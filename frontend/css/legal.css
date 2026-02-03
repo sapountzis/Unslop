@@ -1,0 +1,60 @@
+/* frontend/css/legal.css */
+.legal {
+  padding: 3rem 0;
+}
+
+.legal h1 {
+  font-size: 2.5rem;
+  margin-bottom: 0.5rem;
+  color: var(--primary);
+}
+
+.legal .updated {
+  color: var(--text-light);
+  margin-bottom: 2rem;
+}
+
+.legal section {
+  margin-bottom: 2rem;
+}
+
+.legal h2 {
+  font-size: 1.5rem;
+  margin-bottom: 1rem;
+  color: var(--text);
+}
+
+.legal h3 {
+  font-size: 1.2rem;
+  margin: 1.5rem 0 0.5rem;
+  color: var(--text);
+}
+
+.legal p {
+  margin-bottom: 1rem;
+}
+
+.legal ul {
+  margin-left: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.legal li {
+  margin-bottom: 0.5rem;
+}
+
+.legal code {
+  background: var(--bg-alt);
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+.legal strong {
+  color: var(--text);
+}
+
+.logo a {
+  color: var(--primary);
+  text-decoration: none;
+}
