@@ -1,16 +1,30 @@
 // Email utility for sending magic link emails via Resend
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY!);
-
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const MAGIC_LINK_BASE_URL = process.env.MAGIC_LINK_BASE_URL!;
 
 if (!MAGIC_LINK_BASE_URL) {
   throw new Error('MAGIC_LINK_BASE_URL environment variable is required');
 }
 
+// Only initialize Resend if we have a real API key
+const resend = RESEND_API_KEY && !RESEND_API_KEY.startsWith('re_dummy')
+  ? new Resend(RESEND_API_KEY)
+  : null;
+
 export async function sendMagicLinkEmail(email: string, token: string): Promise<void> {
   const link = `${MAGIC_LINK_BASE_URL}?token=${encodeURIComponent(token)}`;
+
+  // In development with dummy key, log the link instead of sending email
+  if (!resend) {
+    console.log('\n========================================');
+    console.log('📧 MAGIC LINK (dev mode - email not sent)');
+    console.log(`   To: ${email}`);
+    console.log(`   Link: ${link}`);
+    console.log('========================================\n');
+    return;
+  }
 
   await resend.emails.send({
     from: 'Unslop <noreply@getunslop.com>',

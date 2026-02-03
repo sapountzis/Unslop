@@ -32,7 +32,7 @@ const authMiddleware = async (c: any, next: any) => {
 
   try {
     const { verifySessionToken } = await import('../lib/jwt');
-    const payload = verifySessionToken(token);
+    const payload = await verifySessionToken(token);
     c.set('user', payload);
     await next();
   } catch (err) {
@@ -94,27 +94,29 @@ classify.post('/v1/classify', authMiddleware, zValidator('json', classifySchema)
       contentText: normalizedContent,
       contentHash: contentHash,
       decision: llmResult.decision,
-      source: 'llm',
+      source: llmResult.source,
       model: llmResult.model,
     })
     .onConflictDoUpdate({
       target: posts.postId,
       set: {
         decision: llmResult.decision,
-        source: 'llm',
+        source: llmResult.source,
         model: llmResult.model,
         updatedAt: new Date(),
       },
     });
 
-  // Increment usage
-  await incrementUsage(user.sub);
+  // Increment usage only on successful LLM calls (not errors or cache)
+  if (llmResult.source === 'llm') {
+    await incrementUsage(user.sub);
+  }
 
   // Return result
   return c.json({
     post_id: postId,
     decision: llmResult.decision,
-    source: 'llm',
+    source: llmResult.source,
   });
 });
 

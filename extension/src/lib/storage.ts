@@ -1,5 +1,5 @@
 // extension/src/lib/storage.ts
-import type { Storage } from '../types';
+import { Storage } from '../types';
 
 const DEFAULT_STORAGE: Partial<Storage> = {
   enabled: true,

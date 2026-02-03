@@ -1,17 +1,38 @@
 // Database connection for Unslop backend
-import { drizzle } from 'drizzle-orm/neon-http';
+// Supports both local PostgreSQL (via postgres.js) and Neon (via serverless driver)
+
+import { drizzle as drizzleNeon } from 'drizzle-orm/neon-http';
+import { drizzle as drizzlePostgres } from 'drizzle-orm/postgres-js';
 import { neon } from '@neondatabase/serverless';
+import postgres from 'postgres';
 import * as schema from './schema';
 
 const DATABASE_URL = process.env.DATABASE_URL;
 
-// Only throw error if not in test mode
-if (!DATABASE_URL && !process.env.TEST_MODE) {
+if (!DATABASE_URL) {
   throw new Error('DATABASE_URL environment variable is required');
 }
 
-// In test mode, export a placeholder db that will be mocked by tests
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const db: any = DATABASE_URL
-  ? drizzle(neon(DATABASE_URL), { schema })
-  : null;
+// Detect if we're connecting to Neon (production) or local PostgreSQL (development)
+// Neon URLs contain "neon.tech" or start with postgres:// on their infrastructure
+const isNeonDatabase = DATABASE_URL.includes('neon.tech') || DATABASE_URL.includes('neon.com');
+
+function createDb() {
+  if (isNeonDatabase) {
+    // Production: Use Neon serverless driver (HTTP-based)
+    console.log('📡 Connecting to Neon PostgreSQL (serverless mode)');
+    const sql = neon(DATABASE_URL);
+    return drizzleNeon(sql, { schema });
+  } else {
+    // Development: Use postgres.js for standard PostgreSQL connection
+    console.log('🐘 Connecting to local PostgreSQL (standard mode)');
+    const sql = postgres(DATABASE_URL, {
+      max: 10, // Connection pool size
+      idle_timeout: 20,
+      connect_timeout: 10,
+    });
+    return drizzlePostgres(sql, { schema });
+  }
+}
+
+export const db = createDb();

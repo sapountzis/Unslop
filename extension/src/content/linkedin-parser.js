@@ -53,22 +53,34 @@ export function applyDecision(element, decision) {
         case 'dim':
             element.style.opacity = '0.35';
             element.setAttribute('data-unslop-decision', 'dim');
-            // Optional: add small label
-            const label = document.createElement('span');
-            label.textContent = 'Unslop: dimmed';
-            label.style.cssText = 'font-size: 10px; color: #666; display: block;';
-            element.insertBefore(label, element.firstChild);
+            // Add a restore button header
+            const dimHeader = document.createElement('div');
+            dimHeader.style.cssText = 'padding: 4px 8px; margin-bottom: 4px; font-size: 11px; color: #666; background: #fff; border: 1px solid #eee; border-radius: 4px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; width: fit-content;';
+            dimHeader.innerHTML = '<span>Unslop: Low quality post</span> <span style="margin-left:8px; color: #0a66c2; font-weight:600;">Restore</span>';
+            dimHeader.addEventListener('click', (e) => {
+                e.stopPropagation();
+                element.style.opacity = '1';
+                dimHeader.remove();
+                // Keep the processed attribute so we don't re-dim it
+            });
+            // Insert inside the element at the top
+            element.prepend(dimHeader);
             break;
         case 'hide':
-            // Replace with stub
+            // Don't remove from DOM, just hide visually to preserve state
+            element.style.display = 'none';
+            element.setAttribute('data-unslop-decision', 'hide');
             const stub = document.createElement('div');
             stub.textContent = 'Unslop hid a post · Show';
-            stub.style.cssText = 'padding: 8px; color: #666; cursor: pointer; font-size: 12px;';
-            stub.addEventListener('click', () => {
-                stub.replaceWith(element);
-                element.removeAttribute('data-unslop-processed');
+            stub.style.cssText = 'padding: 12px; color: #666; background: #f9f9f9; cursor: pointer; font-size: 12px; margin: 8px 0; border-radius: 8px; text-align: center;';
+            stub.addEventListener('click', (e) => {
+                e.stopPropagation();
+                element.style.display = ''; // Restore visibility
+                stub.remove();
+                // Keep the processed attribute so we don't re-hide it
             });
-            element.replaceWith(stub);
+            // Insert stub before the hidden element
+            element.parentElement?.insertBefore(stub, element);
             break;
     }
 }

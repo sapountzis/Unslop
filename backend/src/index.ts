@@ -12,7 +12,12 @@ const app = new Hono();
 // Middleware
 app.use('*', logger());
 app.use('*', cors({
-  origin: ['https://www.linkedin.com', 'chrome-extension://*'],
+  origin: (origin) => {
+    if (origin.startsWith('chrome-extension://') || origin === 'https://www.linkedin.com') {
+      return origin;
+    }
+    return 'https://www.linkedin.com'; // Default fallback
+  },
   allowHeaders: ['Content-Type', 'Authorization'],
   allowMethods: ['GET', 'POST', 'OPTIONS'],
 }));

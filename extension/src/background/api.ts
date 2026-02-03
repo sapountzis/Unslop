@@ -1,12 +1,13 @@
 // extension/src/background/api.ts
-import type {
+import {
   ClassifyRequest,
   ClassifyResponse,
   FeedbackRequest,
   UserInfo,
 } from '../types';
+import { API_BASE_URL } from '../lib/config';
 
-const API_BASE = 'https://api.getunslop.com/v1';
+const API_BASE = `${API_BASE_URL}/v1`;
 
 export async function classifyPost(
   request: ClassifyRequest,

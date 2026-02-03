@@ -1,9 +1,15 @@
 // extension/src/content/linkedin.ts
 import { extractPostData, applyDecision } from './linkedin-parser';
-import type { PostData } from '../types';
+import { PostData } from '../types';
 
 // Track posts we've already classified
 const processedPosts = new Set<string>();
+
+/**
+ * Classify a single post
+ */
+// Safe processing check
+const PROCESSING_ATTR = 'data-unslop-checking';
 
 /**
  * Classify a single post
@@ -26,37 +32,136 @@ async function classifyPost(postData: PostData): Promise<'keep' | 'dim' | 'hide'
  * Process a post element
  */
 async function processPost(element: HTMLElement): Promise<void> {
-  const postData = await extractPostData(element);
-
-  if (!postData) {
+  // FAST CHECK 1: Already marked by us in UI?
+  if (element.hasAttribute('data-unslop-processed')) {
     return;
   }
 
-  // Skip if already processed
-  if (processedPosts.has(postData.post_id)) {
+  // FAST CHECK 2: Currently checking? (Prevent race conditions)
+  if (element.hasAttribute(PROCESSING_ATTR)) {
     return;
   }
 
-  processedPosts.add(postData.post_id);
+  // FAST CHECK 3: Check memory cache
+  // We can't check purely by ID yet because we haven't extracted it,
+  // but we can check if we've seen this exact element reference before if needed.
+  // For now, the DOM attributes are significant enough.
 
-  // Check if extension is enabled
-  const storage = await chrome.storage.sync.get('enabled');
-  if (storage.enabled === false) {
-    return;
+  // Mark as processing immediately to prevent duplicate async calls
+  element.setAttribute(PROCESSING_ATTR, 'true');
+
+  try {
+    const postData = await extractPostData(element);
+
+    if (!postData) {
+      element.removeAttribute(PROCESSING_ATTR);
+      return;
+    }
+
+    // CHECK 4: Check memory cache for Post ID
+    if (processedPosts.has(postData.post_id)) {
+      // It is processed, just ensure the UI reflects it if needed.
+      // But usually if it's in the set, we've done our job.
+      // We might need to re-apply UI if DOM was wiped but ID matches?
+      // For safely, let's treat it as new for the logic flow, 
+      // but the applyDecision will catch if we want to skip.
+      // Actually, if we have a cache hit, we might want to skip network call.
+    }
+
+    processedPosts.add(postData.post_id);
+
+    // Check if extension is enabled
+    const storage = await chrome.storage.sync.get('enabled');
+    if (storage.enabled === false) {
+      element.removeAttribute(PROCESSING_ATTR);
+      return;
+    }
+
+    // Get classification
+    const decision = await classifyPost(postData);
+
+    // Apply decision
+    applyDecision(element, decision);
+  } catch (e) {
+    console.error('Error processing post:', e);
+  } finally {
+    element.removeAttribute(PROCESSING_ATTR);
+  }
+}
+
+/**
+ * Handle new mutations efficiently
+ */
+function handleMutations(mutations: MutationRecord[]): void {
+  for (const mutation of mutations) {
+    for (const node of mutation.addedNodes) {
+      if (node instanceof HTMLElement) {
+        // Direct match
+        if (node.matches('[data-urn], .feed-shared-update-v2')) {
+          processPost(node);
+        }
+        // Container match - look for children
+        else {
+          const posts = node.querySelectorAll('[data-urn], .feed-shared-update-v2');
+          Array.from(posts).forEach(post => {
+            if (post instanceof HTMLElement) processPost(post);
+          });
+        }
+      }
+    }
+  }
+}
+
+// Global observer for the feed
+let feedObserver: MutationObserver | null = null;
+const feedSelectors = '.scaffold-finite-scroll__content, .feed-shared-update-v2__container, main';
+
+function attachToFeed(): void {
+  // cleanup existing
+  if (feedObserver) {
+    feedObserver.disconnect();
   }
 
-  // Get classification
-  const decision = await classifyPost(postData);
+  const feedContainer = document.querySelector(feedSelectors);
 
-  // Apply decision
-  applyDecision(element, decision);
+  if (feedContainer) {
+    console.log('[Unslop] Feed container found, attaching observer.');
+    feedObserver = new MutationObserver(handleMutations);
+    feedObserver.observe(feedContainer, {
+      childList: true,
+      subtree: true,
+    });
+
+    // Initial scan of what's already there
+    scanForPosts();
+  } else {
+    console.log('[Unslop] Feed container not found yet, waiting...');
+    waitForFeed();
+  }
+}
+
+/**
+ * Watch document body until feed appears
+ */
+function waitForFeed(): void {
+  const bodyObserver = new MutationObserver((mutations, obs) => {
+    const feed = document.querySelector(feedSelectors);
+    if (feed) {
+      obs.disconnect(); // Stop watching body
+      attachToFeed();   // Switch to watching feed
+    }
+  });
+
+  bodyObserver.observe(document.body, {
+    childList: true,
+    subtree: true
+  });
 }
 
 /**
  * Scan the document for new posts
  */
 function scanForPosts(): void {
-  // Find potential post elements
   const postElements = document.querySelectorAll(
     '[data-urn], .feed-shared-update-v2'
   );
@@ -68,50 +173,25 @@ function scanForPosts(): void {
   });
 }
 
-// Set up MutationObserver to detect new posts
-const observer = new MutationObserver((mutations) => {
-  Array.from(mutations).forEach((mutation) => {
-    Array.from(mutation.addedNodes).forEach((node) => {
-      if (node instanceof HTMLElement) {
-        // Check if this node or its children are posts
-        if (node.matches('[data-urn], .feed-shared-update-v2')) {
-          processPost(node);
-        } else {
-          const childPosts = node.querySelectorAll('[data-urn], .feed-shared-update-v2');
-          Array.from(childPosts).forEach((post) => {
-            if (post instanceof HTMLElement) {
-              processPost(post);
-            }
-          });
-        }
-      }
-    });
-  });
-});
-
-// Start observing
-function startObserving(): void {
-  const feedContainer = document.querySelector(
-    '.scaffold-finite-scroll__content, .feed-shared-update-v2__container, main'
-  );
-
-  if (feedContainer) {
-    observer.observe(feedContainer, {
-      childList: true,
-      subtree: true,
-    });
-  }
-
-  // Initial scan
-  scanForPosts();
-}
-
-// Wait for page to be ready
+// Initial Start
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', startObserving);
+  document.addEventListener('DOMContentLoaded', attachToFeed);
 } else {
-  startObserving();
+  attachToFeed();
 }
 
-// Re-scan periodically (fallback)
-setInterval(scanForPosts, 5000);
+// Backup: If SPA navigation completely wipes the DOM and we lose the container
+// We can listen to URL changes or just use a slow poll to check if our observer is still connected/valid
+setInterval(() => {
+  const feed = document.querySelector(feedSelectors);
+  // If we found a feed but our observer is disconnected or looking at a detached node:
+  // (We'd need to track the observed node reference to be strictly explicitly correct, 
+  // but re-running attachToFeed checks existence).
+  // A simple check:
+  if (feed && !feed.hasAttribute('data-unslop-feed-observed')) {
+    // We can mark the feed container to know we've attached.
+    // But simpler: just run attach (which disconnects old) if we suspect drift.
+    // OR: just scanForPosts() gently every few seconds to catch edge cases
+    scanForPosts();
+  }
+}, 2000);

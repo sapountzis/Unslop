@@ -1,4 +1,5 @@
-const API_BASE = 'https://api.getunslop.com/v1';
+import { API_BASE_URL } from '../lib/config';
+const API_BASE = `${API_BASE_URL}/v1`;
 export async function classifyPost(request, jwt) {
     const response = await fetch(`${API_BASE}/classify`, {
         method: 'POST',

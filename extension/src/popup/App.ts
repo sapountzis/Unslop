@@ -1,5 +1,5 @@
 // extension/src/popup/App.ts
-import type { UserInfo } from '../types';
+import { UserInfo } from '../types';
 
 export class App {
   private container: HTMLElement;

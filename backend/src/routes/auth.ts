@@ -21,42 +21,47 @@ const startAuthSchema = z.object({
 
 // POST /v1/auth/start
 auth.post('/v1/auth/start', zValidator('json', startAuthSchema), async (c) => {
-  const { email } = c.req.valid('json');
+  try {
+    const { email } = c.req.valid('json');
 
-  // Normalize email
-  const normalizedEmail = email.toLowerCase().trim();
+    // Normalize email
+    const normalizedEmail = email.toLowerCase().trim();
 
-  // Upsert user
-  const existingUser = await db
-    .select()
-    .from(users)
-    .where(eq(users.email, normalizedEmail))
-    .limit(1);
+    // Upsert user
+    const existingUser = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, normalizedEmail))
+      .limit(1);
 
-  let userId: string;
+    let userId: string;
 
-  if (existingUser.length > 0) {
-    userId = existingUser[0].id;
-  } else {
-    const newUser = await db
-      .insert(users)
-      .values({
-        email: normalizedEmail,
-        plan: 'free',
-        planStatus: 'inactive',
-      })
-      .returning();
+    if (existingUser.length > 0) {
+      userId = existingUser[0].id;
+    } else {
+      const newUser = await db
+        .insert(users)
+        .values({
+          email: normalizedEmail,
+          plan: 'free',
+          planStatus: 'inactive',
+        })
+        .returning();
 
-    userId = newUser[0].id;
+      userId = newUser[0].id;
+    }
+
+    // Generate magic link token
+    const token = await generateMagicLinkToken(userId);
+
+    // Send email
+    await sendMagicLinkEmail(normalizedEmail, token);
+
+    return c.json({ status: 'accepted' }, 202);
+  } catch (error) {
+    console.error('Error in /v1/auth/start:', error);
+    throw error;
   }
-
-  // Generate magic link token
-  const token = await generateMagicLinkToken(userId);
-
-  // Send email
-  await sendMagicLinkEmail(normalizedEmail, token);
-
-  return c.json({ status: 'accepted' }, 202);
 });
 
 // GET /v1/auth/callback

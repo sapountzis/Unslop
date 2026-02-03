@@ -1,4 +1,9 @@
-// LLM classification service using OpenRouter
+// LLM classification service using OpenRouter and OpenAI SDK
+import OpenAI from 'openai';
+import { z } from 'zod';
+import { zodResponseFormat } from 'openai/helpers/zod';
+import { CLASSIFICATION_PROMPT } from './prompts';
+
 export interface PostInput {
   post_id: string;
   author_id: string;
@@ -6,15 +11,28 @@ export interface PostInput {
   content_text: string;
 }
 
-export interface ClassificationResult {
-  decision: 'keep' | 'dim' | 'hide';
-}
-
 export interface LLMCallResult {
   decision: 'keep' | 'dim' | 'hide';
+  source: 'llm' | 'error';
   model: string;
   latency: number;
 }
+
+// Define the schema using Zod
+const DecisionSchema = z.object({
+  usefulness_score: z.number(),
+  educational_depth_score: z.number(),
+  human_connection_score: z.number(),
+  humor_score: z.number(),
+  rage_bait_score: z.number(),
+  ego_bait_score: z.number(),
+  sales_pitch_score: z.number(),
+  template_slop_score: z.number(),
+  spammy_formatting_score: z.number(),
+  overall_quality_label: z.enum(['high_value', 'medium_value', 'low_value', 'spam_slop']),
+  recommended_action: z.enum(['keep', 'dim', 'hide']),
+  short_rationale: z.string(),
+});
 
 function getOpenRouterConfig(): { apiKey: string; baseUrl: string; model: string } {
   const apiKey = process.env.OPENROUTER_API_KEY;
@@ -34,66 +52,67 @@ function getOpenRouterConfig(): { apiKey: string; baseUrl: string; model: string
   };
 }
 
-const SYSTEM_PROMPT = `You are a strict JSON generator. Your job is to decide if a LinkedIn post should be kept, dimmed, or hidden.
-
-Rules:
-- Keep posts that are genuine, thoughtful, or from real connections.
-- Dim posts that are low-quality but not harmful (vague platitudes, engagement bait).
-- Hide posts that are spam, scams, or clearly automated nonsense.
-
-When uncertain, default to "keep".
-
-Output ONLY a JSON object with this exact schema:
-{"decision": "keep" | "dim" | "hide"}`;
-
 export async function classifyPost(post: PostInput): Promise<LLMCallResult> {
   const startTime = Date.now();
+
+  // Fail fast if no API key (for local dev without key)
+  if (!process.env.OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY.startsWith('sk-or-dummy')) {
+    console.log('⚠️ No real OpenRouter API key found, defaulting to "keep" (dev mode)');
+    return {
+      decision: 'keep',
+      source: 'error', // Treating missing key as "error" source to indicate fallback
+      model: 'dev-fallback',
+      latency: 0,
+    };
+  }
+
   const { apiKey, baseUrl, model } = getOpenRouterConfig();
 
-  const userMessage = `Author: ${post.author_name} (ID: ${post.author_id})
-Content: ${post.content_text}`;
+  const openai = new OpenAI({
+    apiKey: apiKey,
+    baseURL: baseUrl,
+  });
+
+  // Construct the final prompt by replacing the placeholder
+  // We prepend author info to the content to provide context, 
+  // as the prompt placeholder {{POST_TEXT}} implies just the text, 
+  // but author info is valuable for "ego_bait" assessment.
+  const contentWithContext = `Author: ${post.author_name}\n\n${post.content_text}`;
+  const finalPrompt = CLASSIFICATION_PROMPT.replace('{{POST_TEXT}}', contentWithContext);
 
   try {
-    const response = await fetch(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://getunslop.com',
-      },
-      body: JSON.stringify({
-        model: model,
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: userMessage },
-        ],
-        temperature: 0.1,
-        max_tokens: 50,
-        response_format: { type: 'json_object' },
-      }),
+    const completion = await openai.chat.completions.create({
+      model: model,
+      messages: [
+        { role: 'user', content: finalPrompt },
+      ],
+      temperature: 0.1,
+      max_tokens: 1000,
+      response_format: zodResponseFormat(DecisionSchema, 'classification'),
     });
 
-    if (!response.ok) {
-      throw new Error(`OpenRouter API error: ${response.status} ${response.statusText}`);
+    const message = completion.choices[0].message;
+
+    if (message.refusal) {
+      throw new Error(`LLM Refusal: ${message.refusal}`);
     }
 
-    const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
-    const content = data.choices?.[0]?.message?.content;
+    const content = message.content;
 
     if (!content) {
-      throw new Error('Empty response from LLM');
+      throw new Error('Empty response from LLM (content is null)');
     }
 
-    const parsed = JSON.parse(content) as ClassificationResult;
+    const parsed = JSON.parse(content);
 
-    if (!['keep', 'dim', 'hide'].includes(parsed.decision)) {
-      throw new Error(`Invalid decision: ${parsed.decision}`);
-    }
+    // Validate again with Zod
+    const result = DecisionSchema.parse(parsed);
 
     const latency = Date.now() - startTime;
 
     return {
-      decision: parsed.decision,
+      decision: result.recommended_action, // Map new action to old decision field
+      source: 'llm',
       model: model,
       latency,
     };
@@ -102,6 +121,7 @@ Content: ${post.content_text}`;
     console.error('LLM classification failed:', err);
     return {
       decision: 'keep',
+      source: 'error',
       model: model,
       latency: Date.now() - startTime,
     };

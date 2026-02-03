@@ -1,59 +1,446 @@
-<!-- frontend/index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Unslop - Filter Your LinkedIn Feed</title>
-  <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="css/styles.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Unslop: A calmer LinkedIn</title>
+  <meta name="description" content="Unslop makes LinkedIn feel calm again. Hide ragebait, dim slop, keep what matters. Control, peace, time saved, mental health." />
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="stylesheet" href="css/styles.css" />
 </head>
+
 <body>
-  <header>
-    <nav class="container">
-      <div class="logo"><a href="index.html">Unslop</a></div>
-      <ul class="nav-links">
-        <li><a href="index.html">Home</a></li>
-        <li><a href="privacy.html">Privacy</a></li>
-        <li><a href="support.html">Support</a></li>
-        <li><a href="terms.html">Terms</a></li>
-      </ul>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <!-- Decorative background -->
+  <div class="bg" aria-hidden="true">
+    <div class="bg__blob bg__blob--1"></div>
+    <div class="bg__blob bg__blob--2"></div>
+    <div class="bg__grid"></div>
+    <div class="bg__vignette"></div>
+  </div>
+
+  <header class="header">
+    <nav class="nav container">
+      <a class="brand" href="#top" aria-label="Unslop home">
+        <span class="brand__mark" aria-hidden="true">U</span>
+        <span class="brand__name">Unslop</span>
+      </a>
+
+      <div class="nav__links" role="navigation" aria-label="Primary">
+        <a href="#how">How it works</a>
+        <a href="#why">Why it feels good</a>
+        <a href="#pricing">Pricing</a>
+        <a href="#faq">FAQ</a>
+        <a class="nav__pill" href="https://chrome.google.com/webstore" target="_blank" rel="noreferrer">
+          Install
+        </a>
+      </div>
     </nav>
   </header>
 
-  <main>
-    <section class="hero">
-      <div class="container">
-        <h1>Unslop</h1>
-        <p class="tagline">Chrome extension that dims or hides low-value LinkedIn posts.</p>
-        <a href="https://chrome.google.com/webstore" class="cta-button">Install on Chrome</a>
+  <main id="main">
+    <!-- HERO -->
+    <section id="top" class="hero">
+      <div class="container hero__grid">
+        <div class="hero__copy">
+          <div class="badge">
+            <span class="badge__dot" aria-hidden="true"></span>
+            <span>Chrome extension • Feed calmer in seconds</span>
+          </div>
+
+          <h1 class="hero__title">
+            Stop hate-scrolling.<br />
+            Get a <span class="gradient-text">calmer LinkedIn</span>.
+          </h1>
+
+          <p class="hero__subtitle">
+            Unslop quietly dims low-value posts like ragebait, engagement farming, and AI slop.
+            Keep what matters. Scroll with a clear head.
+          </p>
+
+          <div class="hero__cta">
+            <a class="btn btn--primary" href="https://chrome.google.com/webstore" target="_blank" rel="noreferrer">
+              Install on Chrome
+              <span class="btn__arrow" aria-hidden="true">→</span>
+            </a>
+            <a class="btn btn--ghost" href="#how">
+              See how it works
+            </a>
+          </div>
+
+          <div class="hero__micro">
+            <div class="micro-card">
+              <div class="micro-card__k">Control</div>
+              <div class="micro-card__v">You decide what stays.</div>
+            </div>
+            <div class="micro-card">
+              <div class="micro-card__k">Peace</div>
+              <div class="micro-card__v">Less noise, less spike.</div>
+            </div>
+            <div class="micro-card">
+              <div class="micro-card__k">Time saved</div>
+              <div class="micro-card__v">Scroll faster, find signal.</div>
+            </div>
+            <div class="micro-card">
+              <div class="micro-card__k">Mental health</div>
+              <div class="micro-card__v">Fewer bait hooks.</div>
+            </div>
+          </div>
+
+          <p class="hero__truth">
+            <strong>You don’t sell filtering.</strong> You sell a calmer LinkedIn.
+          </p>
+        </div>
+
+        <!-- “Fancy SPA” visual panel -->
+        <div class="hero__panel" aria-hidden="true">
+          <div class="panel">
+            <div class="panel__top">
+              <div class="panel__lights">
+                <span></span><span></span><span></span>
+              </div>
+              <div class="panel__title">Feed Preview</div>
+              <div class="panel__pill">Unslop ON</div>
+            </div>
+
+            <div class="panel__content">
+              <div class="post post--keep">
+                <div class="post__head">
+                  <div class="avatar"></div>
+                  <div>
+                    <div class="post__name">Someone You Follow</div>
+                    <div class="post__meta">2h • Industry insight</div>
+                  </div>
+                  <span class="chip chip--keep">Keep</span>
+                </div>
+                <div class="post__body">
+                  A concise breakdown with real numbers and a clear takeaway.
+                </div>
+              </div>
+
+              <div class="post post--dim">
+                <div class="post__head">
+                  <div class="avatar"></div>
+                  <div>
+                    <div class="post__name">Generic Influencer</div>
+                    <div class="post__meta">3h • “A lesson…”</div>
+                  </div>
+                  <span class="chip chip--dim">Dim</span>
+                </div>
+                <div class="post__body">
+                  “Today I learned something profound about leadership…” (you get the idea)
+                </div>
+              </div>
+
+              <div class="post post--hide">
+                <div class="post__head">
+                  <div class="avatar"></div>
+                  <div>
+                    <div class="post__name">Ragebait Factory</div>
+                    <div class="post__meta">5h • Hot take</div>
+                  </div>
+                  <span class="chip chip--hide">Hide</span>
+                </div>
+                <div class="post__body">
+                  “Unpopular opinion: …” + 9 paragraphs of engagement hooks.
+                </div>
+                <div class="post__veil">Hidden to protect your attention.</div>
+              </div>
+
+              <div class="panel__stats">
+                <div class="stat">
+                  <div class="stat__k">Today</div>
+                  <div class="stat__v">28 dimmed • 11 hidden</div>
+                </div>
+                <div class="stat">
+                  <div class="stat__k">Mood</div>
+                  <div class="stat__v">Stable ✅</div>
+                </div>
+              </div>
+
+              <div class="panel__hint">
+                Looks like LinkedIn, feels like yours.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="hero__fade" aria-hidden="true"></div>
+    </section>
+
+    <!-- TRUST / SOCIAL PROOF -->
+    <section class="strip">
+      <div class="container strip__grid">
+        <div class="strip__item">
+          <div class="strip__icon">⚡</div>
+          <div>
+            <div class="strip__title">Instant relief</div>
+            <div class="strip__text">Install → browse normally → breathe.</div>
+          </div>
+        </div>
+        <div class="strip__item">
+          <div class="strip__icon">🛡️</div>
+          <div>
+            <div class="strip__title">Quiet by default</div>
+            <div class="strip__text">No drama. No guilt. Just signal.</div>
+          </div>
+        </div>
+        <div class="strip__item">
+          <div class="strip__icon">🎯</div>
+          <div>
+            <div class="strip__title">Attention protection</div>
+            <div class="strip__text">Less bait. Fewer spikes. More focus.</div>
+          </div>
+        </div>
       </div>
     </section>
 
-    <section class="features">
+    <!-- HOW IT WORKS -->
+    <section id="how" class="section">
       <div class="container">
-        <h2>How it works</h2>
-        <div class="feature-grid">
-          <div class="feature">
-            <h3>1. Install</h3>
-            <p>Add the extension to Chrome</p>
+        <div class="section__head">
+          <h2>How it works</h2>
+          <p>Three steps. Zero friction. Your feed stays usable, just calmer.</p>
+        </div>
+
+        <div class="cards cards--3">
+          <article class="card">
+            <div class="card__icon">1</div>
+            <h3>Install</h3>
+            <p>Add Unslop to Chrome. Takes seconds.</p>
+          </article>
+
+          <article class="card">
+            <div class="card__icon">2</div>
+            <h3>Browse</h3>
+            <p>Use LinkedIn normally. No new workflow.</p>
+          </article>
+
+          <article class="card">
+            <div class="card__icon">3</div>
+            <h3>Calm</h3>
+            <p>Low-value posts are dimmed or hidden. Quietly.</p>
+          </article>
+        </div>
+
+        <div class="callout">
+          <div class="callout__title">You stay in control.</div>
+          <div class="callout__text">
+            Adjust the intensity anytime: keep, dim, or hide. Your feed, your rules.
           </div>
-          <div class="feature">
-            <h3>2. Browse</h3>
-            <p>Scroll through LinkedIn normally</p>
+          <a class="btn btn--ghost" href="#pricing">See pricing</a>
+        </div>
+      </div>
+    </section>
+
+    <section id="why" class="section section--alt">
+      <div class="container">
+        <div class="section__head">
+          <h2>A calmer feed, instantly</h2>
+          <p>Unslop reduces the noise so you can scroll with a clear head.</p>
+        </div>
+
+        <div class="value-grid">
+          <div class="value">
+            <div class="value__icon" aria-hidden="true">◼</div>
+            <div class="value__title">Control</div>
+            <div class="value__text">
+              Choose what stays visible. Dim the low-value stuff, hide the worst of it.
+            </div>
           </div>
-          <div class="feature">
-            <h3>3. Filter</h3>
-            <p>Low-value posts are dimmed or hidden</p>
+
+          <div class="value">
+            <div class="value__icon" aria-hidden="true">◼</div>
+            <div class="value__title">Peace</div>
+            <div class="value__text">
+              Less ragebait and engagement farming. More calm while you scroll.
+            </div>
           </div>
+
+          <div class="value">
+            <div class="value__icon" aria-hidden="true">◼</div>
+            <div class="value__title">Time saved</div>
+            <div class="value__text">
+              Find useful posts faster. Stop wasting minutes on filler threads.
+            </div>
+          </div>
+
+          <div class="value">
+            <div class="value__icon" aria-hidden="true">◼</div>
+            <div class="value__title">Mental health</div>
+            <div class="value__text">
+              Fewer spikes, fewer traps. Keep your attention for your actual life.
+            </div>
+          </div>
+        </div>
+
+        <div class="mini-callout">
+          <strong>Filtering is how it works.</strong> A calmer LinkedIn is what you get.
+        </div>
+      </div>
+    </section>
+
+
+    <!-- PRICING -->
+    <section id="pricing" class="section">
+      <div class="container">
+        <div class="section__head">
+          <h2>Pricing</h2>
+          <p>Start free. Upgrade when you want full calm.</p>
+        </div>
+
+        <div class="pricing">
+          <article class="price-card">
+            <div class="price-card__top">
+              <h3>Free</h3>
+              <div class="price">
+                <span class="price__amount">$0</span>
+                <span class="price__unit">/ month</span>
+              </div>
+              <p class="price-card__desc">Enough to feel the difference.</p>
+            </div>
+
+            <ul class="list">
+              <li><span class="tick">✓</span> 300 AI classifications / month</li>
+              <li><span class="tick">✓</span> Cached decisions don’t re-charge</li>
+              <li><span class="tick">✓</span> Keep / Dim / Hide actions</li>
+              <li><span class="tick">✓</span> Updates included</li>
+            </ul>
+
+            <a class="btn btn--ghost btn--full" href="https://chrome.google.com/webstore" target="_blank" rel="noreferrer">
+              Install Free
+            </a>
+          </article>
+
+          <article class="price-card price-card--featured">
+            <div class="price-card__badge">Best for daily LinkedIn</div>
+
+            <div class="price-card__top">
+              <h3>Pro</h3>
+              <div class="price">
+                <span class="price__amount">€3.99</span>
+                <span class="price__unit">/ month</span>
+              </div>
+              <p class="price-card__desc">For people who value focus.</p>
+            </div>
+
+            <ul class="list">
+              <li><span class="tick">✓</span> 10,000 AI classifications / month</li>
+              <li><span class="tick">✓</span> Stronger calm (more aggressive hide)</li>
+              <li><span class="tick">✓</span> Priority updates & fixes</li>
+              <li><span class="tick">✓</span> Support via email</li>
+            </ul>
+
+            <a class="btn btn--primary btn--full" href="#"
+               aria-label="Upgrade to Pro (connect to your billing checkout)">
+              Upgrade to Pro
+              <span class="btn__arrow" aria-hidden="true">→</span>
+            </a>
+
+            <p class="fineprint">
+              Billing handled by Polar. Cancel anytime.
+            </p>
+          </article>
+        </div>
+
+        <div class="disclaimer">
+          <p>
+            <strong>Note:</strong> Unslop is an independent tool and is not affiliated with, endorsed by, or sponsored by LinkedIn.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- FAQ -->
+    <section id="faq" class="section section--alt">
+      <div class="container">
+        <div class="section__head">
+          <h2>FAQ</h2>
+          <p>Quick answers. No fluff.</p>
+        </div>
+
+        <div class="faq">
+          <details class="faq__item">
+            <summary>
+              Does it “block” LinkedIn content permanently?
+              <span class="faq__chev" aria-hidden="true">▾</span>
+            </summary>
+            <div class="faq__content">
+              No, it simply changes how posts render in your feed (keep, dim, or hide). You stay in control and can turn it off anytime.
+            </div>
+          </details>
+
+          <details class="faq__item">
+            <summary>
+              Will this slow down LinkedIn?
+              <span class="faq__chev" aria-hidden="true">▾</span>
+            </summary>
+            <div class="faq__content">
+              It’s designed to be lightweight. Decisions can be cached so the same posts don’t re-process.
+            </div>
+          </details>
+
+          <details class="faq__item">
+            <summary>
+              Is my data sold or tracked?
+              <span class="faq__chev" aria-hidden="true">▾</span>
+            </summary>
+            <div class="faq__content">
+              No tracking pixels or ad analytics. Read the full <a href="privacy.html">Privacy Policy</a>.
+            </div>
+          </details>
+
+          <details class="faq__item">
+            <summary>
+              Where do I get help?
+              <span class="faq__chev" aria-hidden="true">▾</span>
+            </summary>
+            <div class="faq__content">
+              Email <a href="mailto:support@getunslop.com">support@getunslop.com</a> or visit the <a href="support.html">Support</a> page.
+            </div>
+          </details>
+        </div>
+
+        <div class="cta-band">
+          <div class="cta-band__copy">
+            <h3>Make LinkedIn feel calm again.</h3>
+            <p>Install in seconds. Your feed will thank you.</p>
+          </div>
+          <a class="btn btn--primary" href="https://chrome.google.com/webstore" target="_blank" rel="noreferrer">
+            Install on Chrome
+            <span class="btn__arrow" aria-hidden="true">→</span>
+          </a>
         </div>
       </div>
     </section>
   </main>
 
-  <footer>
-    <div class="container">
-      <p>&copy; 2025 Unslop. <a href="privacy.html">Privacy Policy</a> · <a href="support.html">Support</a></p>
+  <footer class="footer">
+    <div class="container footer__grid">
+      <div>
+        <div class="footer__brand">
+          <span class="brand__mark" aria-hidden="true">U</span>
+          <span class="brand__name">Unslop</span>
+        </div>
+        <p class="footer__tag">
+          Calm your feed. Keep your brain.
+        </p>
+      </div>
+
+      <div class="footer__links" aria-label="Footer">
+        <a href="privacy.html">Privacy</a>
+        <a href="support.html">Support</a>
+        <a href="terms.html">Terms</a>
+      </div>
+
+      <div class="footer__meta">
+        <p>&copy; 2025 Unslop</p>
+        <p class="footer__fine">
+          Built for focus.
+        </p>
+      </div>
     </div>
   </footer>
 </body>

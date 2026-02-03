@@ -1,112 +1,139 @@
-<!-- frontend/privacy.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Privacy Policy - Unslop</title>
-  <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="css/styles.css">
-  <link rel="stylesheet" href="css/legal.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy — Unslop</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/legal.css" />
 </head>
 <body>
-  <header>
-    <nav class="container">
-      <div class="logo"><a href="index.html">Unslop</a></div>
-      <ul class="nav-links">
-        <li><a href="index.html">Home</a></li>
-        <li><a href="privacy.html">Privacy</a></li>
-        <li><a href="support.html">Support</a></li>
-        <li><a href="terms.html">Terms</a></li>
-      </ul>
+  <div class="bg" aria-hidden="true">
+    <div class="bg__blob bg__blob--1"></div>
+    <div class="bg__blob bg__blob--2"></div>
+    <div class="bg__grid"></div>
+    <div class="bg__vignette"></div>
+  </div>
+
+  <header class="header">
+    <nav class="nav container">
+      <a class="brand" href="index.html#top" aria-label="Unslop home">
+        <span class="brand__mark" aria-hidden="true">U</span>
+        <span class="brand__name">Unslop</span>
+      </a>
+
+      <div class="nav__links" role="navigation" aria-label="Primary">
+        <a href="index.html#how">How it works</a>
+        <a href="index.html#pricing">Pricing</a>
+        <a href="support.html">Support</a>
+        <a class="nav__pill" href="https://chrome.google.com/webstore" target="_blank" rel="noreferrer">Install</a>
+      </div>
     </nav>
   </header>
 
-  <main class="legal">
+  <main class="legal-wrap">
     <div class="container">
-      <h1>Privacy Policy</h1>
-      <p class="updated">Last updated: February 2025</p>
+      <article class="legal">
+        <h1>Privacy Policy</h1>
+        <p class="updated">Last updated: February 2025</p>
 
-      <section>
-        <h2>Data we collect</h2>
+        <section>
+          <h2>Data we collect</h2>
 
-        <h3>Account data</h3>
-        <ul>
-          <li><strong>Email address</strong> — for magic-link login authentication</li>
-        </ul>
+          <h3>Account data</h3>
+          <ul>
+            <li><strong>Email address</strong> — for magic-link login authentication</li>
+          </ul>
 
-        <h3>Content for classification</h3>
-        <p>When you use the extension, we process LinkedIn posts to classify them:</p>
-        <ul>
-          <li><code>post_id</code> — LinkedIn post identifier (or derived hash)</li>
-          <li><code>author_id</code> — Author's profile identifier</li>
-          <li><code>author_name</code> — Author's display name (best-effort)</li>
-          <li><code>content_text</code> — Post content, normalized and truncated to 4,000 characters</li>
-          <li><code>decision</code> — The classification result (keep/dim/hide)</li>
-          <li><code>timestamps</code> — When the post was processed</li>
-        </ul>
+          <h3>Content for classification</h3>
+          <p>When you use the extension, we process LinkedIn posts to classify them:</p>
+          <ul>
+            <li><code>post_id</code> — LinkedIn post identifier (or derived hash)</li>
+            <li><code>author_id</code> — Author's profile identifier</li>
+            <li><code>author_name</code> — Author's display name (best-effort)</li>
+            <li><code>content_text</code> — Post content, normalized and truncated to 4,000 characters</li>
+            <li><code>decision</code> — The classification result (keep/dim/hide)</li>
+            <li><code>timestamps</code> — When the post was processed</li>
+          </ul>
 
-        <h3>Feedback (optional)</h3>
-        <p>If you choose to submit feedback on a classification:</p>
-        <ul>
-          <li><code>post_id</code> — Which post the feedback is about</li>
-          <li><code>rendered_decision</code> — What action the extension took</li>
-          <li><code>user_label</code> — Your feedback (should_keep/should_hide)</li>
-        </ul>
-      </section>
+          <h3>Feedback (optional)</h3>
+          <p>If you choose to submit feedback on a classification:</p>
+          <ul>
+            <li><code>post_id</code> — Which post the feedback is about</li>
+            <li><code>rendered_decision</code> — What action the extension took</li>
+            <li><code>user_label</code> — Your feedback (should_keep/should_hide)</li>
+          </ul>
+        </section>
 
-      <section>
-        <h2>Why we collect this data</h2>
-        <ul>
-          <li><strong>Provide filtering decisions</strong> — To determine which posts to dim or hide</li>
-          <li><strong>Prevent duplicate LLM calls</strong> — Cached decisions reduce costs and improve speed</li>
-          <li><strong>Enforce quotas</strong> — Track usage to provide free and paid tiers</li>
-          <li><strong>Improve future versions</strong> — Feedback helps us refine the classifier (no model training in v0.1)</li>
-        </ul>
-      </section>
+        <section>
+          <h2>Why we collect this data</h2>
+          <ul>
+            <li><strong>Provide filtering decisions</strong> — To determine which posts to dim or hide</li>
+            <li><strong>Prevent duplicate LLM calls</strong> — Cached decisions reduce costs and improve speed</li>
+            <li><strong>Enforce quotas</strong> — Track usage to provide free and paid tiers</li>
+            <li><strong>Improve future versions</strong> — Feedback helps refine the classifier (no model training in v0.1)</li>
+          </ul>
+        </section>
 
-      <section>
-        <h2>Where your data goes</h2>
-        <p>We use the following third-party services:</p>
-        <ul>
-          <li><strong>LLM Inference Provider</strong> (e.g., OpenRouter) — Receives post content for classification</li>
-          <li><strong>Backend Hosting</strong> (Railway) — Hosts our API</li>
-          <li><strong>Database</strong> (Neon Postgres) — Stores cached decisions and user data</li>
-          <li><strong>Billing</strong> (Polar) — Processes subscription payments</li>
-        </ul>
-      </section>
+        <section>
+          <h2>Where your data goes</h2>
+          <p>We use the following third-party services:</p>
+          <ul>
+            <li><strong>LLM Inference Provider</strong> (e.g., OpenRouter) — receives post content for classification</li>
+            <li><strong>Backend Hosting</strong> — hosts our API</li>
+            <li><strong>Database</strong> — stores cached decisions and user data</li>
+            <li><strong>Billing</strong> (Polar) — processes subscription payments</li>
+          </ul>
+        </section>
 
-      <section>
-        <h2>Data retention</h2>
-        <ul>
-          <li><strong>Posts</strong> — 90 days (after this, cached decisions expire)</li>
-          <li><strong>Feedback</strong> — 180 days</li>
-          <li><strong>User account</strong> — Until you request deletion</li>
-        </ul>
-      </section>
+        <section>
+          <h2>Data retention</h2>
+          <ul>
+            <li><strong>Posts</strong> — 90 days (cached decisions expire)</li>
+            <li><strong>Feedback</strong> — 180 days</li>
+            <li><strong>User account</strong> — until you request deletion</li>
+          </ul>
+        </section>
 
-      <section>
-        <h2>Data deletion</h2>
-        <p>To request deletion of your account and associated data:</p>
-        <p>Email <strong>support@getunslop.com</strong> from the email address associated with your account.</p>
-        <p>We will process deletion requests within 7 days.</p>
-      </section>
+        <section>
+          <h2>Data deletion</h2>
+          <p>To request deletion of your account and associated data:</p>
+          <p>Email <strong>support@getunslop.com</strong> from the email address associated with your account.</p>
+          <p>We will process deletion requests within 7 days.</p>
+        </section>
 
-      <section>
-        <h2>No tracking</h2>
-        <p>We do not use:</p>
-        <ul>
-          <li>Cookies for analytics or tracking</li>
-          <li>Third-party analytics services</li>
-          <li>Tracking pixels or beacons</li>
-        </ul>
-      </section>
+        <section>
+          <h2>No tracking</h2>
+          <p>We do not use:</p>
+          <ul>
+            <li>Cookies for analytics or tracking</li>
+            <li>Third-party analytics services</li>
+            <li>Tracking pixels or beacons</li>
+          </ul>
+        </section>
+      </article>
     </div>
   </main>
 
-  <footer>
-    <div class="container">
-      <p>&copy; 2025 Unslop. <a href="privacy.html">Privacy Policy</a> · <a href="support.html">Support</a></p>
+  <footer class="footer">
+    <div class="container footer__grid">
+      <div>
+        <div class="footer__brand">
+          <span class="brand__mark" aria-hidden="true">U</span>
+          <span class="brand__name">Unslop</span>
+        </div>
+        <p class="footer__tag">Calm your feed. Keep your brain.</p>
+      </div>
+      <div class="footer__links">
+        <a href="index.html#top">Home</a>
+        <a href="support.html">Support</a>
+        <a href="terms.html">Terms</a>
+      </div>
+      <div class="footer__meta">
+        <p>&copy; 2025 Unslop</p>
+        <p class="footer__fine">Built for focus.</p>
+      </div>
     </div>
   </footer>
 </body>

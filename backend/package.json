@@ -16,8 +16,10 @@
     "@neondatabase/serverless": "^0.10.4",
     "drizzle-orm": "^0.45.1",
     "hono": "^4.11.0",
+    "openai": "^6.17.0",
+    "postgres": "^3.4.8",
     "resend": "^6.9.1",
-    "zod": "^3.24.2"
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

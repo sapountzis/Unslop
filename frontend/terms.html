@@ -1,93 +1,121 @@
-<!-- frontend/terms.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Terms of Service - Unslop</title>
-  <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="css/styles.css">
-  <link rel="stylesheet" href="css/legal.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Terms — Unslop</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/legal.css" />
 </head>
 <body>
-  <header>
-    <nav class="container">
-      <div class="logo"><a href="index.html">Unslop</a></div>
-      <ul class="nav-links">
-        <li><a href="index.html">Home</a></li>
-        <li><a href="privacy.html">Privacy</a></li>
-        <li><a href="support.html">Support</a></li>
-        <li><a href="terms.html">Terms</a></li>
-      </ul>
+  <div class="bg" aria-hidden="true">
+    <div class="bg__blob bg__blob--1"></div>
+    <div class="bg__blob bg__blob--2"></div>
+    <div class="bg__grid"></div>
+    <div class="bg__vignette"></div>
+  </div>
+
+  <header class="header">
+    <nav class="nav container">
+      <a class="brand" href="index.html#top" aria-label="Unslop home">
+        <span class="brand__mark" aria-hidden="true">U</span>
+        <span class="brand__name">Unslop</span>
+      </a>
+
+      <div class="nav__links" role="navigation" aria-label="Primary">
+        <a href="index.html#how">How it works</a>
+        <a href="index.html#pricing">Pricing</a>
+        <a href="privacy.html">Privacy</a>
+        <a class="nav__pill" href="https://chrome.google.com/webstore" target="_blank" rel="noreferrer">Install</a>
+      </div>
     </nav>
   </header>
 
-  <main class="legal">
+  <main class="legal-wrap">
     <div class="container">
-      <h1>Terms of Service</h1>
-      <p class="updated">Last updated: February 2025</p>
+      <article class="legal">
+        <h1>Terms of Service</h1>
+        <p class="updated">Last updated: February 2025</p>
 
-      <section>
-        <h2>1. Acceptance of Terms</h2>
-        <p>By accessing or using the Unslop Chrome extension ("the Service"), you agree to be bound by these Terms of Service.</p>
-      </section>
+        <section>
+          <h2>1. Acceptance of Terms</h2>
+          <p>By accessing or using the Unslop Chrome extension (“the Service”), you agree to be bound by these Terms.</p>
+        </section>
 
-      <section>
-        <h2>2. Description of Service</h2>
-        <p>Unslop is a browser extension that filters LinkedIn feed posts by dimming or hiding content classified as low-value. The service is provided "as is" and may include advertisements or sponsored content in the future.</p>
-      </section>
+        <section>
+          <h2>2. Description of Service</h2>
+          <p>Unslop is a browser extension that filters LinkedIn feed posts by dimming or hiding content classified as low-value.</p>
+          <p>The service is provided “as is” and may change over time.</p>
+        </section>
 
-      <section>
-        <h2>3. User Responsibilities</h2>
-        <p>You agree to:</p>
-        <ul>
-          <li>Use the service only for its intended purpose</li>
-          <li>Not attempt to circumvent usage limits or quotas</li>
-          <li>Not use the service to violate LinkedIn's terms of service</li>
-          <li>Be responsible for maintaining the security of your account</li>
-        </ul>
-      </section>
+        <section>
+          <h2>3. User Responsibilities</h2>
+          <p>You agree to:</p>
+          <ul>
+            <li>Use the service only for its intended purpose</li>
+            <li>Not attempt to circumvent usage limits or quotas</li>
+            <li>Not use the service to violate third-party terms of service</li>
+            <li>Maintain the security of your account</li>
+          </ul>
+        </section>
 
-      <section>
-        <h2>4. Payment and Billing</h2>
-        <p>Pro subscriptions are processed through Polar. By subscribing, you agree to Polar's terms and billing practices. You may cancel your subscription at any time through Polar or by contacting support.</p>
-      </section>
+        <section>
+          <h2>4. Payment and Billing</h2>
+          <p>Pro subscriptions are processed through a billing provider. You may cancel at any time; cancellations take effect at the end of the current billing period.</p>
+        </section>
 
-      <section>
-        <h2>5. Disclaimer of Warranties</h2>
-        <p>THE SERVICE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.</p>
-      </section>
+        <section>
+          <h2>5. Disclaimer of Warranties</h2>
+          <p>THE SERVICE IS PROVIDED “AS IS” WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED.</p>
+        </section>
 
-      <section>
-        <h2>6. Limitation of Liability</h2>
-        <p>Unslop shall not be liable for any indirect, incidental, special, consequential, or punitive damages resulting from your use or inability to use the service.</p>
-      </section>
+        <section>
+          <h2>6. Limitation of Liability</h2>
+          <p>Unslop shall not be liable for any indirect, incidental, special, consequential, or punitive damages resulting from your use of the service.</p>
+        </section>
 
-      <section>
-        <h2>7. Modifications</h2>
-        <p>We reserve the right to modify these terms at any time. Continued use of the service after changes constitutes acceptance of the new terms.</p>
-      </section>
+        <section>
+          <h2>7. Modifications</h2>
+          <p>We reserve the right to modify these terms at any time. Continued use after changes constitutes acceptance of the updated terms.</p>
+        </section>
 
-      <section>
-        <h2>8. Termination</h2>
-        <p>We may terminate or suspend your account at any time for violation of these terms or for any other reason at our sole discretion.</p>
-      </section>
+        <section>
+          <h2>8. Termination</h2>
+          <p>We may terminate or suspend access if you violate these terms or for other reasons at our discretion.</p>
+        </section>
 
-      <section>
-        <h2>9. Governing Law</h2>
-        <p>These terms are governed by the laws of the jurisdiction in which Unslop is established.</p>
-      </section>
+        <section>
+          <h2>9. Governing Law</h2>
+          <p>These terms are governed by the laws of the jurisdiction in which Unslop is established.</p>
+        </section>
 
-      <section>
-        <h2>10. Contact</h2>
-        <p>Questions about these terms? Contact us at <a href="mailto:support@getunslop.com">support@getunslop.com</a></p>
-      </section>
+        <section>
+          <h2>10. Contact</h2>
+          <p>Questions? Email <a href="mailto:support@getunslop.com">support@getunslop.com</a>.</p>
+        </section>
+      </article>
     </div>
   </main>
 
-  <footer>
-    <div class="container">
-      <p>&copy; 2025 Unslop. <a href="privacy.html">Privacy Policy</a> · <a href="support.html">Support</a></p>
+  <footer class="footer">
+    <div class="container footer__grid">
+      <div>
+        <div class="footer__brand">
+          <span class="brand__mark" aria-hidden="true">U</span>
+          <span class="brand__name">Unslop</span>
+        </div>
+        <p class="footer__tag">Calm your feed. Keep your brain.</p>
+      </div>
+      <div class="footer__links">
+        <a href="index.html#top">Home</a>
+        <a href="privacy.html">Privacy</a>
+        <a href="support.html">Support</a>
+      </div>
+      <div class="footer__meta">
+        <p>&copy; 2025 Unslop</p>
+        <p class="footer__fine">Built for focus.</p>
+      </div>
     </div>
   </footer>
 </body>

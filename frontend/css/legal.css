@@ -1,60 +1,67 @@
-/* frontend/css/legal.css */
-.legal {
-  padding: 3rem 0;
+/* Legal pages: keep the same design language, just tighter reading layout */
+
+.legal-wrap{
+  position: relative;
+  z-index: 1;
+  padding: 56px 0;
 }
 
-.legal h1 {
-  font-size: 2.5rem;
-  margin-bottom: 0.5rem;
-  color: var(--primary);
+.legal{
+  padding: 22px 18px;
+  border-radius: 26px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.05);
+  box-shadow: 0 22px 70px rgba(0,0,0,0.22);
 }
 
-.legal .updated {
-  color: var(--text-light);
-  margin-bottom: 2rem;
+.legal h1{
+  margin: 0 0 8px;
+  font-size: clamp(30px, 3vw, 44px);
+  letter-spacing: -0.03em;
 }
 
-.legal section {
-  margin-bottom: 2rem;
+.legal .updated{
+  margin: 0 0 18px;
+  color: rgba(255,255,255,0.62);
+  font-weight: 700;
 }
 
-.legal h2 {
-  font-size: 1.5rem;
-  margin-bottom: 1rem;
-  color: var(--text);
-}
-
-.legal h3 {
+.legal h2{
+  margin: 26px 0 10px;
   font-size: 1.2rem;
-  margin: 1.5rem 0 0.5rem;
-  color: var(--text);
+  letter-spacing: -0.02em;
 }
 
-.legal p {
-  margin-bottom: 1rem;
+.legal h3{
+  margin: 18px 0 8px;
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+  color: rgba(255,255,255,0.88);
 }
 
-.legal ul {
-  margin-left: 1.5rem;
-  margin-bottom: 1rem;
+.legal p{
+  margin: 0 0 12px;
+  color: rgba(255,255,255,0.74);
 }
 
-.legal li {
-  margin-bottom: 0.5rem;
+.legal ul{
+  margin: 0 0 14px 18px;
+  color: rgba(255,255,255,0.74);
 }
 
-.legal code {
-  background: var(--bg-alt);
-  padding: 0.2rem 0.4rem;
-  border-radius: 4px;
-  font-size: 0.9em;
+.legal li{
+  margin: 8px 0;
 }
 
-.legal strong {
-  color: var(--text);
+.legal code{
+  background: rgba(0,0,0,0.25);
+  border: 1px solid rgba(255,255,255,0.10);
+  padding: 2px 6px;
+  border-radius: 8px;
+  color: rgba(255,255,255,0.88);
 }
 
-.logo a {
-  color: var(--primary);
-  text-decoration: none;
+.legal a{
+  text-decoration: underline;
+  text-decoration-color: rgba(255,255,255,0.22);
 }

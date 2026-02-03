@@ -1,85 +1,106 @@
-<!-- frontend/support.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Support - Unslop</title>
-  <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="css/styles.css">
-  <link rel="stylesheet" href="css/legal.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Support — Unslop</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/legal.css" />
 </head>
 <body>
-  <header>
-    <nav class="container">
-      <div class="logo"><a href="index.html">Unslop</a></div>
-      <ul class="nav-links">
-        <li><a href="index.html">Home</a></li>
-        <li><a href="privacy.html">Privacy</a></li>
-        <li><a href="support.html">Support</a></li>
-        <li><a href="terms.html">Terms</a></li>
-      </ul>
+  <div class="bg" aria-hidden="true">
+    <div class="bg__blob bg__blob--1"></div>
+    <div class="bg__blob bg__blob--2"></div>
+    <div class="bg__grid"></div>
+    <div class="bg__vignette"></div>
+  </div>
+
+  <header class="header">
+    <nav class="nav container">
+      <a class="brand" href="index.html#top" aria-label="Unslop home">
+        <span class="brand__mark" aria-hidden="true">U</span>
+        <span class="brand__name">Unslop</span>
+      </a>
+
+      <div class="nav__links" role="navigation" aria-label="Primary">
+        <a href="index.html#how">How it works</a>
+        <a href="index.html#pricing">Pricing</a>
+        <a href="privacy.html">Privacy</a>
+        <a class="nav__pill" href="https://chrome.google.com/webstore" target="_blank" rel="noreferrer">Install</a>
+      </div>
     </nav>
   </header>
 
-  <main class="legal">
+  <main class="legal-wrap">
     <div class="container">
-      <h1>Support</h1>
+      <article class="legal">
+        <h1>Support</h1>
+        <p class="updated">Fast help, no runaround.</p>
 
-      <section>
-        <h2>Contact us</h2>
-        <p>For help, feedback, or questions:</p>
-        <p><strong>Email: <a href="mailto:support@getunslop.com">support@getunslop.com</a></strong></p>
-      </section>
+        <section>
+          <h2>Contact</h2>
+          <p>For help, feedback, or questions:</p>
+          <p><strong>Email: <a href="mailto:support@getunslop.com">support@getunslop.com</a></strong></p>
+        </section>
 
-      <section>
-        <h2>Frequently Asked Questions</h2>
+        <section>
+          <h2>Frequently Asked Questions</h2>
 
-        <h3>How do I sign in?</h3>
-        <p>Click the Unslop extension icon in Chrome, then click "Sign In". Enter your email address and we'll send a magic link. Click the link to sign in.</p>
-        <p>The sign-in link expires in 15 minutes. If it expires, just request a new one.</p>
+          <h3>How do I sign in?</h3>
+          <p>Click the Unslop extension icon in Chrome → “Sign In” → enter your email → click the magic link.</p>
+          <p>The sign-in link expires in 15 minutes. If it expires, request a new one.</p>
 
-        <h3>Why was a post hidden or dimmed?</h3>
-        <p>Unslop uses an AI to classify LinkedIn posts as "keep", "dim", or "hide" based on content quality. Posts that appear to be:</p>
-        <ul>
-          <li>Engagement bait ("Like if you agree!")</li>
-          <li>Vague platitudes without substance</li>
-          <li>Spam or scams</li>
-        </ul>
-        <p>may be dimmed or hidden. The AI isn't perfect—you can provide feedback to help us improve.</p>
+          <h3>Why was a post hidden or dimmed?</h3>
+          <p>Unslop classifies posts as <strong>keep</strong>, <strong>dim</strong>, or <strong>hide</strong>. Posts that look like:</p>
+          <ul>
+            <li>Engagement bait (“Like if you agree!”)</li>
+            <li>Vague platitudes without substance</li>
+            <li>Spam or scams</li>
+          </ul>
+          <p>may be dimmed or hidden. The classifier isn’t perfect — you can send feedback.</p>
 
-        <h3>How do I provide feedback?</h3>
-        <p>In the extension popup, click on a post that was dimmed or hidden and select whether it should have been kept or hidden. This helps us improve future classifications.</p>
+          <h3>What are the usage limits?</h3>
+          <p><strong>Free plan:</strong> 300 AI classifications per month (cached posts don’t count)</p>
+          <p><strong>Pro plan:</strong> 10,000 AI classifications per month</p>
+          <p>After you exceed your limit, posts are shown normally until your quota resets.</p>
 
-        <h3>What are the usage limits?</h3>
-        <p><strong>Free plan:</strong> 300 AI classifications per month (cached posts don't count)</p>
-        <p><strong>Pro plan:</strong> 10,000 AI classifications per month</p>
-        <p>When you exceed your limit, posts will be shown normally (not dimmed or hidden) until your quota resets.</p>
+          <h3>How do I upgrade to Pro?</h3>
+          <p>Open the extension popup → “Upgrade to Pro”. You’ll be taken to checkout.</p>
 
-        <h3>How do I upgrade to Pro?</h3>
-        <p>Click the extension popup, then click "Upgrade to Pro". You'll be taken to Polar checkout to complete your subscription (€3.99/month).</p>
+          <h3>How do I cancel?</h3>
+          <p>Cancel via your billing portal, or email <strong>support@getunslop.com</strong>. Your account returns to Free at period end.</p>
 
-        <h3>How do I cancel my Pro subscription?</h3>
-        <p>You can cancel through Polar, or email <strong>support@getunslop.com</strong> and we can cancel it for you. Your account will revert to the Free plan at the end of your billing period.</p>
-
-        <h3>How do I delete my account?</h3>
-        <p>Email <strong>support@getunslop.com</strong> from your account email address with the subject "Account deletion". We'll delete your account and all associated data within 7 days.</p>
-
-        <h3>The extension isn't working on LinkedIn</h3>
-        <p>Make sure:</p>
-        <ul>
-          <li>You're on <strong>linkedin.com</strong> (not the mobile site)</li>
-          <li>The extension is enabled in Chrome (click the puzzle icon)</li>
-          <li>The toggle in the popup is set to "Enable filtering"</li>
-        </ul>
-        <p>If issues persist, email support with details about what you're seeing.</p>
-      </section>
+          <h3>The extension isn’t working</h3>
+          <ul>
+            <li>Confirm you’re on <strong>linkedin.com</strong> (desktop site)</li>
+            <li>Ensure the extension is enabled in Chrome</li>
+            <li>Make sure filtering is toggled ON in the popup</li>
+          </ul>
+          <p>If it still fails, email support with a short description + screenshot.</p>
+        </section>
+      </article>
     </div>
   </main>
 
-  <footer>
-    <div class="container">
-      <p>&copy; 2025 Unslop. <a href="privacy.html">Privacy Policy</a> · <a href="support.html">Support</a></p>
+  <footer class="footer">
+    <div class="container footer__grid">
+      <div>
+        <div class="footer__brand">
+          <span class="brand__mark" aria-hidden="true">U</span>
+          <span class="brand__name">Unslop</span>
+        </div>
+        <p class="footer__tag">Calm your feed. Keep your brain.</p>
+      </div>
+      <div class="footer__links">
+        <a href="index.html#top">Home</a>
+        <a href="privacy.html">Privacy</a>
+        <a href="terms.html">Terms</a>
+      </div>
+      <div class="footer__meta">
+        <p>&copy; 2025 Unslop</p>
+        <p class="footer__fine">Built for focus.</p>
+      </div>
     </div>
   </footer>
 </body>
