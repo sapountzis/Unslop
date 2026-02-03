@@ -6,6 +6,13 @@ export type UserLabel = 'should_keep' | 'should_hide';
 export interface Storage {
   jwt?: string;
   enabled: boolean;
+  decisionCache?: Record<string, CachedDecision>;
+}
+
+export interface CachedDecision {
+  decision: Decision;
+  source: Source;
+  timestamp: number;
 }
 
 export interface PostData {

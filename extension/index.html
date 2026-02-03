@@ -4,17 +4,240 @@
   <meta charset="UTF-8">
   <title>Unslop</title>
   <style>
-    body {
-      width: 300px;
-      padding: 16px;
-      margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    :root {
+      --bg: #070A12;
+      --bg2: #0B1020;
+      --card: rgba(255,255,255,0.06);
+      --card2: rgba(255,255,255,0.09);
+      --text: rgba(255,255,255,0.92);
+      --muted: rgba(255,255,255,0.68);
+      --faint: rgba(255,255,255,0.52);
+      --border: rgba(255,255,255,0.14);
+      --border2: rgba(255,255,255,0.22);
+      --accent: #5AA2FF;
+      --accent2: #B45CFF;
+      --good: #46E3A6;
+      --radius: 12px;
+      --radius2: 16px;
+      --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial;
     }
+
     * {
       box-sizing: border-box;
+      margin: 0;
+      padding: 0;
     }
-    button:hover {
+
+    body {
+      width: 320px;
+      margin: 0;
+      font-family: var(--font);
+      background: radial-gradient(400px 300px at 20% -10%, rgba(90,162,255,0.2), transparent 55%),
+                  radial-gradient(300px 200px at 110% 20%, rgba(180,92,255,0.18), transparent 50%),
+                  linear-gradient(180deg, var(--bg), var(--bg2));
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    #app {
+      padding: 16px;
+    }
+
+    h2 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    p {
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 12px;
+    }
+
+    input[type="email"] {
+      width: 100%;
+      padding: 10px 12px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input[type="email"]:focus {
+      border-color: var(--accent);
+    }
+
+    input[type="email"]::placeholder {
+      color: var(--faint);
+    }
+
+    button {
+      width: 100%;
+      padding: 10px 16px;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    button.primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: white;
+    }
+
+    button.primary:hover {
       opacity: 0.9;
+      transform: translateY(-1px);
+    }
+
+    button.secondary {
+      background: var(--card);
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+
+    button.secondary:hover {
+      background: var(--card2);
+    }
+
+    button.ghost {
+      background: transparent;
+      color: var(--faint);
+      border: 1px solid var(--border);
+    }
+
+    button.ghost:hover {
+      background: var(--card);
+      color: var(--muted);
+    }
+
+    label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    input[type="checkbox"] {
+      display: none;
+    }
+
+    /* Toggle switch */
+    .toggle {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      transition: all 0.2s ease;
+      flex-shrink: 0;
+    }
+
+    .toggle::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 18px;
+      height: 18px;
+      background: var(--faint);
+      border-radius: 50%;
+      transition: all 0.2s ease;
+    }
+
+    input[type="checkbox"]:checked + .toggle {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-color: transparent;
+    }
+
+    input[type="checkbox"]:checked + .toggle::after {
+      left: calc(100% - 20px);
+      background: white;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+
+    .toggle-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+    }
+
+    .toggle-text {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    input[type="checkbox"]:checked ~ .toggle-text {
+      color: var(--text);
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 12px;
+      margin-bottom: 10px;
+      font-size: 13px;
+    }
+
+    .text-center {
+      text-align: center;
+    }
+
+    .mb-8 {
+      margin-bottom: 8px;
+    }
+
+    .mb-10 {
+      margin-bottom: 10px;
+    }
+
+    .mb-12 {
+      margin-bottom: 12px;
+    }
+
+    .card strong {
+      color: var(--text);
+    }
+
+    .card div {
+      margin-bottom: 6px;
+    }
+
+    .card div:last-child {
+      margin-bottom: 0;
+    }
+
+    .status {
+      font-size: 12px;
+      color: var(--faint);
+      margin-top: 8px;
+    }
+
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 12px 0;
+    }
+
+    form {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
     }
   </style>
 </head>

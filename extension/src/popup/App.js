@@ -24,35 +24,32 @@ export class App {
     async getUserInfo() {
         try {
             const response = await chrome.runtime.sendMessage({ type: 'GET_USER_INFO' });
+            if (!response || !response.email) {
+                console.log('Invalid user info response:', response);
+                return null;
+            }
             return response;
         }
-        catch {
+        catch (err) {
+            console.error('GetUserInfo error:', err);
             return null;
         }
     }
     renderSignIn() {
         this.container.innerHTML = `
-      <div style="text-align: center;">
-        <h2 style="margin: 0 0 16px;">Unslop</h2>
-        <p style="color: #666; font-size: 14px; margin-bottom: 16px;">
-          Sign in to filter your LinkedIn feed
-        </p>
-        <form id="signin-form" style="display: flex; flex-direction: column; gap: 8px;">
+      <div class="text-center">
+        <h2>Unslop</h2>
+        <p>Sign in to filter your LinkedIn feed</p>
+        <form id="signin-form">
           <input
             type="email"
             id="email-input"
             placeholder="your@email.com"
             required
-            style="padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;"
           />
-          <button
-            type="submit"
-            style="padding: 8px 16px; background: #0077b5; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;"
-          >
-            Send Sign In Link
-          </button>
+          <button type="submit" class="primary">Send Sign In Link</button>
         </form>
-        <p id="status" style="font-size: 12px; color: #666; margin-top: 8px;"></p>
+        <p id="status" class="status"></p>
       </div>
     `;
         const form = this.container.querySelector('#signin-form');
@@ -79,29 +76,27 @@ export class App {
         const isPro = userInfo.plan === 'pro' && userInfo.plan_status === 'active';
         this.container.innerHTML = `
       <div>
-        <h2 style="margin: 0 0 16px;">Unslop</h2>
+        <h2>Unslop</h2>
 
-        <div style="margin-bottom: 16px;">
-          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+        <div class="mb-8">
+          <label class="toggle-label">
             <input type="checkbox" id="enabled-toggle" ${enabled ? 'checked' : ''} />
-            <span>Enable filtering</span>
+            <div class="toggle"></div>
+            <span class="toggle-text">Enable filtering</span>
           </label>
         </div>
 
-        <div style="padding: 8px; background: #f5f5f5; border-radius: 4px; font-size: 13px; margin-bottom: 16px;">
-          <div><strong>Email:</strong> ${userInfo.email}</div>
+        <div class="card mb-8">
+          <div><strong>Email:</strong> ${userInfo.email || 'Loading...'}</div>
           <div><strong>Plan:</strong> ${isPro ? 'Pro' : 'Free'}</div>
         </div>
 
         ${!isPro ? `
-          <button id="upgrade-btn" style="width: 100%; padding: 8px; background: #0077b5; color: white; border: none; border-radius: 4px; cursor: pointer;">
-            Upgrade to Pro (3.99/mo)
-          </button>
+          <button id="upgrade-btn" class="primary">Upgrade to Pro ($3.99/mo)</button>
+          <div class="mb-8"></div>
         ` : ''}
 
-        <button id="signout-btn" style="width: 100%; padding: 8px; margin-top: 8px; background: transparent; color: #666; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; font-size: 13px;">
-          Sign Out
-        </button>
+        <button id="signout-btn" class="ghost">Sign Out</button>
       </div>
     `;
         // Event listeners

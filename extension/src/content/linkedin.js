@@ -1,26 +1,41 @@
 // extension/src/content/linkedin.ts
 import { extractPostData, applyDecision } from './linkedin-parser';
+import { getCachedDecision, setCachedDecision, cleanupExpiredCache } from '../lib/storage';
 // Track posts we've already classified
 const processedPosts = new Set();
+// Run cleanup on startup
+cleanupExpiredCache().catch(console.error);
 /**
  * Classify a single post
  */
 // Safe processing check
 const PROCESSING_ATTR = 'data-unslop-checking';
 /**
- * Classify a single post
+ * Classify a single post with cache priority
+ * Priority: user choice (cache) > server decision
  */
 async function classifyPost(postData) {
+    const postId = postData.post_id;
+    // Check cache first (user choice or previous server decision)
+    const cached = await getCachedDecision(postId);
+    if (cached) {
+        return { decision: cached.decision, source: cached.source };
+    }
+    // No cache hit, ask server
     try {
         const response = await chrome.runtime.sendMessage({
             type: 'CLASSIFY_POST',
             post: postData,
         });
-        return response.decision || 'keep';
+        const decision = response.decision || 'keep';
+        const source = response.source || 'error';
+        // Save to cache for next time
+        await setCachedDecision(postId, decision, source);
+        return { decision, source };
     }
     catch (err) {
         console.error('Classification failed:', err);
-        return 'keep';
+        return { decision: 'keep', source: 'error' };
     }
 }
 /**
@@ -63,10 +78,10 @@ async function processPost(element) {
             element.removeAttribute(PROCESSING_ATTR);
             return;
         }
-        // Get classification
-        const decision = await classifyPost(postData);
-        // Apply decision
-        applyDecision(element, decision);
+        // Get classification (with cache)
+        const { decision } = await classifyPost(postData);
+        // Apply decision (pass post_id for user override caching)
+        applyDecision(element, decision, postData.post_id);
     }
     catch (e) {
         console.error('Error processing post:', e);
