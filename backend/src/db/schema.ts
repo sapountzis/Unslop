@@ -1,0 +1,56 @@
+// Database schema for Unslop backend
+import { pgTable, uuid, text, timestamp, date, integer, bigserial, index, primaryKey } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+
+export const users = pgTable('users', {
+  id: uuid('id').primaryKey().default(sql`uuid_generate_v4()`),
+  email: text('email').unique().notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+
+  // plan & billing
+  plan: text('plan').notNull().default('free'), // 'free' | 'pro'
+  planStatus: text('plan_status').notNull().default('inactive'), // 'active' | 'inactive'
+  polarCustomerId: text('polar_customer_id'),
+  polarSubscriptionId: text('polar_subscription_id'),
+});
+
+export const posts = pgTable('posts', {
+  postId: text('post_id').primaryKey(),
+  authorId: text('author_id').notNull(),
+  authorName: text('author_name'),
+
+  contentText: text('content_text').notNull(), // normalized + truncated (<= 4000 chars)
+  contentHash: text('content_hash').notNull(), // SHA-256 of content_text (hex)
+
+  decision: text('decision').notNull(), // 'keep' | 'dim' | 'hide'
+  source: text('source').notNull(), // 'llm' | 'cache' | 'error'
+  model: text('model'), // e.g. 'openrouter:gpt-...'; nullable
+
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  authorIdIdx: index('idx_posts_author_id').on(table.authorId),
+  updatedAtIdx: index('idx_posts_updated_at').on(table.updatedAt),
+}));
+
+export const postFeedback = pgTable('post_feedback', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  userId: uuid('user_id').notNull().references(() => users.id),
+  postId: text('post_id').notNull().references(() => posts.postId),
+
+  renderedDecision: text('rendered_decision').notNull(), // 'keep' | 'dim' | 'hide'
+  userLabel: text('user_label').notNull(), // 'should_keep' | 'should_hide'
+
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  postIdIdx: index('idx_feedback_post_id').on(table.postId),
+  userIdIdx: index('idx_feedback_user_id').on(table.userId),
+}));
+
+export const userUsage = pgTable('user_usage', {
+  userId: uuid('user_id').notNull().references(() => users.id),
+  monthStart: date('month_start').notNull(), // YYYY-MM-01 in UTC
+  llmCalls: integer('llm_calls').notNull().default(0),
+}, (table) => [
+  primaryKey({ columns: [table.userId, table.monthStart] }),
+]);

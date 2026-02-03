@@ -111,7 +111,7 @@ DATABASE_URL=
 # Auth
 JWT_SECRET=
 MAGIC_LINK_SECRET=
-MAGIC_LINK_BASE_URL=https://api.unslop.xyz/v1/auth/callback
+MAGIC_LINK_BASE_URL=https://api.getunslop.com/v1/auth/callback
 
 # Email
 RESEND_API_KEY=
@@ -332,7 +332,7 @@ railway variables set MAGIC_LINK_BASE_URL="https://your-domain.railway.app/v1/au
 
 1. Sign up at https://resend.com
 2. Create API key
-3. Verify your domain (e.g., unslop.xyz)
+3. Verify your domain (e.g., getunslop.com)
 4. Set `RESEND_API_KEY` environment variable
 
 ### Polar (Billing)

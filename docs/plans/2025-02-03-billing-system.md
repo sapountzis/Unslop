@@ -67,8 +67,8 @@ export async function createCheckoutSession(userId: string): Promise<CheckoutSes
     },
     body: JSON.stringify({
       product_price_id: process.env.POLAR_PRO_MONTHLY_PRICE_ID!,
-      success_url: 'https://unslop.xyz/billing/success',
-      cancel_url: 'https://unslop.xyz/billing/cancel',
+      success_url: 'https://getunslop.com/billing/success',
+      cancel_url: 'https://getunslop.com/billing/cancel',
       customer_email: user.email,
       metadata: {
         user_id: userId,

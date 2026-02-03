@@ -71,7 +71,7 @@ Content: ${post.content_text}`;
       headers: {
         'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
         'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://unslop.xyz',
+        'HTTP-Referer': 'https://getunslop.com',
       },
       body: JSON.stringify({
         model: OPENROUTER_MODEL,

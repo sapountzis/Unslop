@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "Unslop",
+  "version": "0.1.0",
+  "description": "Filter your LinkedIn feed",
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://www.linkedin.com/*",
+    "https://api.getunslop.com/*"
+  ],
+  "background": {
+    "service_worker": "src/background/index.ts",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.linkedin.com/*"],
+      "js": ["src/content/linkedin.ts"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://api.getunslop.com/*"],
+      "js": ["src/content/auth.ts"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "index.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Build a static HTML/CSS website for unslop.xyz with landing page, privacy policy, and support pages.
+**Goal:** Build a static HTML/CSS website for getunslop.com with landing page, privacy policy, and support pages.
 
 **Architecture:** Pure static HTML/CSS files with no build step, no JavaScript, no tracking.
 
@@ -348,7 +348,7 @@ git commit -m "feat: add landing page with base styles"
       <section>
         <h2>Data deletion</h2>
         <p>To request deletion of your account and associated data:</p>
-        <p>Email <strong>support@unslop.xyz</strong> from the email address associated with your account.</p>
+        <p>Email <strong>support@getunslop.com</strong> from the email address associated with your account.</p>
         <p>We will process deletion requests within 7 days.</p>
       </section>
 
@@ -489,7 +489,7 @@ git commit -m "feat: add privacy policy page"
       <section>
         <h2>Contact us</h2>
         <p>For help, feedback, or questions:</p>
-        <p><strong>Email: <a href="mailto:support@unslop.xyz">support@unslop.xyz</a></strong></p>
+        <p><strong>Email: <a href="mailto:support@getunslop.com">support@getunslop.com</a></strong></p>
       </section>
 
       <section>
@@ -520,10 +520,10 @@ git commit -m "feat: add privacy policy page"
         <p>Click the extension popup, then click "Upgrade to Pro". You'll be taken to Polar checkout to complete your subscription (€3.99/month).</p>
 
         <h3>How do I cancel my Pro subscription?</h3>
-        <p>You can cancel through Polar, or email <strong>support@unslop.xyz</strong> and we can cancel it for you. Your account will revert to the Free plan at the end of your billing period.</p>
+        <p>You can cancel through Polar, or email <strong>support@getunslop.com</strong> and we can cancel it for you. Your account will revert to the Free plan at the end of your billing period.</p>
 
         <h3>How do I delete my account?</h3>
-        <p>Email <strong>support@unslop.xyz</strong> from your account email address with the subject "Account deletion". We'll delete your account and all associated data within 7 days.</p>
+        <p>Email <strong>support@getunslop.com</strong> from your account email address with the subject "Account deletion". We'll delete your account and all associated data within 7 days.</p>
 
         <h3>The extension isn't working on LinkedIn</h3>
         <p>Make sure:</p>
@@ -648,7 +648,7 @@ git commit -m "feat: add support page with FAQ"
 
       <section>
         <h2>10. Contact</h2>
-        <p>Questions about these terms? Contact us at <a href="mailto:support@unslop.xyz">support@unslop.xyz</a></p>
+        <p>Questions about these terms? Contact us at <a href="mailto:support@getunslop.com">support@getunslop.com</a></p>
       </section>
     </div>
   </main>
@@ -721,7 +721,7 @@ git commit -m "feat: add Terms link to navigation"
 ```markdown
 # Unslop Frontend
 
-Static website for unslop.xyz.
+Static website for getunslop.com.
 
 ## Files
 
@@ -737,7 +737,7 @@ Static website for unslop.xyz.
 ### Requirements
 
 - Static hosting with HTTPS
-- Custom domain support (unslop.xyz)
+- Custom domain support (getunslop.com)
 - No build step required
 
 ### Deployment Options
@@ -765,7 +765,7 @@ Static website for unslop.xyz.
 
 ### DNS Configuration
 
-For apex domain (unslop.xyz):
+For apex domain (getunslop.com):
 - A record: points to hosting provider's IP
 - Or CNAME flattening service
 

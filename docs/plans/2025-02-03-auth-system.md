@@ -174,7 +174,7 @@ export async function sendMagicLinkEmail(email: string, token: string): Promise<
   const link = `${MAGIC_LINK_BASE_URL}?token=${encodeURIComponent(token)}`;
 
   await resend.emails.send({
-    from: 'Unslop <noreply@unslop.xyz>',
+    from: 'Unslop <noreply@getunslop.com>',
     to: email,
     subject: 'Sign in to Unslop',
     html: `

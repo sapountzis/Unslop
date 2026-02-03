@@ -99,7 +99,7 @@ Sets up Docker containerization and Railway deployment for the backend API.
 ---
 
 ### 8. [Frontend Website](2025-02-03-frontend-website.md)
-Builds static public website (unslop.xyz) with landing, privacy, and support pages.
+Builds static public website (getunslop.com) with landing, privacy, and support pages.
 
 **Dependencies:**
 - None (completely independent static site)

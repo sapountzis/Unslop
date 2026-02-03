@@ -1,6 +1,6 @@
 # Unslop Frontend
 
-Static website for unslop.xyz.
+Static website for getunslop.com.
 
 ## Files
 
@@ -16,7 +16,7 @@ Static website for unslop.xyz.
 ### Requirements
 
 - Static hosting with HTTPS
-- Custom domain support (unslop.xyz)
+- Custom domain support (getunslop.com)
 - No build step required
 
 ### Deployment Options
@@ -44,7 +44,7 @@ Static website for unslop.xyz.
 
 ### DNS Configuration
 
-For apex domain (unslop.xyz):
+For apex domain (getunslop.com):
 - A record: points to hosting provider's IP
 - Or CNAME flattening service
 

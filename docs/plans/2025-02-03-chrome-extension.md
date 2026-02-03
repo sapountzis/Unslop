@@ -105,7 +105,7 @@ export default defineConfig({
   ],
   "host_permissions": [
     "https://www.linkedin.com/*",
-    "https://api.unslop.xyz/*"
+    "https://api.getunslop.com/*"
   ],
   "background": {
     "service_worker": "src/background/index.ts",
@@ -118,7 +118,7 @@ export default defineConfig({
       "run_at": "document_idle"
     },
     {
-      "matches": ["https://api.unslop.xyz/*"],
+      "matches": ["https://api.getunslop.com/*"],
       "js": ["src/content/auth.ts"],
       "run_at": "document_idle"
     }
@@ -339,7 +339,7 @@ import type {
   UserInfo,
 } from '../types';
 
-const API_BASE = 'https://api.unslop.xyz/v1';
+const API_BASE = 'https://api.getunslop.com/v1';
 
 export async function classifyPost(
   request: ClassifyRequest,
@@ -549,7 +549,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // Listen for messages from auth callback page
 chrome.runtime.onMessageExternal.addListener(
   (message, sender, sendResponse) => {
-    if (sender.origin !== 'https://api.unslop.xyz') {
+    if (sender.origin !== 'https://api.getunslop.com') {
       return;
     }
 
@@ -832,7 +832,7 @@ git commit -m "feat: implement LinkedIn content script"
 
 ```typescript
 // extension/src/content/auth.ts
-// This script runs on https://api.unslop.xyz/*
+// This script runs on https://api.getunslop.com/*
 // It extracts the JWT from the auth callback page
 
 function extractJwtFromPage(): string | null {
