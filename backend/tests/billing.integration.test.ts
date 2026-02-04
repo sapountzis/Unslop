@@ -18,7 +18,7 @@ describe('Billing E2E Integration Tests (Polar Sandbox)', () => {
       plan: 'free',
       planStatus: 'inactive',
     }).returning();
-    
+
     testUser = user;
     testUserId = user.id;
     testAuthToken = await generateSessionToken(user.id, user.email);
@@ -34,7 +34,7 @@ describe('Billing E2E Integration Tests (Polar Sandbox)', () => {
 
   it.skipIf(!process.env.POLAR_SANDBOX_ACCESS_TOKEN)('should create checkout session with correct metadata', async () => {
     const session = await createCheckoutSession(testUserId);
-    
+
     expect(session.checkout_url).toContain('polar.sh/checkout/');
     expect(session.checkout_url).toBeTruthy();
   });
@@ -180,7 +180,7 @@ describe('Billing E2E Integration Tests (Polar Sandbox)', () => {
     expect(updatedUser.planStatus).toBe('inactive');
   });
 
-  it('should handle subscription.uncensored (via updated)', async () => {
+  it('should handle subscription.uncancelled (via updated)', async () => {
     await db.delete(webhookDeliveries).where(eq(webhookDeliveries.userId, testUserId));
 
     const cancelPayload = {
@@ -207,7 +207,7 @@ describe('Billing E2E Integration Tests (Polar Sandbox)', () => {
     const { handleSubscriptionCancelled } = await import('../src/services/polar');
     await handleSubscriptionCancelled(cancelPayload.data);
 
-    const uncensoredPayload = {
+    const uncancelledPayload = {
       type: 'subscription.updated',
       timestamp: new Date().toISOString(),
       data: {
@@ -228,8 +228,8 @@ describe('Billing E2E Integration Tests (Polar Sandbox)', () => {
       },
     };
 
-    const { handleSubscriptionUncensored } = await import('../src/services/polar');
-    await handleSubscriptionUncensored(uncensoredPayload.data);
+    const { handleSubscriptionUncancelled } = await import('../src/services/polar');
+    await handleSubscriptionUncancelled(uncancelledPayload.data);
 
     const [updatedUser] = await db
       .select()

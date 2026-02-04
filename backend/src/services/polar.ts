@@ -1,287 +1,180 @@
-// Polar service for billing checkout and webhooks
+// Polar billing service
 import { db } from '../db';
-import { users, webhookDeliveries } from '../db/schema';
+import { users } from '../db/schema';
 import { eq } from 'drizzle-orm';
+import { logger } from '../lib/logger';
+import { Plan, PlanStatus, PolarStatus, BillingError } from '../lib/billing-constants';
 
 const POLAR_API_KEY = process.env.POLAR_API_KEY;
-const POLAR_WEBHOOK_SECRET = process.env.POLAR_WEBHOOK_SECRET;
-const POLAR_ENV = process.env.POLAR_ENV || 'production';
-const POLAR_API_BASE = POLAR_ENV === 'sandbox'
+const POLAR_API_BASE = (process.env.POLAR_ENV || 'production') === 'sandbox'
   ? 'https://sandbox-api.polar.sh'
   : 'https://api.polar.sh';
 
-// Only require API key in production, not in test mode
 if (!POLAR_API_KEY && !process.env.TEST_MODE) {
   throw new Error('POLAR_API_KEY environment variable is required');
 }
-if (!POLAR_WEBHOOK_SECRET && !process.env.TEST_MODE) {
+if (!process.env.POLAR_WEBHOOK_SECRET && !process.env.TEST_MODE) {
   throw new Error('POLAR_WEBHOOK_SECRET environment variable is required');
 }
 
-export interface CheckoutSession {
-  checkout_url: string;
-}
-
-
-// Cache price ID to avoid fetching on every request
 let cachedPriceId: string | null = null;
-let cachedPriceIdTimestamp: number = 0;
-const CACHE_TTL = 1000 * 60 * 60; // 1 hour
+let cachedPriceIdTimestamp = 0;
 
 async function getPriceId(): Promise<string> {
-  // Dynamically find it from Product ID
   const productId = process.env.POLAR_PRODUCT_ID;
-  if (!productId) {
-    throw new Error('POLAR_PRODUCT_ID environment variable is required');
-  }
+  if (!productId) throw new Error('POLAR_PRODUCT_ID required');
 
-  // Check cache
-  const now = Date.now();
-  if (cachedPriceId && (now - cachedPriceIdTimestamp < CACHE_TTL)) {
+  if (cachedPriceId && (Date.now() - cachedPriceIdTimestamp < 3600000)) {
     return cachedPriceId;
   }
 
-  // Fetch product to find price
-  console.log(`Fetching prices for product ${productId}...`);
-  const response = await fetch(`${POLAR_API_BASE}/v1/products/${productId}`, {
+  const res = await fetch(`${POLAR_API_BASE}/v1/products/${productId}`, {
     headers: { 'Authorization': `Bearer ${POLAR_API_KEY}` }
   });
+  if (!res.ok) throw new Error(`Failed to fetch product: ${res.status}`);
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch product: ${response.status} ${await response.text()}`);
-  }
+  const product = await res.json() as { prices: { id: string; type: string; recurring_interval: string }[] };
+  const price = product.prices.find(p => p.type === 'recurring' && p.recurring_interval === 'month');
+  if (!price) throw new Error('No monthly recurring price found');
 
-  const product = await response.json() as any;
-
-  // Find the monthly recurring price
-  const price = product.prices.find((p: any) =>
-    p.type === 'recurring' &&
-    p.recurring_interval === 'month'
-  );
-
-  if (!price) {
-    throw new Error('No monthly recurring price found for this product');
-  }
-
-  // Update cache
   cachedPriceId = price.id;
-  cachedPriceIdTimestamp = now;
-
+  cachedPriceIdTimestamp = Date.now();
   return price.id;
 }
 
-export async function createCheckoutSession(userId: string): Promise<CheckoutSession> {
-  // Get current user to check if already Pro
-  const userRecords = await db
-    .select()
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
-
-  if (userRecords.length === 0) {
-    throw new Error('User not found');
+export async function createCheckoutSession(userId: string): Promise<{ checkout_url: string }> {
+  const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  if (!user) throw new Error(BillingError.USER_NOT_FOUND);
+  if (user.plan === Plan.PRO && user.planStatus === PlanStatus.ACTIVE) {
+    throw new Error(BillingError.ALREADY_PRO);
   }
 
-  const user = userRecords[0];
-
-  // Check if already active Pro
-  if (user.plan === 'pro' && user.planStatus === 'active') {
-    throw new Error('ALREADY_PRO');
-  }
-
-  // Get the correct price ID (dynamic or static)
-  const priceId = await getPriceId();
-
-  // Create Polar checkout
-  const response = await fetch(`${POLAR_API_BASE}/v1/checkouts`, {
+  const res = await fetch(`${POLAR_API_BASE}/v1/checkouts`, {
     method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${POLAR_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Authorization': `Bearer ${POLAR_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      product_price_id: priceId,
+      product_price_id: await getPriceId(),
       success_url: `${process.env.APP_URL}/billing/success`,
       cancel_url: `${process.env.APP_URL}/billing/cancel`,
       customer_email: user.email,
-      metadata: {
-        user_id: userId,
-      },
+      metadata: { user_id: userId },
     }),
   });
+  if (!res.ok) throw new Error(`Polar API error: ${res.status}`);
 
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Polar API error: ${response.status} ${error}`);
+  const data = await res.json() as { url: string };
+  return { checkout_url: data.url };
+}
+
+export interface SubscriptionData {
+  subscriptionId: string;
+  userId: string;
+  customerId?: string;
+  status?: string;
+  periodStart?: Date;
+  periodEnd?: Date;
+}
+
+export function extractSubscriptionData(data: Record<string, unknown>): SubscriptionData | null {
+  const subscriptionId = (data.id || data.subscription_id) as string | undefined;
+  if (!subscriptionId) {
+    logger.warn('Webhook missing subscription_id');
+    return null;
   }
 
-  const data = (await response.json()) as { url: string };
+  const metadata = data.metadata as Record<string, unknown> | undefined;
+  const userId = metadata?.user_id as string | undefined;
+  if (!userId) {
+    logger.warn('Webhook missing user_id in metadata', { subscriptionId });
+    return null;
+  }
 
   return {
-    checkout_url: data.url,
+    subscriptionId,
+    userId,
+    customerId: (data.customer_id || (data.customer as Record<string, unknown>)?.id) as string | undefined,
+    status: data.status as string | undefined,
+    periodStart: data.current_period_start ? new Date(data.current_period_start as string) : undefined,
+    periodEnd: data.current_period_end ? new Date(data.current_period_end as string) : undefined,
   };
 }
 
-export interface PolarWebhookPayload {
-  type: string;
-  data: {
-    id: string;
-    customer_id?: string;
-    subscription_id?: string;
-    current_period_start?: string;
-    current_period_end?: string;
-    metadata?: Record<string, unknown>;
-    status?: string;
-  };
+async function setUserTier(userId: string, plan: string, planStatus: string, extra: Partial<{
+  polarCustomerId: string;
+  polarSubscriptionId: string;
+  subscriptionPeriodStart: Date;
+  subscriptionPeriodEnd: Date;
+}> = {}): Promise<void> {
+  await db.update(users).set({ plan, planStatus, ...extra }).where(eq(users.id, userId));
 }
 
-export async function hasWebhookBeenProcessed(subscriptionId: string): Promise<boolean> {
-  const records = await db
-    .select()
-    .from(webhookDeliveries)
-    .where(eq(webhookDeliveries.subscriptionId, subscriptionId))
-    .limit(1);
-
-  return records.length > 0 && records[0].status === 'success';
+export async function handleSubscriptionActive(data: Record<string, unknown>): Promise<void> {
+  const sub = extractSubscriptionData(data);
+  if (!sub) return;
+  await setUserTier(sub.userId, Plan.PRO, PlanStatus.ACTIVE, {
+    polarCustomerId: sub.customerId,
+    polarSubscriptionId: sub.subscriptionId,
+    subscriptionPeriodStart: sub.periodStart,
+    subscriptionPeriodEnd: sub.periodEnd,
+  });
+  logger.info('Subscription active', { userId: sub.userId });
 }
 
-export async function recordWebhookProcessed(
-  subscriptionId: string,
-  eventType: string,
-  userId?: string,
-  status: 'success' | 'failed' = 'success'
-): Promise<void> {
-  await db
-    .insert(webhookDeliveries)
-    .values({
-      subscriptionId,
-      eventType,
-      userId,
-      status,
-    })
-    .onConflictDoNothing();
+export async function handleSubscriptionCanceled(data: Record<string, unknown>): Promise<void> {
+  const sub = extractSubscriptionData(data);
+  if (!sub) return;
+  await setUserTier(sub.userId, Plan.PRO, PlanStatus.CANCELED, {
+    polarSubscriptionId: sub.subscriptionId,
+    subscriptionPeriodEnd: sub.periodEnd,
+  });
+  logger.info('Subscription canceled', { userId: sub.userId, accessUntil: sub.periodEnd });
 }
 
-export async function handleSubscriptionActive(data: PolarWebhookPayload['data']): Promise<void> {
-  const subscriptionId = data.subscription_id || (data as any).subscriptionId || data.id;
-
-  if (!subscriptionId) {
-    console.error('Webhook missing subscription_id');
-    return;
-  }
-
-  if (await hasWebhookBeenProcessed(subscriptionId)) {
-    console.info('Webhook already processed, skipping', { subscription_id: subscriptionId });
-    return;
-  }
-
-  const userId = (data.metadata?.user_id || (data as any).metadata?.userId) as string | undefined;
-
-  if (!userId) {
-    console.error('Webhook missing user_id in metadata');
-    return;
-  }
-
-  // Handle potentially camelCased keys from SDK
-  const currentPeriodStart = data.current_period_start || (data as any).currentPeriodStart;
-  const currentPeriodEnd = data.current_period_end || (data as any).currentPeriodEnd;
-  const customerId = data.customer_id || (data as any).customerId;
-
-  // Parse dates if present
-  const periodStart = currentPeriodStart ? new Date(currentPeriodStart) : undefined;
-  const periodEnd = currentPeriodEnd ? new Date(currentPeriodEnd) : undefined;
-
-  // Set to Pro active
-  await db
-    .update(users)
-    .set({
-      plan: 'pro',
-      planStatus: 'active',
-      polarCustomerId: customerId,
-      polarSubscriptionId: subscriptionId,
-      subscriptionPeriodStart: periodStart,
-      subscriptionPeriodEnd: periodEnd,
-    })
-    .where(eq(users.id, userId));
-
-  await recordWebhookProcessed(subscriptionId, 'subscription.active', userId, 'success');
-
-  console.log(`Updated user ${userId} to PRO (Period: ${periodStart?.toISOString()} -> ${periodEnd?.toISOString()})`);
+export async function handleSubscriptionUncanceled(data: Record<string, unknown>): Promise<void> {
+  const sub = extractSubscriptionData(data);
+  if (!sub) return;
+  await setUserTier(sub.userId, Plan.PRO, PlanStatus.ACTIVE, {
+    polarCustomerId: sub.customerId,
+    polarSubscriptionId: sub.subscriptionId,
+    subscriptionPeriodStart: sub.periodStart,
+    subscriptionPeriodEnd: sub.periodEnd,
+  });
+  logger.info('Subscription uncanceled', { userId: sub.userId });
 }
 
-export async function handleSubscriptionCancelled(data: PolarWebhookPayload['data']): Promise<void> {
-  const subscriptionId = data.subscription_id || (data as any).subscriptionId || data.id;
-
-  if (!subscriptionId) {
-    console.error('Webhook missing subscription_id');
-    return;
-  }
-
-  if (await hasWebhookBeenProcessed(subscriptionId)) {
-    console.info('Webhook already processed, skipping', { subscription_id: subscriptionId });
-    return;
-  }
-
-  const userId = data.metadata?.user_id as string | undefined;
-
-  if (!userId) {
-    console.error('Webhook missing user_id in metadata');
-    return;
-  }
-
-  // Set to inactive
-  await db
-    .update(users)
-    .set({
-      planStatus: 'inactive',
-    })
-    .where(eq(users.id, userId));
-
-  await recordWebhookProcessed(subscriptionId, 'subscription.cancelled', userId, 'success');
-
-  console.log(`Updated user ${userId} to INACTIVE`);
+export async function handleSubscriptionRevoked(data: Record<string, unknown>): Promise<void> {
+  const sub = extractSubscriptionData(data);
+  if (!sub) return;
+  await setUserTier(sub.userId, Plan.FREE, PlanStatus.INACTIVE, {
+    polarSubscriptionId: sub.subscriptionId,
+  });
+  logger.info('Subscription revoked', { userId: sub.userId });
 }
 
-export async function handleSubscriptionUncensored(data: PolarWebhookPayload['data']): Promise<void> {
-  const subscriptionId = data.subscription_id || (data as any).subscriptionId || data.id;
+export async function handleSubscriptionPastDue(data: Record<string, unknown>): Promise<void> {
+  const sub = extractSubscriptionData(data);
+  if (!sub) return;
+  await setUserTier(sub.userId, Plan.PRO, PlanStatus.PAST_DUE, {
+    polarSubscriptionId: sub.subscriptionId,
+  });
+  logger.warn('Subscription past due', { userId: sub.userId });
+}
 
-  if (!subscriptionId) {
-    console.error('Webhook missing subscription_id');
-    return;
+export async function handleSubscriptionUpdated(data: Record<string, unknown>): Promise<void> {
+  const sub = extractSubscriptionData(data);
+  if (!sub) return;
+
+  switch (sub.status) {
+    case PolarStatus.ACTIVE:
+    case PolarStatus.TRIALING:
+      await handleSubscriptionActive(data);
+      break;
+    case PolarStatus.CANCELED:
+      await handleSubscriptionCanceled(data);
+      break;
+    case PolarStatus.PAST_DUE:
+    case PolarStatus.UNPAID:
+      await handleSubscriptionPastDue(data);
+      break;
   }
-
-  if (await hasWebhookBeenProcessed(subscriptionId)) {
-    console.info('Webhook already processed, skipping', { subscription_id: subscriptionId });
-    return;
-  }
-
-  const userId = data.metadata?.user_id as string | undefined;
-
-  if (!userId) {
-    console.error('Webhook missing user_id in metadata (uncanceled)');
-    return;
-  }
-
-  const currentPeriodStart = data.current_period_start || (data as any).currentPeriodStart;
-  const currentPeriodEnd = data.current_period_end || (data as any).currentPeriodEnd;
-  const customerId = data.customer_id || (data as any).customerId;
-
-  const periodStart = currentPeriodStart ? new Date(currentPeriodStart) : undefined;
-  const periodEnd = currentPeriodEnd ? new Date(currentPeriodEnd) : undefined;
-
-  await db
-    .update(users)
-    .set({
-      plan: 'pro',
-      planStatus: 'active',
-      polarCustomerId: customerId,
-      polarSubscriptionId: subscriptionId,
-      subscriptionPeriodStart: periodStart,
-      subscriptionPeriodEnd: periodEnd,
-    })
-    .where(eq(users.id, userId));
-
-  await recordWebhookProcessed(subscriptionId, 'subscription.uncanceled', userId, 'success');
-
-  console.log(`Reactivated user ${userId} (subscription.uncanceled)`);
 }

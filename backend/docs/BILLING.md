@@ -47,7 +47,7 @@ For testing without full checkout flow:
 1. Go to Polar Sandbox Dashboard → Subscriptions
 2. Find your test subscription
 3. Click "Cancel" to trigger `subscription.canceled`
-4. Click "Reactivate" to trigger `subscription.uncensored`
+4. Click "Reactivate" to trigger `subscription.uncancelled`
 
 ### 5. Verify User State
 

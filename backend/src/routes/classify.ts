@@ -5,9 +5,10 @@ import { z } from 'zod';
 import { db } from '../db';
 import { posts, userActivity } from '../db/schema';
 import { eq } from 'drizzle-orm';
-import { classifyPost, type PostInput } from '../services/llm';
+import { classifyPost } from '../services/llm';
 import { checkQuota, incrementUsage } from '../services/quota';
 import { hashContentText, normalizeContentText } from '../lib/hash';
+import { authMiddleware } from '../middleware/auth';
 
 const classify = new Hono();
 
@@ -19,26 +20,6 @@ const classifySchema = z.object({
     content_text: z.string().max(4000),
   }),
 });
-
-// Auth middleware (inline for this route)
-const authMiddleware = async (c: any, next: any) => {
-  const authHeader = c.req.header('Authorization');
-
-  if (!authHeader?.startsWith('Bearer ')) {
-    return c.json({ error: 'Unauthorized' }, 401);
-  }
-
-  const token = authHeader.substring(7);
-
-  try {
-    const { verifySessionToken } = await import('../lib/jwt');
-    const payload = await verifySessionToken(token);
-    c.set('user', payload);
-    await next();
-  } catch (err) {
-    return c.json({ error: 'Invalid token' }, 401);
-  }
-};
 
 // POST /v1/classify
 classify.post('/v1/classify', authMiddleware, zValidator('json', classifySchema), async (c) => {
