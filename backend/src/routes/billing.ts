@@ -60,16 +60,36 @@ billing.post(
       await handleSubscriptionActive(payload.data as any);
     },
     onSubscriptionUpdated: async (payload) => {
-      await handleSubscriptionActive(payload.data as any);
+      const data = payload.data as any;
+      const status = data.status;
+
+      if (status === 'active') {
+        await handleSubscriptionActive(data);
+        console.log('Subscription updated to active', {
+          user_id: data.metadata?.user_id,
+          subscription_id: data.subscription_id,
+        });
+      } else if (status === 'canceled') {
+        await handleSubscriptionCancelled(data);
+        console.log('Subscription updated to canceled', {
+          user_id: data.metadata?.user_id,
+          subscription_id: data.subscription_id,
+        });
+      } else if (status === 'uncensored') {
+        await handleSubscriptionUncensored(data);
+        console.log('Subscription updated to uncensored', {
+          user_id: data.metadata?.user_id,
+          subscription_id: data.subscription_id,
+        });
+      } else {
+        console.log('Subscription updated with unknown status', { status });
+      }
     },
     onSubscriptionCanceled: async (payload) => {
       await handleSubscriptionCancelled(payload.data as any);
     },
     onSubscriptionRevoked: async (payload) => {
       await handleSubscriptionCancelled(payload.data as any);
-    },
-    onSubscriptionUncensored: async (payload) => {
-      await handleSubscriptionUncensored(payload.data as any);
     },
     onPayload: async (payload) => {
       // Catch-all mostly for logging, or silence it.
