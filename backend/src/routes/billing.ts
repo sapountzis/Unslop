@@ -99,9 +99,9 @@ billing.post(
             user_id: data.metadata?.user_id,
             subscription_id: data.subscription_id,
           });
-        } else if (status === 'uncensored') {
+        } else if (status === 'uncanceled') {
           await handleSubscriptionUncensored(data);
-          logger.info('Subscription updated to uncensored', {
+          logger.info('Subscription updated to uncanceled', {
             user_id: data.metadata?.user_id,
             subscription_id: data.subscription_id,
           });

@@ -312,7 +312,7 @@ describe('Polar webhook handlers', () => {
     });
   });
 
-  it('should handle subscription.updated with uncensored status', async () => {
+  it('should handle subscription.updated with uncanceled status', async () => {
     const payloadData = createMockSubscriptionPayload({
       status: 'active',
       cancel_at_period_end: false,

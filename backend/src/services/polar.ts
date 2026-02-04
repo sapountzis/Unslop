@@ -258,7 +258,7 @@ export async function handleSubscriptionUncensored(data: PolarWebhookPayload['da
   const userId = data.metadata?.user_id as string | undefined;
 
   if (!userId) {
-    console.error('Webhook missing user_id in metadata (uncensored)');
+    console.error('Webhook missing user_id in metadata (uncanceled)');
     return;
   }
 
@@ -281,7 +281,7 @@ export async function handleSubscriptionUncensored(data: PolarWebhookPayload['da
     })
     .where(eq(users.id, userId));
 
-  await recordWebhookProcessed(subscriptionId, 'subscription.uncensored', userId, 'success');
+  await recordWebhookProcessed(subscriptionId, 'subscription.uncanceled', userId, 'success');
 
-  console.log(`Reactivated user ${userId} (subscription.uncensored)`);
+  console.log(`Reactivated user ${userId} (subscription.uncanceled)`);
 }
