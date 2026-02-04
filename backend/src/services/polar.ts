@@ -1,6 +1,6 @@
 // Polar service for billing checkout and webhooks
 import { db } from '../db';
-import { users } from '../db/schema';
+import { users, webhookDeliveries } from '../db/schema';
 import { eq } from 'drizzle-orm';
 
 const POLAR_API_KEY = process.env.POLAR_API_KEY;
@@ -135,8 +135,38 @@ export interface PolarWebhookPayload {
   };
 }
 
+export async function hasWebhookBeenProcessed(webhookId: string): Promise<boolean> {
+  const records = await db
+    .select()
+    .from(webhookDeliveries)
+    .where(eq(webhookDeliveries.webhookId, webhookId))
+    .limit(1);
 
-export async function handleSubscriptionActive(data: PolarWebhookPayload['data']): Promise<void> {
+  return records.length > 0 && records[0].status === 'success';
+}
+
+export async function recordWebhookProcessed(
+  webhookId: string,
+  eventType: string,
+  userId?: string,
+  status: 'success' | 'failed' = 'success'
+): Promise<void> {
+  await db
+    .insert(webhookDeliveries)
+    .values({
+      webhookId,
+      eventType,
+      userId,
+      status,
+    })
+    .onConflictDoNothing();
+}
+
+export async function handleSubscriptionActive(data: PolarWebhookPayload['data'], webhookId?: string): Promise<void> {
+  if (webhookId && await hasWebhookBeenProcessed(webhookId)) {
+    console.info('Webhook already processed, skipping', { webhook_id: webhookId });
+    return;
+  }
 
   const userId = (data.metadata?.user_id || (data as any).metadata?.userId) as string | undefined;
 
@@ -169,10 +199,19 @@ export async function handleSubscriptionActive(data: PolarWebhookPayload['data']
     })
     .where(eq(users.id, userId));
 
+  if (webhookId) {
+    await recordWebhookProcessed(webhookId, 'subscription.active', userId, 'success');
+  }
+
   console.log(`Updated user ${userId} to PRO (Period: ${periodStart?.toISOString()} -> ${periodEnd?.toISOString()})`);
 }
 
-export async function handleSubscriptionCancelled(data: PolarWebhookPayload['data']): Promise<void> {
+export async function handleSubscriptionCancelled(data: PolarWebhookPayload['data'], webhookId?: string): Promise<void> {
+  if (webhookId && await hasWebhookBeenProcessed(webhookId)) {
+    console.info('Webhook already processed, skipping', { webhook_id: webhookId });
+    return;
+  }
+
   const userId = data.metadata?.user_id as string | undefined;
 
   if (!userId) {
@@ -188,6 +227,49 @@ export async function handleSubscriptionCancelled(data: PolarWebhookPayload['dat
     })
     .where(eq(users.id, userId));
 
+  if (webhookId) {
+    await recordWebhookProcessed(webhookId, 'subscription.cancelled', userId, 'success');
+  }
+
   console.log(`Updated user ${userId} to INACTIVE`);
 }
 
+export async function handleSubscriptionUncensored(data: PolarWebhookPayload['data'], webhookId?: string): Promise<void> {
+  if (webhookId && await hasWebhookBeenProcessed(webhookId)) {
+    console.info('Webhook already processed, skipping', { webhook_id: webhookId });
+    return;
+  }
+
+  const userId = data.metadata?.user_id as string | undefined;
+
+  if (!userId) {
+    console.error('Webhook missing user_id in metadata (uncensored)');
+    return;
+  }
+
+  const currentPeriodStart = data.current_period_start || (data as any).currentPeriodStart;
+  const currentPeriodEnd = data.current_period_end || (data as any).currentPeriodEnd;
+  const customerId = data.customer_id || (data as any).customerId;
+  const subscriptionId = data.subscription_id || (data as any).subscriptionId || data.id;
+
+  const periodStart = currentPeriodStart ? new Date(currentPeriodStart) : undefined;
+  const periodEnd = currentPeriodEnd ? new Date(currentPeriodEnd) : undefined;
+
+  await db
+    .update(users)
+    .set({
+      plan: 'pro',
+      planStatus: 'active',
+      polarCustomerId: customerId,
+      polarSubscriptionId: subscriptionId,
+      subscriptionPeriodStart: periodStart,
+      subscriptionPeriodEnd: periodEnd,
+    })
+    .where(eq(users.id, userId));
+
+  if (webhookId) {
+    await recordWebhookProcessed(webhookId, 'subscription.uncensored', userId, 'success');
+  }
+
+  console.log(`Reactivated user ${userId} (subscription.uncensored)`);
+}

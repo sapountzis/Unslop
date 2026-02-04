@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { Webhooks } from '@polar-sh/hono';
-import { createCheckoutSession, handleSubscriptionActive, handleSubscriptionCancelled } from '../services/polar';
+import { createCheckoutSession, handleSubscriptionActive, handleSubscriptionCancelled, handleSubscriptionUncensored } from '../services/polar';
 import type { JWTPayload } from '../lib/jwt';
 
 const billing = new Hono();
@@ -67,6 +67,9 @@ billing.post(
     },
     onSubscriptionRevoked: async (payload) => {
       await handleSubscriptionCancelled(payload.data as any);
+    },
+    onSubscriptionUncensored: async (payload) => {
+      await handleSubscriptionUncensored(payload.data as any);
     },
     onPayload: async (payload) => {
       // Catch-all mostly for logging, or silence it.
