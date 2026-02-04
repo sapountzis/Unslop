@@ -2,6 +2,7 @@
 import OpenAI from 'openai';
 import { z } from 'zod';
 import { zodResponseFormat } from 'openai/helpers/zod';
+import retry from 'async-retry';
 import { CLASSIFICATION_PROMPT } from './prompts';
 
 export interface PostInput {
@@ -18,21 +19,57 @@ export interface LLMCallResult {
   latency: number;
 }
 
-// Define the schema using Zod
+// enum thresholds
+const KEEP_THRESHOLD = 0.4;
+const DIM_THRESHOLD = 0.3;
+
+// Score result interface
+export interface ScoreResult {
+  u: number;  // usefulness_score (higher is better)
+  d: number;  // educational_depth_score (higher is better)
+  c: number;  // human_connection_score (higher is better)
+  h: number;  // humor_score (higher is better)
+  rb: number; // rage_bait_score (lower is better)
+  eb: number; // ego_bait_score (lower is better)
+  sp: number; // sales_pitch_score (lower is better)
+  ts: number; // template_slop_score (lower is better)
+  sf: number; // spammy_formatting_score (lower is better)
+}
+
+// Define the schema using Zod - only abbreviated scores
 const DecisionSchema = z.object({
-  usefulness_score: z.number(),
-  educational_depth_score: z.number(),
-  human_connection_score: z.number(),
-  humor_score: z.number(),
-  rage_bait_score: z.number(),
-  ego_bait_score: z.number(),
-  sales_pitch_score: z.number(),
-  template_slop_score: z.number(),
-  spammy_formatting_score: z.number(),
-  overall_quality_label: z.enum(['high_value', 'medium_value', 'low_value', 'spam_slop']),
-  recommended_action: z.enum(['keep', 'dim', 'hide']),
-  short_rationale: z.string(),
+  u: z.number(),
+  d: z.number(),
+  c: z.number(),
+  h: z.number(),
+  rb: z.number(),
+  eb: z.number(),
+  sp: z.number(),
+  ts: z.number(),
+  sf: z.number(),
 });
+
+/**
+ * Composes a final decision (keep/dim/hide) from orthogonal scores.
+ */
+export function composeDecision(scores: ScoreResult): 'keep' | 'dim' | 'hide' {
+  const { u, d, c, h, rb, eb, sp, ts, sf } = scores;
+
+  const positiveSignal = (u + d + c + h);
+  const nPositiveSignals = 4;
+  const negativeSignal = (rb + eb + sp + ts + sf);
+  const nNegativeSignals = 5;
+
+  const compositeSignal = (positiveSignal + nNegativeSignals - negativeSignal) / (nPositiveSignals + nNegativeSignals);
+
+  if (compositeSignal > KEEP_THRESHOLD) {
+    return 'keep';
+    // } else if (compositeSignal > DIM_THRESHOLD) {
+    //   return 'dim';
+  } else {
+    return 'hide';
+  }
+}
 
 function getOpenRouterConfig(): { apiKey: string; baseUrl: string; model: string } {
   const apiKey = process.env.OPENROUTER_API_KEY;
@@ -52,6 +89,75 @@ function getOpenRouterConfig(): { apiKey: string; baseUrl: string; model: string
   };
 }
 
+function constructPrompt(post: PostInput): string {
+  // We prepend author info to the content to provide context, 
+  // as the prompt placeholder {{POST_TEXT}} implies just the text, 
+  // but author info is valuable for "ego_bait" assessment.
+  const contentWithContext = `Author: ${post.author_name}\n\n${post.content_text}`;
+  return CLASSIFICATION_PROMPT.replace('{{POST_TEXT}}', contentWithContext);
+}
+
+/**
+ * Executes the LLM call with retry logic for transient failures
+ */
+async function callLLMWithRetry(openai: OpenAI, model: string, prompt: string) {
+  return await retry(
+    async (bail) => {
+      try {
+        const completion = await openai.chat.completions.create({
+          model: model,
+          messages: [
+            { role: 'user', content: prompt },
+          ],
+          temperature: 0.1,
+          max_tokens: 1000,
+          response_format: zodResponseFormat(DecisionSchema, 'classification'),
+        });
+
+        const message = completion.choices[0].message;
+
+        if (message.refusal) {
+          // If the model refuses, do not retry
+          bail(new Error(`LLM Refusal: ${message.refusal}`));
+          return completion; // TypeScript requires return even after bail
+        }
+
+        if (!message.content) {
+          throw new Error('Empty response from LLM (content is null)');
+        }
+
+        return completion;
+      } catch (error: any) {
+        // Stop retrying on 401/403 errors (auth issues)
+        if (error.status === 401 || error.status === 403) {
+          bail(error);
+          return null as any;
+        }
+        throw error; // Retry other errors
+      }
+    },
+    {
+      retries: 3,
+      minTimeout: 2000,
+      maxTimeout: 20000,
+      randomize: true, // Jitter
+      onRetry: (err: any, attempt) => {
+        console.warn(`LLM call attempt ${attempt} failed: ${err.message}`);
+      }
+    }
+  );
+}
+
+function parseAndValidateResponse(content: string | null): ScoreResult {
+  if (!content) {
+    throw new Error('Empty content received from LLM');
+  }
+
+  const parsed = JSON.parse(content);
+  // Validate with Zod
+  return DecisionSchema.parse(parsed);
+}
+
 export async function classifyPost(post: PostInput): Promise<LLMCallResult> {
   const startTime = Date.now();
 
@@ -60,7 +166,7 @@ export async function classifyPost(post: PostInput): Promise<LLMCallResult> {
     console.log('⚠️ No real OpenRouter API key found, defaulting to "keep" (dev mode)');
     return {
       decision: 'keep',
-      source: 'error', // Treating missing key as "error" source to indicate fallback
+      source: 'error',
       model: 'dev-fallback',
       latency: 0,
     };
@@ -73,52 +179,23 @@ export async function classifyPost(post: PostInput): Promise<LLMCallResult> {
     baseURL: baseUrl,
   });
 
-  // Construct the final prompt by replacing the placeholder
-  // We prepend author info to the content to provide context, 
-  // as the prompt placeholder {{POST_TEXT}} implies just the text, 
-  // but author info is valuable for "ego_bait" assessment.
-  const contentWithContext = `Author: ${post.author_name}\n\n${post.content_text}`;
-  const finalPrompt = CLASSIFICATION_PROMPT.replace('{{POST_TEXT}}', contentWithContext);
+  const prompt = constructPrompt(post);
 
   try {
-    const completion = await openai.chat.completions.create({
-      model: model,
-      messages: [
-        { role: 'user', content: finalPrompt },
-      ],
-      temperature: 0.1,
-      max_tokens: 1000,
-      response_format: zodResponseFormat(DecisionSchema, 'classification'),
-    });
-
-    const message = completion.choices[0].message;
-
-    if (message.refusal) {
-      throw new Error(`LLM Refusal: ${message.refusal}`);
-    }
-
-    const content = message.content;
-
-    if (!content) {
-      throw new Error('Empty response from LLM (content is null)');
-    }
-
-    const parsed = JSON.parse(content);
-
-    // Validate again with Zod
-    const result = DecisionSchema.parse(parsed);
-
+    const completion = await callLLMWithRetry(openai, model, prompt);
+    const scores = parseAndValidateResponse(completion.choices[0].message.content);
+    const decision = composeDecision(scores);
     const latency = Date.now() - startTime;
 
     return {
-      decision: result.recommended_action, // Map new action to old decision field
+      decision,
       source: 'llm',
       model: model,
       latency,
     };
   } catch (err) {
     // On error, fail open to "keep"
-    console.error('LLM classification failed:', err);
+    console.error('LLM classification failed after retries:', err);
     return {
       decision: 'keep',
       source: 'error',

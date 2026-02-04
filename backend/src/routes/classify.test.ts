@@ -18,10 +18,16 @@ import { generateSessionToken, verifySessionToken } from '../lib/jwt';
 const mockFetch = mock(() => {
   return Promise.resolve({
     ok: true,
+    status: 200,
+    statusText: 'OK',
+    headers: new Headers({
+      'content-type': 'application/json',
+    }),
     json: async () => ({
       choices: [{
         message: {
-          content: '{"decision": "dim"}',
+          // Scores that produce "dim": positiveSignal=0.4 (<0.5), negativeSignal=0.5 (>=0.4)
+          content: '{"u":0.4,"d":0.4,"c":0.3,"h":0.1,"rb":0.5,"eb":0.5,"sp":0.5,"ts":0.5,"sf":0.5}',
         },
       }],
     }),

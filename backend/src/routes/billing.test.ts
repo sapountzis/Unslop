@@ -4,9 +4,9 @@ import { generateSessionToken } from '../lib/jwt';
 
 // Set test mode before any imports
 process.env.TEST_MODE = 'true';
-process.env.JWT_SECRET = 'test-secret';
-process.env.POLAR_WEBHOOK_SECRET = 'test-webhook-secret';
-process.env.POLAR_API_KEY = 'test-key';
+process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret';
+process.env.POLAR_WEBHOOK_SECRET = process.env.POLAR_WEBHOOK_SECRET || 'test-webhook-secret';
+process.env.POLAR_API_KEY = process.env.POLAR_API_KEY || 'test-key';
 
 // Mock the database before importing the routes
 const mockSelect = mock(() => ({ from: mock(() => ({ where: mock(() => ({ limit: mock(() => Promise.resolve([])) })) })) }));
@@ -47,7 +47,7 @@ async function getAuthToken(userId: string, email: string): Promise<string> {
 
 // Helper to make requests to the billing app
 async function billingRequest(path: string, options: RequestInit = {}) {
-  const url = new URL(path, 'http://localhost');
+  const url = new URL(path, process.env.APP_URL || 'http://localhost:3000');
   const req = new Request(url.toString(), options);
   return billing.fetch(req);
 }

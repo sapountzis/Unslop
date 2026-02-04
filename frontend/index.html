@@ -436,12 +436,15 @@
       </div>
 
       <div class="footer__meta">
-        <p>&copy; 2025 Unslop</p>
+        <p>&copy; <span id="year"></span> Unslop</p>
         <p class="footer__fine">
           Built for focus.
         </p>
       </div>
     </div>
   </footer>
+  <script>
+    document.getElementById('year').textContent = new Date().getFullYear();
+  </script>
 </body>
 </html>

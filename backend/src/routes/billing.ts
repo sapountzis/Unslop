@@ -2,7 +2,8 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import { createCheckoutSession, handleSubscriptionWebhook, verifyWebhookSignature } from '../services/polar';
+import { Webhooks } from '@polar-sh/hono';
+import { createCheckoutSession, handleSubscriptionActive, handleSubscriptionCancelled } from '../services/polar';
 import type { JWTPayload } from '../lib/jwt';
 
 const billing = new Hono();
@@ -48,27 +49,79 @@ billing.post('/v1/billing/create-checkout', authMiddleware, zValidator('json', c
 });
 
 // POST /v1/billing/polar/webhook
-billing.post('/v1/billing/polar/webhook', async (c) => {
-  // Get raw body for signature verification
-  const rawBody = await c.req.text();
-  const signature = c.req.header('x-polar-signature') || '';
+billing.post(
+  '/v1/billing/polar/webhook',
+  Webhooks({
+    webhookSecret: process.env.POLAR_WEBHOOK_SECRET!,
+    onSubscriptionCreated: async (payload) => {
+      await handleSubscriptionActive(payload.data as any);
+    },
+    onSubscriptionActive: async (payload) => {
+      await handleSubscriptionActive(payload.data as any);
+    },
+    onSubscriptionCanceled: async (payload) => {
+      await handleSubscriptionCancelled(payload.data as any);
+    },
+    onSubscriptionRevoked: async (payload) => {
+      await handleSubscriptionCancelled(payload.data as any);
+    },
+    onPayload: async (payload) => {
+      // Catch-all mostly for logging, or silence it.
+      // console.log('Received other webhook:', payload.type);
+    }
+  })
+);
 
-  // Verify signature
-  const isValid = await verifyWebhookSignature(rawBody, signature);
 
-  if (!isValid) {
-    return c.json({ error: 'invalid_signature' }, 401);
-  }
+// GET /billing/success
+billing.get('/billing/success', (c) => {
+  return c.html(`
+    <html>
+      <head>
+        <title>Payment Successful</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+          body { font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #f9fafb; }
+          .card { background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); text-align: center; max-width: 400px; }
+          h1 { color: #059669; margin-bottom: 0.5rem; }
+          p { color: #4b5563; line-height: 1.5; }
+          .button { display: inline-block; margin-top: 1.5rem; padding: 0.75rem 1.5rem; background: #000; color: white; text-decoration: none; border-radius: 6px; font-weight: 500; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <h1>Payment Successful!</h1>
+          <p>Thank you for subscribing to Unslop Pro. Your account has been upgraded.</p>
+          <p>You can now close this window and return to LinkedIn.</p>
+        </div>
+      </body>
+    </html>
+  `);
+});
 
-  try {
-    const payload = JSON.parse(rawBody);
-    await handleSubscriptionWebhook(payload);
-    return c.json({ received: true });
-  } catch (err) {
-    console.error('Webhook handling failed:', err);
-    // Still return 200 so Polar doesn't retry
-    return c.json({ received: true, error: 'processing_failed' });
-  }
+// GET /billing/cancel
+billing.get('/billing/cancel', (c) => {
+  return c.html(`
+    <html>
+      <head>
+        <title>Payment Cancelled</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+          body { font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #f9fafb; }
+          .card { background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); text-align: center; max-width: 400px; }
+          h1 { color: #dc2626; margin-bottom: 0.5rem; }
+          p { color: #4b5563; line-height: 1.5; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <h1>Payment Cancelled</h1>
+          <p>No charges were made. You can try again whenever you're ready.</p>
+          <p>You can close this window.</p>
+        </div>
+      </body>
+    </html>
+  `);
 });
 
 export { billing };

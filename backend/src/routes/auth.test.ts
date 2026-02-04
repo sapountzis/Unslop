@@ -14,7 +14,7 @@ const mockSendMagicLinkEmail = async (email: string, token: string) => {
   // Mock implementation - do nothing
 };
 
-const API_URL = 'http://localhost:3000';
+const API_URL = process.env.APP_URL || 'http://localhost:3000';
 
 describe('POST /v1/auth/start', () => {
   beforeEach(async () => {

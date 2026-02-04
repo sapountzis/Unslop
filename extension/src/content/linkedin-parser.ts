@@ -30,12 +30,53 @@ export async function extractPostData(element: HTMLElement): Promise<PostData | 
 
   // Extract author info
   const authorLink = element.querySelector('a[href*="/in/"], a[href*="/company/"]');
-  const authorId = authorLink?.getAttribute('href') || 'unknown';
+  const href = authorLink?.getAttribute('href') || '';
 
-  const authorNameElement = element.querySelector(
-    '[data-anonymize="person-name"], .feed-shared-author__name'
+  // Extract clean author_id from LinkedIn URL patterns
+  // Matches: /in/username/, /in/username/with/slashes, /company/companyname/
+  let authorId = 'unknown';
+  const inMatch = href.match(/\/in\/([^\/?]+)/);
+  const companyMatch = href.match(/\/company\/([^\/?]+)/);
+
+  if (inMatch?.[1]) {
+    authorId = inMatch[1];
+  } else if (companyMatch?.[1]) {
+    authorId = `company-${companyMatch[1]}`;
+  } else if (href) {
+    // Fallback: use full href if it exists but doesn't match patterns
+    authorId = href;
+  }
+
+  // Extract author name - try multiple selectors as LinkedIn's DOM changes frequently
+  // The aria-hidden span is the key - it contains just the name without duplicates
+  let authorName = 'Unknown';
+
+  const nameSpan = element.querySelector(
+    '.update-components-actor__title span[aria-hidden="true"]:first-child, ' +
+    'span[aria-hidden="true"][class*="visually-hidden"] ~ span[aria-hidden="true"], ' +
+    '[data-anonymize="person-name"]'
   );
-  const authorName = authorNameElement?.textContent?.trim() || 'Unknown';
+
+  if (nameSpan?.textContent) {
+    const trimmed = nameSpan.textContent.trim();
+    // Only use if it looks like a name (not empty, not just symbols)
+    if (trimmed && trimmed.length > 0 && /^[A-Za-z\u00C0-\u00FF\s\.\-]+$/.test(trimmed)) {
+      authorName = trimmed;
+    }
+  }
+
+  // Fallback: try to extract from aria-label
+  if (authorName === 'Unknown') {
+    const authorLink = element.querySelector('a[href*="/in/"], a[href*="/company/"]');
+    const ariaLabel = authorLink?.getAttribute('aria-label');
+    if (ariaLabel) {
+      // aria-label format: "View: Name • ...". Extract just the name.
+      const match = ariaLabel.match(/View:\s*([^•]+)/);
+      if (match?.[1]) {
+        authorName = match[1].trim();
+      }
+    }
+  }
 
   // Extract post content
   const contentElement = element.querySelector(
