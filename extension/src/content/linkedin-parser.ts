@@ -2,18 +2,64 @@
 import { normalizeContentText, derivePostId } from '../lib/hash';
 import { PostData, Decision } from '../types';
 import { setCachedDecision } from '../lib/storage';
+import { SELECTORS, AUTHOR_PATTERNS, ATTRIBUTES } from '../lib/selectors';
 
 /**
  * Check if an element is a LinkedIn feed post
  */
 function isFeedPost(element: HTMLElement): boolean {
-  // LinkedIn feed posts typically have specific data attributes or class names
-  // This is a simplified check - adjust based on actual DOM structure
   return (
     element.hasAttribute('data-urn') ||
     element.classList.contains('feed-shared-update-v2') ||
-    element.querySelector('[data-urn]') !== null
+    element.querySelector(SELECTORS.postUrn) !== null
   );
+}
+
+/**
+ * Extract author ID from LinkedIn URL
+ */
+function extractAuthorId(href: string): string {
+  const profileMatch = href.match(AUTHOR_PATTERNS.profile);
+  if (profileMatch?.[1]) {
+    return profileMatch[1];
+  }
+
+  const companyMatch = href.match(AUTHOR_PATTERNS.company);
+  if (companyMatch?.[1]) {
+    return `company-${companyMatch[1]}`;
+  }
+
+  // Fallback: use full href if it exists but doesn't match patterns
+  return href || 'unknown';
+}
+
+/**
+ * Extract author name from element
+ */
+function extractAuthorName(element: HTMLElement): string {
+  // Try the primary selector for author name
+  const nameSpan = element.querySelector(SELECTORS.authorName);
+
+  if (nameSpan?.textContent) {
+    const trimmed = nameSpan.textContent.trim();
+    // Only use if it looks like a name (not empty, not just symbols)
+    if (trimmed && trimmed.length > 0 && /^[A-Za-z\u00C0-\u00FF\s.\-]+$/.test(trimmed)) {
+      return trimmed;
+    }
+  }
+
+  // Fallback: try to extract from aria-label
+  const authorLink = element.querySelector(SELECTORS.authorLink);
+  const ariaLabel = authorLink?.getAttribute('aria-label');
+  if (ariaLabel) {
+    // aria-label format: "View: Name • ...". Extract just the name.
+    const match = ariaLabel.match(/View:\s*([^•]+)/);
+    if (match?.[1]) {
+      return match[1].trim();
+    }
+  }
+
+  return 'Unknown';
 }
 
 /**
@@ -25,66 +71,18 @@ export async function extractPostData(element: HTMLElement): Promise<PostData | 
   }
 
   // Try to get post ID from data-urn attribute
-  const urnElement = element.querySelector('[data-urn]') || element;
+  const urnElement = element.querySelector(SELECTORS.postUrn) || element;
   const postId = urnElement.getAttribute('data-urn');
 
   // Extract author info
-  const authorLink = element.querySelector('a[href*="/in/"], a[href*="/company/"]');
+  const authorLink = element.querySelector(SELECTORS.authorLink);
   const href = authorLink?.getAttribute('href') || '';
-
-  // Extract clean author_id from LinkedIn URL patterns
-  // Matches: /in/username/, /in/username/with/slashes, /company/companyname/
-  let authorId = 'unknown';
-  const inMatch = href.match(/\/in\/([^\/?]+)/);
-  const companyMatch = href.match(/\/company\/([^\/?]+)/);
-
-  if (inMatch?.[1]) {
-    authorId = inMatch[1];
-  } else if (companyMatch?.[1]) {
-    authorId = `company-${companyMatch[1]}`;
-  } else if (href) {
-    // Fallback: use full href if it exists but doesn't match patterns
-    authorId = href;
-  }
-
-  // Extract author name - try multiple selectors as LinkedIn's DOM changes frequently
-  // The aria-hidden span is the key - it contains just the name without duplicates
-  let authorName = 'Unknown';
-
-  const nameSpan = element.querySelector(
-    '.update-components-actor__title span[aria-hidden="true"]:first-child, ' +
-    'span[aria-hidden="true"][class*="visually-hidden"] ~ span[aria-hidden="true"], ' +
-    '[data-anonymize="person-name"]'
-  );
-
-  if (nameSpan?.textContent) {
-    const trimmed = nameSpan.textContent.trim();
-    // Only use if it looks like a name (not empty, not just symbols)
-    if (trimmed && trimmed.length > 0 && /^[A-Za-z\u00C0-\u00FF\s\.\-]+$/.test(trimmed)) {
-      authorName = trimmed;
-    }
-  }
-
-  // Fallback: try to extract from aria-label
-  if (authorName === 'Unknown') {
-    const authorLink = element.querySelector('a[href*="/in/"], a[href*="/company/"]');
-    const ariaLabel = authorLink?.getAttribute('aria-label');
-    if (ariaLabel) {
-      // aria-label format: "View: Name • ...". Extract just the name.
-      const match = ariaLabel.match(/View:\s*([^•]+)/);
-      if (match?.[1]) {
-        authorName = match[1].trim();
-      }
-    }
-  }
+  const authorId = extractAuthorId(href);
+  const authorName = extractAuthorName(element);
 
   // Extract post content
-  const contentElement = element.querySelector(
-    '.feed-shared-text, .feed-shared-update-v2__description, [data-anonymize="text"]'
-  );
-  const contentText = normalizeContentText(
-    contentElement?.textContent || ''
-  );
+  const contentElement = element.querySelector(SELECTORS.postContent);
+  const contentText = normalizeContentText(contentElement?.textContent || '');
 
   // Derive post_id if we don't have a native one
   const finalPostId = postId || await derivePostId(authorId, contentText);
@@ -98,6 +96,51 @@ export async function extractPostData(element: HTMLElement): Promise<PostData | 
 }
 
 /**
+ * Create the dim header element
+ */
+function createDimHeader(element: HTMLElement, postId?: string): HTMLElement {
+  const header = document.createElement('div');
+  header.className = 'unslop-dim-header';
+  header.innerHTML = `
+    <span class="unslop-dim-header-text">Unslop: Low quality post</span>
+    <span class="unslop-dim-header-action">Restore</span>
+  `;
+
+  header.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    element.style.opacity = '1';
+    header.remove();
+    // Save user choice to cache (priority over server)
+    if (postId) {
+      await setCachedDecision(postId, 'keep', 'cache');
+    }
+  });
+
+  return header;
+}
+
+/**
+ * Create the hidden post stub element
+ */
+function createHiddenStub(element: HTMLElement, postId?: string): HTMLElement {
+  const stub = document.createElement('div');
+  stub.className = 'unslop-hidden-stub';
+  stub.textContent = 'Unslop hid a post · Show';
+
+  stub.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    element.style.display = ''; // Restore visibility
+    stub.remove();
+    // Save user choice to cache (priority over server)
+    if (postId) {
+      await setCachedDecision(postId, 'keep', 'cache');
+    }
+  });
+
+  return stub;
+}
+
+/**
  * Apply a decision to a post element
  */
 export function applyDecision(
@@ -106,11 +149,11 @@ export function applyDecision(
   postId?: string
 ): void {
   // Mark element to avoid reprocessing
-  if (element.hasAttribute('data-unslop-processed')) {
+  if (element.hasAttribute(ATTRIBUTES.processed)) {
     return;
   }
 
-  element.setAttribute('data-unslop-processed', 'true');
+  element.setAttribute(ATTRIBUTES.processed, 'true');
 
   switch (decision) {
     case 'keep':
@@ -119,50 +162,14 @@ export function applyDecision(
 
     case 'dim':
       element.style.opacity = '0.35';
-      element.setAttribute('data-unslop-decision', 'dim');
-
-      // Add a restore button header
-      const dimHeader = document.createElement('div');
-      dimHeader.style.cssText = 'padding: 4px 8px; margin-bottom: 4px; font-size: 11px; color: #666; background: #fff; border: 1px solid #eee; border-radius: 4px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; width: fit-content;';
-      dimHeader.innerHTML = '<span>Unslop: Low quality post</span> <span style="margin-left:8px; color: #0a66c2; font-weight:600;">Restore</span>';
-
-      dimHeader.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        element.style.opacity = '1';
-        dimHeader.remove();
-        // Keep the processed attribute so we don't re-dim it
-        // Save user choice to cache (priority over server)
-        if (postId) {
-          await setCachedDecision(postId, 'keep', 'cache');
-        }
-      });
-
-      // Insert inside the element at the top
-      element.prepend(dimHeader);
+      element.setAttribute(ATTRIBUTES.decision, 'dim');
+      element.prepend(createDimHeader(element, postId));
       break;
 
     case 'hide':
-      // Don't remove from DOM, just hide visually to preserve state
       element.style.display = 'none';
-      element.setAttribute('data-unslop-decision', 'hide');
-
-      const stub = document.createElement('div');
-      stub.textContent = 'Unslop hid a post · Show';
-      stub.style.cssText = 'padding: 12px; color: #666; background: #f9f9f9; cursor: pointer; font-size: 12px; margin: 8px 0; border-radius: 8px; text-align: center;';
-
-      stub.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        element.style.display = ''; // Restore visibility
-        stub.remove();
-        // Keep the processed attribute so we don't re-hide it
-        // Save user choice to cache (priority over server)
-        if (postId) {
-          await setCachedDecision(postId, 'keep', 'cache');
-        }
-      });
-
-      // Insert stub before the hidden element
-      element.parentElement?.insertBefore(stub, element);
+      element.setAttribute(ATTRIBUTES.decision, 'hide');
+      element.parentElement?.insertBefore(createHiddenStub(element, postId), element);
       break;
   }
 }

@@ -2,6 +2,7 @@
 import { extractPostData, applyDecision } from './linkedin-parser';
 import { PostData, Decision, Source } from '../types';
 import { getCachedDecision, setCachedDecision, cleanupExpiredCache } from '../lib/storage';
+import { SELECTORS, ATTRIBUTES } from '../lib/selectors';
 
 // Track posts we've already classified
 const processedPosts = new Set<string>();
@@ -9,11 +10,38 @@ const processedPosts = new Set<string>();
 // Run cleanup on startup
 cleanupExpiredCache().catch(console.error);
 
+// ============================================================================
+// Guard Functions (Pure, testable checks)
+// ============================================================================
+
 /**
- * Classify a single post
+ * Check if element should be skipped (already processed or currently processing)
  */
-// Safe processing check
-const PROCESSING_ATTR = 'data-unslop-checking';
+function shouldSkipElement(element: HTMLElement): boolean {
+  return (
+    element.hasAttribute(ATTRIBUTES.processed) ||
+    element.hasAttribute(ATTRIBUTES.processing)
+  );
+}
+
+/**
+ * Check if filtering is enabled
+ */
+async function isFilteringEnabled(): Promise<boolean> {
+  const storage = await chrome.storage.sync.get('enabled');
+  return storage.enabled !== false;
+}
+
+/**
+ * Check if post was already processed by ID
+ */
+function isPostAlreadyProcessed(postId: string): boolean {
+  return processedPosts.has(postId);
+}
+
+// ============================================================================
+// Classification Logic
+// ============================================================================
 
 /**
  * Classify a single post with cache priority
@@ -48,66 +76,69 @@ async function classifyPost(postData: PostData): Promise<{ decision: Decision; s
   }
 }
 
+// ============================================================================
+// Post Processing Pipeline
+// ============================================================================
+
 /**
- * Process a post element
+ * Mark element as being processed
+ */
+function markProcessing(element: HTMLElement): void {
+  element.setAttribute(ATTRIBUTES.processing, 'true');
+}
+
+/**
+ * Unmark element processing state
+ */
+function unmarkProcessing(element: HTMLElement): void {
+  element.removeAttribute(ATTRIBUTES.processing);
+}
+
+/**
+ * Process a single post element
+ * Broken into clear steps for readability
  */
 async function processPost(element: HTMLElement): Promise<void> {
-  // FAST CHECK 1: Already marked by us in UI?
-  if (element.hasAttribute('data-unslop-processed')) {
+  // Step 1: Fast guard checks
+  if (shouldSkipElement(element)) {
     return;
   }
 
-  // FAST CHECK 2: Currently checking? (Prevent race conditions)
-  if (element.hasAttribute(PROCESSING_ATTR)) {
-    return;
-  }
-
-  // FAST CHECK 3: Check memory cache
-  // We can't check purely by ID yet because we haven't extracted it,
-  // but we can check if we've seen this exact element reference before if needed.
-  // For now, the DOM attributes are significant enough.
-
-  // Mark as processing immediately to prevent duplicate async calls
-  element.setAttribute(PROCESSING_ATTR, 'true');
+  // Step 2: Mark as processing to prevent race conditions
+  markProcessing(element);
 
   try {
+    // Step 3: Extract post data
     const postData = await extractPostData(element);
-
     if (!postData) {
-      element.removeAttribute(PROCESSING_ATTR);
       return;
     }
 
-    // CHECK 4: Check memory cache for Post ID
-    if (processedPosts.has(postData.post_id)) {
-      // It is processed, just ensure the UI reflects it if needed.
-      // But usually if it's in the set, we've done our job.
-      // We might need to re-apply UI if DOM was wiped but ID matches?
-      // For safely, let's treat it as new for the logic flow, 
-      // but the applyDecision will catch if we want to skip.
-      // Actually, if we have a cache hit, we might want to skip network call.
+    // Step 4: Track by post ID
+    if (isPostAlreadyProcessed(postData.post_id)) {
+      return;
     }
-
     processedPosts.add(postData.post_id);
 
-    // Check if extension is enabled
-    const storage = await chrome.storage.sync.get('enabled');
-    if (storage.enabled === false) {
-      element.removeAttribute(PROCESSING_ATTR);
+    // Step 5: Check if filtering is enabled
+    if (!await isFilteringEnabled()) {
       return;
     }
 
-    // Get classification (with cache)
+    // Step 6: Classify and apply decision
     const { decision } = await classifyPost(postData);
-
-    // Apply decision (pass post_id for user override caching)
     applyDecision(element, decision, postData.post_id);
+
   } catch (e) {
     console.error('Error processing post:', e);
   } finally {
-    element.removeAttribute(PROCESSING_ATTR);
+    unmarkProcessing(element);
   }
 }
+
+// ============================================================================
+// DOM Observation
+// ============================================================================
 
 /**
  * Handle new mutations efficiently
@@ -117,14 +148,16 @@ function handleMutations(mutations: MutationRecord[]): void {
     for (const node of mutation.addedNodes) {
       if (node instanceof HTMLElement) {
         // Direct match
-        if (node.matches('[data-urn], .feed-shared-update-v2')) {
+        if (node.matches(SELECTORS.post)) {
           processPost(node);
         }
         // Container match - look for children
         else {
-          const posts = node.querySelectorAll('[data-urn], .feed-shared-update-v2');
-          Array.from(posts).forEach(post => {
-            if (post instanceof HTMLElement) processPost(post);
+          const posts = node.querySelectorAll(SELECTORS.post);
+          posts.forEach((post) => {
+            if (post instanceof HTMLElement) {
+              processPost(post);
+            }
           });
         }
       }
@@ -134,15 +167,17 @@ function handleMutations(mutations: MutationRecord[]): void {
 
 // Global observer for the feed
 let feedObserver: MutationObserver | null = null;
-const feedSelectors = '.scaffold-finite-scroll__content, .feed-shared-update-v2__container, main';
 
+/**
+ * Attach observer to the feed container
+ */
 function attachToFeed(): void {
-  // cleanup existing
+  // Cleanup existing
   if (feedObserver) {
     feedObserver.disconnect();
   }
 
-  const feedContainer = document.querySelector(feedSelectors);
+  const feedContainer = document.querySelector(SELECTORS.feed);
 
   if (feedContainer) {
     console.log('[Unslop] Feed container found, attaching observer.');
@@ -165,7 +200,7 @@ function attachToFeed(): void {
  */
 function waitForFeed(): void {
   const bodyObserver = new MutationObserver((mutations, obs) => {
-    const feed = document.querySelector(feedSelectors);
+    const feed = document.querySelector(SELECTORS.feed);
     if (feed) {
       obs.disconnect(); // Stop watching body
       attachToFeed();   // Switch to watching feed
@@ -174,7 +209,7 @@ function waitForFeed(): void {
 
   bodyObserver.observe(document.body, {
     childList: true,
-    subtree: true
+    subtree: true,
   });
 }
 
@@ -182,36 +217,61 @@ function waitForFeed(): void {
  * Scan the document for new posts
  */
 function scanForPosts(): void {
-  const postElements = document.querySelectorAll(
-    '[data-urn], .feed-shared-update-v2'
-  );
+  const postElements = document.querySelectorAll(SELECTORS.post);
 
-  Array.from(postElements).forEach((element) => {
+  postElements.forEach((element) => {
     if (element instanceof HTMLElement) {
       processPost(element);
     }
   });
 }
 
-// Initial Start
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', attachToFeed);
-} else {
-  attachToFeed();
+// ============================================================================
+// Initialization & SPA Navigation Handling
+// ============================================================================
+
+/**
+ * Handle SPA navigation (when LinkedIn changes pages without full reload)
+ */
+function handleNavigation(): void {
+  console.log('[Unslop] Navigation detected, re-attaching to feed.');
+  // Give the new page a moment to render
+  requestAnimationFrame(() => {
+    attachToFeed();
+  });
 }
 
-// Backup: If SPA navigation completely wipes the DOM and we lose the container
-// We can listen to URL changes or just use a slow poll to check if our observer is still connected/valid
-setInterval(() => {
-  const feed = document.querySelector(feedSelectors);
-  // If we found a feed but our observer is disconnected or looking at a detached node:
-  // (We'd need to track the observed node reference to be strictly explicitly correct, 
-  // but re-running attachToFeed checks existence).
-  // A simple check:
-  if (feed && !feed.hasAttribute('data-unslop-feed-observed')) {
-    // We can mark the feed container to know we've attached.
-    // But simpler: just run attach (which disconnects old) if we suspect drift.
-    // OR: just scanForPosts() gently every few seconds to catch edge cases
-    scanForPosts();
-  }
-}, 2000);
+/**
+ * Set up History API interception for SPA navigation detection
+ * This is more efficient than polling
+ */
+function setupNavigationDetection(): void {
+  // Listen for browser back/forward
+  window.addEventListener('popstate', handleNavigation);
+
+  // Intercept pushState and replaceState for programmatic navigation
+  const originalPushState = history.pushState.bind(history);
+  const originalReplaceState = history.replaceState.bind(history);
+
+  history.pushState = function (...args) {
+    originalPushState(...args);
+    handleNavigation();
+  };
+
+  history.replaceState = function (...args) {
+    originalReplaceState(...args);
+    handleNavigation();
+  };
+}
+
+// Initial start
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => {
+    attachToFeed();
+    setupNavigationDetection();
+  });
+} else {
+  attachToFeed();
+  setupNavigationDetection();
+}
+

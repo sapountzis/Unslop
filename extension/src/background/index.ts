@@ -149,7 +149,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // Listen for messages from auth callback page
 chrome.runtime.onMessageExternal.addListener(
   (message, sender, sendResponse) => {
-    if (sender.origin !== 'https://api.getunslop.com') {
+    if (sender.origin !== AUTH_CALLBACK_ORIGIN) {
       return;
     }
 

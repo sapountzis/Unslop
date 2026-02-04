@@ -1,11 +1,10 @@
 // extension/src/lib/storage.ts
 import { Storage, CachedDecision, Decision, Source } from '../types';
+import { CACHE_TTL_MS } from './config';
 
 const DEFAULT_STORAGE: Partial<Storage> = {
   enabled: true,
 };
-
-const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 export async function getStorage(): Promise<Storage> {
   const result = await chrome.storage.sync.get(DEFAULT_STORAGE);

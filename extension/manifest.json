@@ -24,6 +24,9 @@
       "js": [
         "src/content/linkedin.ts"
       ],
+      "css": [
+        "src/styles/content.css"
+      ],
       "run_at": "document_idle"
     },
     {

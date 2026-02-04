@@ -2,9 +2,13 @@
 // This script runs on https://api.getunslop.com/*
 // It extracts the JWT from the auth callback page
 
+import { SELECTORS } from '../lib/selectors';
+
+/**
+ * Extract JWT from page meta tag
+ */
 function extractJwtFromPage(): string | null {
-  // Check for meta tag with JWT
-  const metaTag = document.querySelector('meta[name="unslop-jwt"]');
+  const metaTag = document.querySelector(SELECTORS.jwtMeta);
 
   if (metaTag instanceof HTMLMetaElement) {
     return metaTag.content;
@@ -13,6 +17,9 @@ function extractJwtFromPage(): string | null {
   return null;
 }
 
+/**
+ * Send JWT to background script
+ */
 function sendJwtToBackground(jwt: string): void {
   chrome.runtime.sendMessage({
     type: 'SET_JWT',
@@ -20,19 +27,24 @@ function sendJwtToBackground(jwt: string): void {
   });
 }
 
-// Try to extract JWT on page load
-const jwt = extractJwtFromPage();
-
-if (jwt) {
-  sendJwtToBackground(jwt);
-
-  // Show success message
+/**
+ * Render success message
+ */
+function renderSuccessPage(): void {
   document.body.innerHTML = `
-    <div style="display: flex; align-items: center; justify-content: center; height: 100vh; font-family: system-ui;">
-      <div style="text-align: center;">
+    <div class="unslop-auth-success">
+      <div class="unslop-auth-success-content">
         <h1>Sign in successful</h1>
         <p>You can close this tab and return to LinkedIn.</p>
       </div>
     </div>
   `;
+}
+
+// Try to extract JWT on page load
+const jwt = extractJwtFromPage();
+
+if (jwt) {
+  sendJwtToBackground(jwt);
+  renderSuccessPage();
 }
