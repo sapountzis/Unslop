@@ -599,6 +599,88 @@ describe('POST /v1/billing/polar/webhook', () => {
     });
   });
 
+  it('should handle subscription.updated with uncensored status', async () => {
+    const payloadData = createMockSubscriptionPayload({
+      status: 'active',
+      cancel_at_period_end: false,
+    });
+
+    const webhookPayload = {
+      type: 'subscription.updated',
+      timestamp: new Date().toISOString(),
+      data: payloadData,
+    };
+
+    const webhookId = `msg_${Math.random().toString(36).substring(7)}`;
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const secret = process.env.POLAR_WEBHOOK_SECRET || 'test-webhook-secret';
+    const toSign = `${webhookId}.${timestamp}.${JSON.stringify(webhookPayload)}`;
+    const crypto = await import('crypto');
+    const hmac = crypto.createHmac('sha256', secret);
+    hmac.update(toSign);
+    const signature = `v1,${hmac.digest('base64')}`;
+
+    const mockWhere = mock(() => Promise.resolve([]));
+    const mockSet = mock(() => ({ where: mockWhere }));
+    mockUpdate.mockReturnValue({ set: mockSet } as any);
+
+    const res = await billingRequest('/v1/billing/polar/webhook', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'webhook-id': webhookId,
+        'webhook-timestamp': timestamp,
+        'webhook-signature': signature,
+      },
+      body: JSON.stringify(webhookPayload),
+    });
+
+    expect(res.status).toBe(200);
+    expect(mockSet).toHaveBeenCalledWith({
+      plan: 'pro',
+      planStatus: 'active',
+      polarCustomerId: 'cust_123',
+      polarSubscriptionId: 'sub_123',
+      subscriptionPeriodStart: expect.any(Date),
+      subscriptionPeriodEnd: expect.any(Date),
+    });
+  });
+
+  it('should handle subscription.updated with missing user_id gracefully', async () => {
+    const payloadData = createMockSubscriptionPayload({
+      metadata: {}, // No user_id
+    });
+
+    const webhookPayload = {
+      type: 'subscription.updated',
+      timestamp: new Date().toISOString(),
+      data: payloadData,
+    };
+
+    const webhookId = `msg_${Math.random().toString(36).substring(7)}`;
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const secret = process.env.POLAR_WEBHOOK_SECRET || 'test-webhook-secret';
+    const toSign = `${webhookId}.${timestamp}.${JSON.stringify(webhookPayload)}`;
+    const crypto = await import('crypto');
+    const hmac = crypto.createHmac('sha256', secret);
+    hmac.update(toSign);
+    const signature = `v1,${hmac.digest('base64')}`;
+
+    const res = await billingRequest('/v1/billing/polar/webhook', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'webhook-id': webhookId,
+        'webhook-timestamp': timestamp,
+        'webhook-signature': signature,
+      },
+      body: JSON.stringify(webhookPayload),
+    });
+
+    expect(res.status).toBe(200);
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
   it('should handle subscription.created webhook', async () => {
     const payloadData = createMockSubscriptionPayload({
       id: 'sub_new',
