@@ -6,6 +6,7 @@ import { classify } from './routes/classify';
 import { billing } from './routes/billing';
 import { auth } from './routes/auth';
 import { feedback } from './routes/feedback';
+import { stats } from './routes/stats';
 
 const app = new Hono();
 
@@ -45,6 +46,10 @@ app.route('/', auth);
 
 // Mount feedback routes
 app.route('/', feedback);
+
+// Mount stats routes
+app.route('/', stats);
+
 
 // Start server
 const port = parseInt(process.env.PORT || '3000');

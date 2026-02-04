@@ -17,10 +17,12 @@
       --accent: #5AA2FF;
       --accent2: #B45CFF;
       --good: #46E3A6;
+      --warning: #FF6B6B;
       --radius: 12px;
       --radius2: 16px;
       --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial;
     }
+
 
     * {
       box-sizing: border-box;
@@ -239,6 +241,56 @@
       flex-direction: column;
       gap: 10px;
     }
+
+    /* Usage bar styles */
+    .usage-card {
+      padding: 12px !important;
+    }
+
+    .usage-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .usage-label {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--muted);
+    }
+
+    .usage-count {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--good);
+    }
+
+    .usage-count.low {
+      color: var(--warning);
+    }
+
+    .usage-bar-bg {
+      height: 6px;
+      background: var(--card2);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+
+    .usage-bar {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+
+    .usage-footer {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--faint);
+    }
+
   </style>
 </head>
 <body>

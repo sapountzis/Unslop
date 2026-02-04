@@ -100,3 +100,48 @@ export async function startAuthFlow(email: string): Promise<void> {
     throw new Error('Failed to start auth flow');
   }
 }
+
+export interface UsageInfo {
+  current_usage: number;
+  limit: number;
+  remaining: number;
+  plan: 'free' | 'pro';
+  plan_status: 'active' | 'inactive';
+  reset_date: string;
+}
+
+export async function getUsage(jwt: string): Promise<UsageInfo | null> {
+  const response = await fetch(`${API_BASE}/usage`, {
+    headers: {
+      'Authorization': `Bearer ${jwt}`,
+    },
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  return response.json();
+}
+
+export interface StatsInfo {
+  all_time: { keep: number; dim: number; hide: number; total: number };
+  last_30_days: { keep: number; dim: number; hide: number; total: number };
+  today: { keep: number; dim: number; hide: number; total: number };
+  daily_breakdown: { date: string; decision: string; count: number }[];
+}
+
+export async function getStats(jwt: string): Promise<StatsInfo | null> {
+  const response = await fetch(`${API_BASE}/stats`, {
+    headers: {
+      'Authorization': `Bearer ${jwt}`,
+    },
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  return response.json();
+}
+

@@ -1,5 +1,13 @@
 // extension/src/background/index.ts
-import { classifyPost, sendFeedback } from './api';
+import {
+  classifyPost,
+  sendFeedback,
+  getUserInfo,
+  createCheckout,
+  startAuthFlow,
+  getUsage,
+  getStats,
+} from './api';
 import { ClassifyRequest, FeedbackRequest } from '../types';
 import { AUTH_CALLBACK_ORIGIN } from '../lib/config';
 
@@ -50,7 +58,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           const storage = await chrome.storage.sync.get('jwt');
 
           if (storage.jwt) {
-            const { getUserInfo } = await import('./api');
             const userInfo = await getUserInfo(storage.jwt);
             sendResponse(userInfo);
           } else {
@@ -63,7 +70,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           const storage = await chrome.storage.sync.get('jwt');
 
           if (storage.jwt) {
-            const { createCheckout } = await import('./api');
             const url = await createCheckout(storage.jwt);
             sendResponse({ checkout_url: url });
           } else {
@@ -73,7 +79,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
 
         case 'START_AUTH': {
-          const { startAuthFlow } = await import('./api');
           await startAuthFlow(message.email);
           sendResponse({ status: 'ok' });
           return;
@@ -99,8 +104,34 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           return;
         }
 
+        case 'GET_USAGE': {
+          const storage = await chrome.storage.sync.get('jwt');
+
+          if (storage.jwt) {
+            const usage = await getUsage(storage.jwt);
+            sendResponse(usage);
+          } else {
+            sendResponse(null);
+          }
+          return;
+        }
+
+        case 'GET_STATS': {
+          const storage = await chrome.storage.sync.get('jwt');
+
+          if (storage.jwt) {
+            const stats = await getStats(storage.jwt);
+            sendResponse(stats);
+          } else {
+            sendResponse(null);
+          }
+          return;
+        }
+
         default:
           sendResponse({ error: 'Unknown message type' });
+
+
       }
     } catch (error) {
       console.error('Message handler error:', error);

@@ -3,7 +3,7 @@ import { pgTable, uuid, text, timestamp, date, integer, bigserial, index, primar
 import { sql } from 'drizzle-orm';
 
 export const users = pgTable('users', {
-  id: uuid('id').primaryKey().default(sql`uuid_generate_v4()`),
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
   email: text('email').unique().notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 
@@ -28,10 +28,10 @@ export const posts = pgTable('posts', {
 
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-}, (table) => ({
-  authorIdIdx: index('idx_posts_author_id').on(table.authorId),
-  updatedAtIdx: index('idx_posts_updated_at').on(table.updatedAt),
-}));
+}, (table) => [
+  index('idx_posts_author_id').on(table.authorId),
+  index('idx_posts_updated_at').on(table.updatedAt),
+]);
 
 export const postFeedback = pgTable('post_feedback', {
   id: bigserial('id', { mode: 'number' }).primaryKey(),
@@ -42,10 +42,10 @@ export const postFeedback = pgTable('post_feedback', {
   userLabel: text('user_label').notNull(), // 'should_keep' | 'should_hide'
 
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, (table) => ({
-  postIdIdx: index('idx_feedback_post_id').on(table.postId),
-  userIdIdx: index('idx_feedback_user_id').on(table.userId),
-}));
+}, (table) => [
+  index('idx_feedback_post_id').on(table.postId),
+  index('idx_feedback_user_id').on(table.userId),
+]);
 
 export const userUsage = pgTable('user_usage', {
   userId: uuid('user_id').notNull().references(() => users.id),
@@ -53,4 +53,18 @@ export const userUsage = pgTable('user_usage', {
   llmCalls: integer('llm_calls').notNull().default(0),
 }, (table) => [
   primaryKey({ columns: [table.userId, table.monthStart] }),
+]);
+
+// Track individual classification events per user for statistics
+export const userActivity = pgTable('user_activity', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  userId: uuid('user_id').notNull().references(() => users.id),
+  postId: text('post_id').notNull(),
+  decision: text('decision').notNull(), // 'keep' | 'dim' | 'hide'
+  source: text('source').notNull(), // 'llm' | 'cache'
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index('idx_activity_user_id').on(table.userId),
+  index('idx_activity_created_at').on(table.createdAt),
+  index('idx_activity_user_id_created_at').on(table.userId, table.createdAt),
 ]);

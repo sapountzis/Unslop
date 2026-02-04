@@ -3,9 +3,6 @@
 
 import { drizzle as drizzleNeon } from 'drizzle-orm/neon-http';
 import { drizzle as drizzlePostgres } from 'drizzle-orm/postgres-js';
-import { neon } from '@neondatabase/serverless';
-import postgres from 'postgres';
-import * as schema from './schema';
 
 const DATABASE_URL = process.env.DATABASE_URL;
 
@@ -21,17 +18,11 @@ function createDb() {
   if (isNeonDatabase) {
     // Production: Use Neon serverless driver (HTTP-based)
     console.log('📡 Connecting to Neon PostgreSQL (serverless mode)');
-    const sql = neon(DATABASE_URL);
-    return drizzleNeon(sql, { schema });
+    return drizzleNeon(DATABASE_URL!);
   } else {
     // Development: Use postgres.js for standard PostgreSQL connection
     console.log('🐘 Connecting to local PostgreSQL (standard mode)');
-    const sql = postgres(DATABASE_URL, {
-      max: 10, // Connection pool size
-      idle_timeout: 20,
-      connect_timeout: 10,
-    });
-    return drizzlePostgres(sql, { schema });
+    return drizzlePostgres(DATABASE_URL!);
   }
 }
 

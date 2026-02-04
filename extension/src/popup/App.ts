@@ -1,5 +1,5 @@
 // extension/src/popup/App.ts
-import { UserInfo } from '../types';
+import { UserInfo, UsageInfo } from '../types';
 
 export class App {
   private container: HTMLElement;
@@ -20,7 +20,8 @@ export class App {
     } else {
       const userInfo = await this.getUserInfo();
       if (userInfo) {
-        this.renderDashboard(userInfo, storage.enabled);
+        const usageInfo = await this.getUsageInfo();
+        this.renderDashboard(userInfo, usageInfo, storage.enabled);
       } else {
         this.renderSignIn();
       }
@@ -37,6 +38,16 @@ export class App {
       return response;
     } catch (err) {
       console.error('GetUserInfo error:', err);
+      return null;
+    }
+  }
+
+  private async getUsageInfo(): Promise<UsageInfo | null> {
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'GET_USAGE' });
+      return response;
+    } catch (err) {
+      console.error('GetUsageInfo error:', err);
       return null;
     }
   }
@@ -83,8 +94,34 @@ export class App {
     });
   }
 
-  private renderDashboard(userInfo: UserInfo, enabled: boolean): void {
+  private renderDashboard(userInfo: UserInfo, usageInfo: UsageInfo | null, enabled: boolean): void {
     const isPro = userInfo.plan === 'pro' && userInfo.plan_status === 'active';
+
+    // Usage display
+    let usageHtml = '';
+    if (usageInfo) {
+      const usagePercent = Math.round((usageInfo.current_usage / usageInfo.limit) * 100);
+      const isLow = usageInfo.remaining < usageInfo.limit * 0.1;
+      const barColor = isLow ? 'var(--warning)' : 'var(--accent)';
+      const resetDate = new Date(usageInfo.reset_date);
+      const resetStr = resetDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+      usageHtml = `
+        <div class="card usage-card mb-8">
+          <div class="usage-header">
+            <span class="usage-label">Monthly Usage</span>
+            <span class="usage-count ${isLow ? 'low' : ''}">${usageInfo.remaining} remaining</span>
+          </div>
+          <div class="usage-bar-bg">
+            <div class="usage-bar" style="width: ${Math.min(usagePercent, 100)}%; background: ${barColor};"></div>
+          </div>
+          <div class="usage-footer">
+            <span>${usageInfo.current_usage} / ${usageInfo.limit} calls</span>
+            <span>Resets ${resetStr}</span>
+          </div>
+        </div>
+      `;
+    }
 
     this.container.innerHTML = `
       <div>
@@ -98,15 +135,18 @@ export class App {
           </label>
         </div>
 
+        ${usageHtml}
+
         <div class="card mb-8">
           <div><strong>Email:</strong> ${userInfo.email || 'Loading...'}</div>
           <div><strong>Plan:</strong> ${isPro ? 'Pro' : 'Free'}</div>
         </div>
 
         ${!isPro ? `
-          <button id="upgrade-btn" class="primary">Upgrade to Pro ($3.99/mo)</button>
-          <div class="mb-8"></div>
+          <button id="upgrade-btn" class="primary mb-8">Upgrade to Pro ($3.99/mo)</button>
         ` : ''}
+
+        <button id="stats-btn" class="secondary mb-8">View Statistics</button>
 
         <button id="signout-btn" class="ghost">Sign Out</button>
       </div>
@@ -127,6 +167,11 @@ export class App {
       }
     });
 
+    const statsBtn = this.container.querySelector('#stats-btn');
+    statsBtn?.addEventListener('click', () => {
+      chrome.tabs.create({ url: chrome.runtime.getURL('stats.html') });
+    });
+
     const signoutBtn = this.container.querySelector('#signout-btn');
     signoutBtn?.addEventListener('click', async () => {
       await chrome.runtime.sendMessage({ type: 'CLEAR_JWT' });
@@ -134,3 +179,4 @@ export class App {
     });
   }
 }
+

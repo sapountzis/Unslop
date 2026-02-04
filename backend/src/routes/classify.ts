@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { db } from '../db';
-import { posts } from '../db/schema';
+import { posts, userActivity } from '../db/schema';
 import { eq } from 'drizzle-orm';
 import { classifyPost, type PostInput } from '../services/llm';
 import { checkQuota, incrementUsage } from '../services/quota';
@@ -61,7 +61,14 @@ classify.post('/v1/classify', authMiddleware, zValidator('json', classifySchema)
   cacheExpiry.setDate(cacheExpiry.getDate() - POST_CACHE_TTL_DAYS);
 
   if (cached.length > 0 && cached[0].updatedAt > cacheExpiry) {
-    // Cache hit
+    // Cache hit - still record activity for stats
+    await db.insert(userActivity).values({
+      userId: user.sub,
+      postId: postId,
+      decision: cached[0].decision,
+      source: 'cache',
+    });
+
     return c.json({
       post_id: postId,
       decision: cached[0].decision,
@@ -110,6 +117,16 @@ classify.post('/v1/classify', authMiddleware, zValidator('json', classifySchema)
   // Increment usage only on successful LLM calls (not errors or cache)
   if (llmResult.source === 'llm') {
     await incrementUsage(user.sub);
+  }
+
+  // Record activity for stats (both llm and cache, not errors)
+  if (llmResult.source !== 'error') {
+    await db.insert(userActivity).values({
+      userId: user.sub,
+      postId: postId,
+      decision: llmResult.decision,
+      source: llmResult.source,
+    });
   }
 
   // Return result
