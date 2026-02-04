@@ -135,18 +135,18 @@ export interface PolarWebhookPayload {
   };
 }
 
-export async function hasWebhookBeenProcessed(webhookId: string): Promise<boolean> {
+export async function hasWebhookBeenProcessed(subscriptionId: string): Promise<boolean> {
   const records = await db
     .select()
     .from(webhookDeliveries)
-    .where(eq(webhookDeliveries.webhookId, webhookId))
+    .where(eq(webhookDeliveries.subscriptionId, subscriptionId))
     .limit(1);
 
   return records.length > 0 && records[0].status === 'success';
 }
 
 export async function recordWebhookProcessed(
-  webhookId: string,
+  subscriptionId: string,
   eventType: string,
   userId?: string,
   status: 'success' | 'failed' = 'success'
@@ -154,7 +154,7 @@ export async function recordWebhookProcessed(
   await db
     .insert(webhookDeliveries)
     .values({
-      webhookId,
+      subscriptionId,
       eventType,
       userId,
       status,
@@ -162,9 +162,16 @@ export async function recordWebhookProcessed(
     .onConflictDoNothing();
 }
 
-export async function handleSubscriptionActive(data: PolarWebhookPayload['data'], webhookId?: string): Promise<void> {
-  if (webhookId && await hasWebhookBeenProcessed(webhookId)) {
-    console.info('Webhook already processed, skipping', { webhook_id: webhookId });
+export async function handleSubscriptionActive(data: PolarWebhookPayload['data']): Promise<void> {
+  const subscriptionId = data.subscription_id || (data as any).subscriptionId || data.id;
+
+  if (!subscriptionId) {
+    console.error('Webhook missing subscription_id');
+    return;
+  }
+
+  if (await hasWebhookBeenProcessed(subscriptionId)) {
+    console.info('Webhook already processed, skipping', { subscription_id: subscriptionId });
     return;
   }
 
@@ -179,8 +186,6 @@ export async function handleSubscriptionActive(data: PolarWebhookPayload['data']
   const currentPeriodStart = data.current_period_start || (data as any).currentPeriodStart;
   const currentPeriodEnd = data.current_period_end || (data as any).currentPeriodEnd;
   const customerId = data.customer_id || (data as any).customerId;
-  // Fallback to id if subscription_id is missing (it be the subscription object itself)
-  const subscriptionId = data.subscription_id || (data as any).subscriptionId || data.id;
 
   // Parse dates if present
   const periodStart = currentPeriodStart ? new Date(currentPeriodStart) : undefined;
@@ -199,16 +204,21 @@ export async function handleSubscriptionActive(data: PolarWebhookPayload['data']
     })
     .where(eq(users.id, userId));
 
-  if (webhookId) {
-    await recordWebhookProcessed(webhookId, 'subscription.active', userId, 'success');
-  }
+  await recordWebhookProcessed(subscriptionId, 'subscription.active', userId, 'success');
 
   console.log(`Updated user ${userId} to PRO (Period: ${periodStart?.toISOString()} -> ${periodEnd?.toISOString()})`);
 }
 
-export async function handleSubscriptionCancelled(data: PolarWebhookPayload['data'], webhookId?: string): Promise<void> {
-  if (webhookId && await hasWebhookBeenProcessed(webhookId)) {
-    console.info('Webhook already processed, skipping', { webhook_id: webhookId });
+export async function handleSubscriptionCancelled(data: PolarWebhookPayload['data']): Promise<void> {
+  const subscriptionId = data.subscription_id || (data as any).subscriptionId || data.id;
+
+  if (!subscriptionId) {
+    console.error('Webhook missing subscription_id');
+    return;
+  }
+
+  if (await hasWebhookBeenProcessed(subscriptionId)) {
+    console.info('Webhook already processed, skipping', { subscription_id: subscriptionId });
     return;
   }
 
@@ -227,16 +237,21 @@ export async function handleSubscriptionCancelled(data: PolarWebhookPayload['dat
     })
     .where(eq(users.id, userId));
 
-  if (webhookId) {
-    await recordWebhookProcessed(webhookId, 'subscription.cancelled', userId, 'success');
-  }
+  await recordWebhookProcessed(subscriptionId, 'subscription.cancelled', userId, 'success');
 
   console.log(`Updated user ${userId} to INACTIVE`);
 }
 
-export async function handleSubscriptionUncensored(data: PolarWebhookPayload['data'], webhookId?: string): Promise<void> {
-  if (webhookId && await hasWebhookBeenProcessed(webhookId)) {
-    console.info('Webhook already processed, skipping', { webhook_id: webhookId });
+export async function handleSubscriptionUncensored(data: PolarWebhookPayload['data']): Promise<void> {
+  const subscriptionId = data.subscription_id || (data as any).subscriptionId || data.id;
+
+  if (!subscriptionId) {
+    console.error('Webhook missing subscription_id');
+    return;
+  }
+
+  if (await hasWebhookBeenProcessed(subscriptionId)) {
+    console.info('Webhook already processed, skipping', { subscription_id: subscriptionId });
     return;
   }
 
@@ -250,7 +265,6 @@ export async function handleSubscriptionUncensored(data: PolarWebhookPayload['da
   const currentPeriodStart = data.current_period_start || (data as any).currentPeriodStart;
   const currentPeriodEnd = data.current_period_end || (data as any).currentPeriodEnd;
   const customerId = data.customer_id || (data as any).customerId;
-  const subscriptionId = data.subscription_id || (data as any).subscriptionId || data.id;
 
   const periodStart = currentPeriodStart ? new Date(currentPeriodStart) : undefined;
   const periodEnd = currentPeriodEnd ? new Date(currentPeriodEnd) : undefined;
@@ -267,9 +281,7 @@ export async function handleSubscriptionUncensored(data: PolarWebhookPayload['da
     })
     .where(eq(users.id, userId));
 
-  if (webhookId) {
-    await recordWebhookProcessed(webhookId, 'subscription.uncensored', userId, 'success');
-  }
+  await recordWebhookProcessed(subscriptionId, 'subscription.uncensored', userId, 'success');
 
   console.log(`Reactivated user ${userId} (subscription.uncensored)`);
 }

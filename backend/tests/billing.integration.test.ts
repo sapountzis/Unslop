@@ -40,6 +40,8 @@ describe('Billing E2E Integration Tests (Polar Sandbox)', () => {
   });
 
   it('should handle subscription.created webhook', async () => {
+    await db.delete(webhookDeliveries).where(eq(webhookDeliveries.userId, testUserId));
+
     const webhookPayload = {
       type: 'subscription.created',
       timestamp: new Date().toISOString(),
@@ -128,6 +130,8 @@ describe('Billing E2E Integration Tests (Polar Sandbox)', () => {
   });
 
   it('should handle subscription.canceled webhook', async () => {
+    await db.delete(webhookDeliveries).where(eq(webhookDeliveries.userId, testUserId));
+
     const webhookPayload = {
       type: 'subscription.canceled',
       timestamp: new Date().toISOString(),
@@ -177,6 +181,8 @@ describe('Billing E2E Integration Tests (Polar Sandbox)', () => {
   });
 
   it('should handle subscription.uncensored (via updated)', async () => {
+    await db.delete(webhookDeliveries).where(eq(webhookDeliveries.userId, testUserId));
+
     const cancelPayload = {
       type: 'subscription.updated',
       timestamp: new Date().toISOString(),
@@ -222,8 +228,8 @@ describe('Billing E2E Integration Tests (Polar Sandbox)', () => {
       },
     };
 
-    const { handleSubscriptionActive } = await import('../src/services/polar');
-    await handleSubscriptionActive(uncensoredPayload.data);
+    const { handleSubscriptionUncensored } = await import('../src/services/polar');
+    await handleSubscriptionUncensored(uncensoredPayload.data);
 
     const [updatedUser] = await db
       .select()
