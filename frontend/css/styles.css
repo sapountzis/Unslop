@@ -552,18 +552,28 @@ a:hover{ opacity: 0.96; }
   margin-top: 18px;
 }
 .price-card{
-  padding: 18px 18px;
+  padding: 24px;
   border-radius: var(--radius2);
   border: 1px solid rgba(255,255,255,0.12);
   background: rgba(255,255,255,0.05);
   box-shadow: 0 22px 70px rgba(0,0,0,0.22);
   position: relative;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.price-card__header{
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  min-height: 40px; /* Ensures vertical alignment even if one has a badge */
 }
 .price-card__top h3{
-  margin: 0 0 8px;
-  font-size: 1.2rem;
+  margin: 0;
+  font-size: 1.25rem;
   letter-spacing: -0.02em;
+  font-weight: 850;
 }
 .price{
   display:flex;
@@ -576,17 +586,22 @@ a:hover{ opacity: 0.96; }
   letter-spacing: -0.04em;
 }
 .price__unit{ color: rgba(255,255,255,0.62); font-weight: 700; }
-.price-card__desc{ margin: 8px 0 0; color: rgba(255,255,255,0.70); }
+.price-card__desc{
+  margin: 12px 0 0;
+  color: rgba(255,255,255,0.70);
+  min-height: 2.5em; /* Ensures features align even if text wraps slightly */
+}
 
 .list{
   list-style:none;
   padding: 0;
-  margin: 16px 0 16px;
+  margin: 24px 0 24px;
   display:flex;
   flex-direction:column;
-  gap: 10px;
+  gap: 12px;
   color: rgba(255,255,255,0.78);
   font-weight: 600;
+  flex: 1;
 }
 .tick{
   display:inline-grid;
@@ -616,14 +631,15 @@ a:hover{ opacity: 0.96; }
 .price-card__badge{
   display:inline-flex;
   align-items:center;
-  padding: 8px 10px;
+  padding: 4px 10px;
   border-radius: 999px;
   border: 1px solid rgba(90,162,255,0.28);
   background: rgba(90,162,255,0.12);
-  color: rgba(240,248,255,0.90);
+  color: rgba(240,248,255,0.95);
   font-weight: 900;
-  font-size: 0.85rem;
-  margin-bottom: 12px;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 .fineprint{
   margin: 12px 0 0;
