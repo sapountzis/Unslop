@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { Webhooks } from '@polar-sh/hono';
 import { createCheckoutSession, handleSubscriptionActive, handleSubscriptionCancelled, handleSubscriptionUncensored } from '../services/polar';
 import type { JWTPayload } from '../lib/jwt';
+import { logger } from '../lib/logger';
 
 const billing = new Hono();
 
@@ -54,46 +55,97 @@ billing.post(
   Webhooks({
     webhookSecret: process.env.POLAR_WEBHOOK_SECRET!,
     onSubscriptionCreated: async (payload) => {
-      await handleSubscriptionActive(payload.data as any);
+      try {
+        const data = payload.data as any;
+        await handleSubscriptionActive(data);
+        logger.info('Subscription created', {
+          user_id: data.metadata?.user_id,
+          subscription_id: data.subscription_id,
+        });
+      } catch (err) {
+        logger.error('Failed to handle subscription.created', err as Error, {
+          payload_type: 'subscription.created',
+        });
+        // Don't rethrow - return 200 to stop Polar retrying
+      }
     },
     onSubscriptionActive: async (payload) => {
-      await handleSubscriptionActive(payload.data as any);
+      try {
+        const data = payload.data as any;
+        await handleSubscriptionActive(data);
+        logger.info('Subscription active', {
+          user_id: data.metadata?.user_id,
+          subscription_id: data.subscription_id,
+        });
+      } catch (err) {
+        logger.error('Failed to handle subscription.active', err as Error, {
+          payload_type: 'subscription.active',
+        });
+      }
     },
     onSubscriptionUpdated: async (payload) => {
-      const data = payload.data as any;
-      const status = data.status;
-
-      if (status === 'active') {
-        await handleSubscriptionActive(data);
-        console.log('Subscription updated to active', {
-          user_id: data.metadata?.user_id,
-          subscription_id: data.subscription_id,
+      try {
+        const data = payload.data as any;
+        const status = data.status;
+        if (status === 'active') {
+          await handleSubscriptionActive(data);
+          logger.info('Subscription updated to active', {
+            user_id: data.metadata?.user_id,
+            subscription_id: data.subscription_id,
+          });
+        } else if (status === 'canceled') {
+          await handleSubscriptionCancelled(data);
+          logger.info('Subscription updated to canceled', {
+            user_id: data.metadata?.user_id,
+            subscription_id: data.subscription_id,
+          });
+        } else if (status === 'uncensored') {
+          await handleSubscriptionUncensored(data);
+          logger.info('Subscription updated to uncensored', {
+            user_id: data.metadata?.user_id,
+            subscription_id: data.subscription_id,
+          });
+        }
+      } catch (err) {
+        const data = payload.data as any;
+        logger.error('Failed to handle subscription.updated', err as Error, {
+          payload_type: 'subscription.updated',
+          status: data.status,
         });
-      } else if (status === 'canceled') {
-        await handleSubscriptionCancelled(data);
-        console.log('Subscription updated to canceled', {
-          user_id: data.metadata?.user_id,
-          subscription_id: data.subscription_id,
-        });
-      } else if (status === 'uncensored') {
-        await handleSubscriptionUncensored(data);
-        console.log('Subscription updated to uncensored', {
-          user_id: data.metadata?.user_id,
-          subscription_id: data.subscription_id,
-        });
-      } else {
-        console.log('Subscription updated with unknown status', { status });
       }
     },
     onSubscriptionCanceled: async (payload) => {
-      await handleSubscriptionCancelled(payload.data as any);
+      try {
+        const data = payload.data as any;
+        await handleSubscriptionCancelled(data);
+        logger.info('Subscription canceled', {
+          user_id: data.metadata?.user_id,
+          subscription_id: data.subscription_id,
+        });
+      } catch (err) {
+        logger.error('Failed to handle subscription.canceled', err as Error, {
+          payload_type: 'subscription.canceled',
+        });
+      }
     },
     onSubscriptionRevoked: async (payload) => {
-      await handleSubscriptionCancelled(payload.data as any);
+      try {
+        const data = payload.data as any;
+        await handleSubscriptionCancelled(data);
+        logger.info('Subscription revoked', {
+          user_id: data.metadata?.user_id,
+          subscription_id: data.subscription_id,
+        });
+      } catch (err) {
+        logger.error('Failed to handle subscription.revoked', err as Error, {
+          payload_type: 'subscription.revoked',
+        });
+      }
     },
     onPayload: async (payload) => {
-      // Catch-all mostly for logging, or silence it.
-      // console.log('Received other webhook:', payload.type);
+      logger.info('Received unhandled webhook', {
+        type: payload.type,
+      });
     }
   })
 );
