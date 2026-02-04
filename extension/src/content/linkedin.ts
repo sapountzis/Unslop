@@ -3,6 +3,7 @@ import { extractPostData, applyDecision } from './linkedin-parser';
 import { PostData, Decision, Source } from '../types';
 import { getCachedDecision, setCachedDecision, cleanupExpiredCache } from '../lib/storage';
 import { SELECTORS, ATTRIBUTES } from '../lib/selectors';
+import '../styles/content.css';
 
 // Track posts we've already classified
 const processedPosts = new Set<string>();

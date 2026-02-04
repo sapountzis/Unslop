@@ -3,7 +3,7 @@ import OpenAI from 'openai';
 import { z } from 'zod';
 import { zodResponseFormat } from 'openai/helpers/zod';
 import retry from 'async-retry';
-import { CLASSIFICATION_PROMPT } from './prompts';
+import { SYSTEM_PROMPT, USER_PROMPT } from './prompts';
 
 export interface PostInput {
   post_id: string;
@@ -62,10 +62,10 @@ export function composeDecision(scores: ScoreResult): 'keep' | 'dim' | 'hide' {
 
   const compositeSignal = (positiveSignal + nNegativeSignals - negativeSignal) / (nPositiveSignals + nNegativeSignals);
 
-  if (compositeSignal > KEEP_THRESHOLD) {
+  if (compositeSignal >= KEEP_THRESHOLD) {
     return 'keep';
-    // } else if (compositeSignal > DIM_THRESHOLD) {
-    //   return 'dim';
+  } else if (compositeSignal >= DIM_THRESHOLD) {
+    return 'dim';
   } else {
     return 'hide';
   }
@@ -89,26 +89,24 @@ function getOpenRouterConfig(): { apiKey: string; baseUrl: string; model: string
   };
 }
 
-function constructPrompt(post: PostInput): string {
+function constructUserPrompt(post: PostInput): string {
   // We prepend author info to the content to provide context, 
   // as the prompt placeholder {{POST_TEXT}} implies just the text, 
   // but author info is valuable for "ego_bait" assessment.
   const contentWithContext = `Author: ${post.author_name}\n\n${post.content_text}`;
-  return CLASSIFICATION_PROMPT.replace('{{POST_TEXT}}', contentWithContext);
+  return USER_PROMPT.replace('{{POST_TEXT}}', contentWithContext);
 }
 
 /**
  * Executes the LLM call with retry logic for transient failures
  */
-async function callLLMWithRetry(openai: OpenAI, model: string, prompt: string) {
+async function callLLMWithRetry(openai: OpenAI, model: string, messages: any[]) {
   return await retry(
     async (bail) => {
       try {
         const completion = await openai.chat.completions.create({
           model: model,
-          messages: [
-            { role: 'user', content: prompt },
-          ],
+          messages: messages,
           temperature: 0.1,
           max_tokens: 1000,
           response_format: zodResponseFormat(DecisionSchema, 'classification'),
@@ -179,10 +177,14 @@ export async function classifyPost(post: PostInput): Promise<LLMCallResult> {
     baseURL: baseUrl,
   });
 
-  const prompt = constructPrompt(post);
+  const userPrompt = constructUserPrompt(post);
+  const messages = [
+    { role: 'system', content: SYSTEM_PROMPT },
+    { role: 'user', content: userPrompt },
+  ];
 
   try {
-    const completion = await callLLMWithRetry(openai, model, prompt);
+    const completion = await callLLMWithRetry(openai, model, messages);
     const scores = parseAndValidateResponse(completion.choices[0].message.content);
     const decision = composeDecision(scores);
     const latency = Date.now() - startTime;

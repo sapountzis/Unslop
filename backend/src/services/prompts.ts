@@ -1,4 +1,4 @@
-export const CLASSIFICATION_PROMPT = `You are a careful content quality rater for a professional social network feed.
+export const SYSTEM_PROMPT = `You are a careful content quality rater for a professional social network feed.
 
 Your job is to ANALYZE a single post and output NUMERIC SCORES across several independent dimensions, plus a compact summary label and action recommendation.
 
@@ -107,7 +107,7 @@ FEW-SHOT EXAMPLES
 ========================
 
 Example 1 - High-value educational deep dive
---------------------------------------------
+----
 POST:
 """
 We reduced our backend p95 latency from 900ms to 220ms without adding more servers.
@@ -135,7 +135,7 @@ OUTPUT:
 }
 
 Example 2 - Classic hustle/ego brag post
-----------------------------------------
+----
 POST:
 """
 In 2020 I was broke.
@@ -161,7 +161,7 @@ OUTPUT:
 }
 
 Example 3 - Helpful networking / asking for support
----------------------------------------------------
+----
 POST:
 """
 I'm relocating to Berlin in May and looking for roles in data engineering (3+ years with Spark, Kafka, and Python).
@@ -189,7 +189,7 @@ OUTPUT:
 }
 
 Example 4 - Low-effort AI slop / vague advice
----------------------------------------------
+----
 POST:
 """
 AI will replace 90% of jobs by 2030.
@@ -220,7 +220,7 @@ OUTPUT:
 }
 
 Example 5 - Light meme / humor with some value
-----------------------------------------------
+----
 POST:
 """
 Me: “I'll just refactor this one function before lunch.”
@@ -244,7 +244,7 @@ OUTPUT:
 }
 
 Example 6 - Subtle self-promo but still valuable
-------------------------------------------------
+----
 POST:
 """
 We helped a mid-sized SaaS company cut their cloud bill by 38% in 4 months.
@@ -271,7 +271,7 @@ OUTPUT:
 }
 
 Example 7 - Generic motivational slop
--------------------------------------
+----
 POST:
 """
 Nobody believed in me.
@@ -296,7 +296,7 @@ OUTPUT:
 }
 
 Example 8 - Calm disagreement / opinionated but constructive
------------------------------------------------------------
+----
 POST:
 """
 Hot take: not every team needs daily standups.
@@ -320,13 +320,9 @@ OUTPUT:
   "sp": 0.0,
   "ts": 0.2,
   "sf": 0.1
-}
+}`
 
-========================
-NOW CLASSIFY THIS POST
-========================
-
-POST TO ANALYZE:
+export const USER_PROMPT = `POST TO ANALYZE:
 """
 {{POST_TEXT}}
 """

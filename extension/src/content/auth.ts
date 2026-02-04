@@ -3,6 +3,7 @@
 // It extracts the JWT from the auth callback page
 
 import { SELECTORS } from '../lib/selectors';
+import '../styles/content.css';
 
 /**
  * Extract JWT from page meta tag
