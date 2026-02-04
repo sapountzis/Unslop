@@ -1,12 +1,20 @@
 FROM nginx:alpine
 
-# Copy the static files
+# Needed for envsubst (to inject $PORT into nginx config)
+RUN apk add --no-cache gettext
+
+# Copy static site
 COPY . /usr/share/nginx/html/
 
-# Copy custom nginx configuration
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Template nginx config that listens on $PORT
+RUN mkdir -p /etc/nginx/templates
+COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 
-# Expose port 80
-EXPOSE 80
+# Entrypoint renders template -> nginx config and starts nginx
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
 
-CMD ["nginx", "-g", "daemon off;"]
+# Railway injects PORT; EXPOSE is informational
+EXPOSE 8080
+
+CMD ["/docker-entrypoint.sh"]

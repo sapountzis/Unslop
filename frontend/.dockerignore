@@ -6,3 +6,9 @@ CLAUDE.md
 railway.json
 Dockerfile
 .dockerignore
+.git
+**/.DS_Store
+**/node_modules
+**/.env
+**/.env.*
+README.md
