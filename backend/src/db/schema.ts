@@ -12,6 +12,8 @@ export const users = pgTable('users', {
   planStatus: text('plan_status').notNull().default('inactive'), // 'active' | 'inactive'
   polarCustomerId: text('polar_customer_id'),
   polarSubscriptionId: text('polar_subscription_id'),
+  subscriptionPeriodStart: timestamp('subscription_period_start', { withTimezone: true }),
+  subscriptionPeriodEnd: timestamp('subscription_period_end', { withTimezone: true }),
 });
 
 export const posts = pgTable('posts', {

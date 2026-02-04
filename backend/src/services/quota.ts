@@ -14,7 +14,7 @@ export interface QuotaCheckResult {
 }
 
 export async function checkQuota(userId: string): Promise<QuotaCheckResult> {
-  // Get user's plan
+  // Get user's plan and subscription period
   const userRecords = await db
     .select()
     .from(users)
@@ -31,9 +31,18 @@ export async function checkQuota(userId: string): Promise<QuotaCheckResult> {
   const isPro = user.plan === 'pro' && user.planStatus === 'active';
   const limit = isPro ? PRO_MONTHLY_LLM_CALLS : FREE_MONTHLY_LLM_CALLS;
 
-  // Get current month's usage
-  const now = new Date();
-  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  // Determine usage period start
+  let periodStartStr: string;
+
+  if (isPro && user.subscriptionPeriodStart) {
+    // For active Pro users with a subscription period, use that
+    periodStartStr = user.subscriptionPeriodStart.toISOString().split('T')[0];
+  } else {
+    // Fallback to 1st of current calendar month
+    const now = new Date();
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    periodStartStr = monthStart.toISOString().split('T')[0];
+  }
 
   const usageRecords = await db
     .select()
@@ -41,7 +50,7 @@ export async function checkQuota(userId: string): Promise<QuotaCheckResult> {
     .where(
       and(
         eq(userUsage.userId, userId),
-        eq(userUsage.monthStart, monthStart.toISOString().split('T')[0])
+        eq(userUsage.monthStart, periodStartStr)
       )
     )
     .limit(1);
@@ -57,16 +66,38 @@ export async function checkQuota(userId: string): Promise<QuotaCheckResult> {
 }
 
 export async function incrementUsage(userId: string): Promise<void> {
-  const now = new Date();
-  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-  const monthStartStr = monthStart.toISOString().split('T')[0];
+  // We need to fetch the user to know their period start
+  // This adds a DB call, but ensures accuracy.
+  const userRecords = await db
+    .select({
+      plan: users.plan,
+      planStatus: users.planStatus,
+      subscriptionPeriodStart: users.subscriptionPeriodStart,
+    })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  if (userRecords.length === 0) return;
+  const user = userRecords[0];
+  const isPro = user.plan === 'pro' && user.planStatus === 'active';
+
+  let periodStartStr: string;
+
+  if (isPro && user.subscriptionPeriodStart) {
+    periodStartStr = user.subscriptionPeriodStart.toISOString().split('T')[0];
+  } else {
+    const now = new Date();
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    periodStartStr = monthStart.toISOString().split('T')[0];
+  }
 
   // UPSERT usage record
   await db
     .insert(userUsage)
     .values({
       userId,
-      monthStart: monthStartStr,
+      monthStart: periodStartStr,
       llmCalls: 1,
     })
     .onConflictDoUpdate({

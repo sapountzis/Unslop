@@ -128,21 +128,33 @@ export interface PolarWebhookPayload {
     id: string;
     customer_id?: string;
     subscription_id?: string;
+    current_period_start?: string;
+    current_period_end?: string;
     metadata?: Record<string, unknown>;
     status?: string;
   };
 }
 
 
-
-
 export async function handleSubscriptionActive(data: PolarWebhookPayload['data']): Promise<void> {
-  const userId = data.metadata?.user_id as string | undefined;
+
+  const userId = (data.metadata?.user_id || (data as any).metadata?.userId) as string | undefined;
 
   if (!userId) {
     console.error('Webhook missing user_id in metadata');
     return;
   }
+
+  // Handle potentially camelCased keys from SDK
+  const currentPeriodStart = data.current_period_start || (data as any).currentPeriodStart;
+  const currentPeriodEnd = data.current_period_end || (data as any).currentPeriodEnd;
+  const customerId = data.customer_id || (data as any).customerId;
+  // Fallback to id if subscription_id is missing (it be the subscription object itself)
+  const subscriptionId = data.subscription_id || (data as any).subscriptionId || data.id;
+
+  // Parse dates if present
+  const periodStart = currentPeriodStart ? new Date(currentPeriodStart) : undefined;
+  const periodEnd = currentPeriodEnd ? new Date(currentPeriodEnd) : undefined;
 
   // Set to Pro active
   await db
@@ -150,12 +162,14 @@ export async function handleSubscriptionActive(data: PolarWebhookPayload['data']
     .set({
       plan: 'pro',
       planStatus: 'active',
-      polarCustomerId: data.customer_id,
-      polarSubscriptionId: data.subscription_id || data.id, // subscription_id or falling back to id if it's the subscription object itself
+      polarCustomerId: customerId,
+      polarSubscriptionId: subscriptionId,
+      subscriptionPeriodStart: periodStart,
+      subscriptionPeriodEnd: periodEnd,
     })
     .where(eq(users.id, userId));
 
-  console.log(`Updated user ${userId} to PRO`);
+  console.log(`Updated user ${userId} to PRO (Period: ${periodStart?.toISOString()} -> ${periodEnd?.toISOString()})`);
 }
 
 export async function handleSubscriptionCancelled(data: PolarWebhookPayload['data']): Promise<void> {

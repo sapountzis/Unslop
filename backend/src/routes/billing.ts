@@ -59,6 +59,9 @@ billing.post(
     onSubscriptionActive: async (payload) => {
       await handleSubscriptionActive(payload.data as any);
     },
+    onSubscriptionUpdated: async (payload) => {
+      await handleSubscriptionActive(payload.data as any);
+    },
     onSubscriptionCanceled: async (payload) => {
       await handleSubscriptionCancelled(payload.data as any);
     },

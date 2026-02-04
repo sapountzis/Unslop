@@ -120,10 +120,31 @@ stats.get('/v1/usage', authMiddleware, async (c) => {
     const isPro = userData.plan === 'pro' && userData.planStatus === 'active';
     const limit = isPro ? PRO_MONTHLY_LLM_CALLS : FREE_MONTHLY_LLM_CALLS;
 
-    // Get current month's usage
     const now = new Date();
-    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-    const monthStartStr = monthStart.toISOString().split('T')[0];
+    let periodStartStr: string;
+    let resetDate: string;
+
+    if (isPro && userData.subscriptionPeriodStart) {
+        // Use actual subscription period
+        periodStartStr = userData.subscriptionPeriodStart.toISOString().split('T')[0];
+        // Reset date is the period end
+        if (userData.subscriptionPeriodEnd) {
+            resetDate = userData.subscriptionPeriodEnd.toISOString();
+        } else {
+            // Fallback if end date missing? Assume 1 month from start
+            const start = new Date(userData.subscriptionPeriodStart);
+            const end = new Date(start);
+            end.setMonth(end.getMonth() + 1);
+            resetDate = end.toISOString();
+        }
+    } else {
+        // Fallback to calendar month
+        const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+        periodStartStr = monthStart.toISOString().split('T')[0];
+        // Reset date is 1st of next month
+        const nextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+        resetDate = nextMonth.toISOString();
+    }
 
     const usageRecords = await db
         .select()
@@ -131,7 +152,7 @@ stats.get('/v1/usage', authMiddleware, async (c) => {
         .where(
             and(
                 eq(userUsage.userId, userId),
-                eq(userUsage.monthStart, monthStartStr)
+                eq(userUsage.monthStart, periodStartStr)
             )
         )
         .limit(1);
@@ -139,16 +160,13 @@ stats.get('/v1/usage', authMiddleware, async (c) => {
     const currentUsage = usageRecords[0]?.llmCalls || 0;
     const remaining = Math.max(0, limit - currentUsage);
 
-    // Calculate reset date (1st of next month)
-    const nextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
-
     return c.json({
         current_usage: currentUsage,
         limit: limit,
         remaining: remaining,
         plan: userData.plan,
         plan_status: userData.planStatus,
-        reset_date: nextMonth.toISOString(),
+        reset_date: resetDate,
     });
 });
 
