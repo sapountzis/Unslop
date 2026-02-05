@@ -5,7 +5,8 @@ import { describe, it, expect } from 'bun:test';
 import { normalizeContentText, hashContentText, derivePostId } from '../lib/hash';
 import { generateSessionToken, verifySessionToken } from '../lib/jwt';
 import { checkQuota, getQuotaStatus, incrementUsageBy } from '../services/quota';
-import { classifyPost, composeDecision } from '../services/llm';
+import { classifyPost } from '../services/llm';
+import { ScoringEngine } from '../services/scoring';
 
 const API_URL = process.env.APP_URL || 'http://localhost:3000';
 
@@ -24,18 +25,23 @@ describe('LLM Service', () => {
       content_text: 'Just published my new course on how to 10x your productivity! 🚀 Link in bio. #hustle #grindset',
     });
 
-    expect(['keep', 'dim', 'hide']).toContain(result.decision);
     expect(result.source).toBe('llm');
     expect(result.model).toBe(process.env.LLM_MODEL!);
     expect(result.latency).toBeGreaterThan(0);
+    expect(result.scores).not.toBeNull();
+
+    const engine = new ScoringEngine();
+    const scored = engine.score(result.scores);
+    expect(['keep', 'dim', 'hide']).toContain(scored.decision);
   }, 30000); // 30s timeout for API call
 
-  it('should compose decision from scores correctly', () => {
+  it('should score decisions from scores correctly', () => {
+    const engine = new ScoringEngine();
     // High positive, low negative = keep
-    expect(composeDecision({ u: 0.8, d: 0.7, c: 0.6, h: 0.5, rb: 0.1, eb: 0.1, sp: 0.1, ts: 0.1, sf: 0.1 })).toBe('keep');
+    expect(engine.score({ u: 0.8, d: 0.7, c: 0.6, h: 0.5, rb: 0.1, eb: 0.1, sp: 0.1, ts: 0.1, sf: 0.1, x: 0.1 }).decision).toBe('keep');
 
     // Low positive, high negative = hide
-    expect(composeDecision({ u: 0.1, d: 0.1, c: 0.1, h: 0.1, rb: 0.8, eb: 0.8, sp: 0.8, ts: 0.8, sf: 0.8 })).toBe('hide');
+    expect(engine.score({ u: 0.1, d: 0.1, c: 0.1, h: 0.1, rb: 0.8, eb: 0.8, sp: 0.8, ts: 0.8, sf: 0.8, x: 0.8 }).decision).toBe('hide');
   });
 });
 
