@@ -1,11 +1,69 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "2ce9f310-8207-4f5b-9ee7-07a75e04325f",
+  "id": "be22b001-33c4-4303-b67b-449158278698",
   "prevIds": [
-    "a1b2c3d4-e5f6-4789-0123-456789abcdef0"
+    "00000000-0000-0000-0000-000000000000"
   ],
   "ddl": [
+    {
+      "values": [
+        "llm",
+        "cache"
+      ],
+      "name": "activity_source",
+      "entityType": "enums",
+      "schema": "public"
+    },
+    {
+      "values": [
+        "keep",
+        "dim",
+        "hide"
+      ],
+      "name": "decision",
+      "entityType": "enums",
+      "schema": "public"
+    },
+    {
+      "values": [
+        "should_keep",
+        "should_hide"
+      ],
+      "name": "feedback_label",
+      "entityType": "enums",
+      "schema": "public"
+    },
+    {
+      "values": [
+        "free",
+        "pro"
+      ],
+      "name": "plan",
+      "entityType": "enums",
+      "schema": "public"
+    },
+    {
+      "values": [
+        "inactive",
+        "active",
+        "canceled",
+        "past_due"
+      ],
+      "name": "plan_status",
+      "entityType": "enums",
+      "schema": "public"
+    },
+    {
+      "values": [
+        "llm",
+        "cache",
+        "error"
+      ],
+      "name": "post_source",
+      "entityType": "enums",
+      "schema": "public"
+    },
     {
       "isRlsEnabled": false,
       "name": "post_feedback",
@@ -33,6 +91,12 @@
     {
       "isRlsEnabled": false,
       "name": "users",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "webhook_deliveries",
       "entityType": "tables",
       "schema": "public"
     },
@@ -76,8 +140,8 @@
       "table": "post_feedback"
     },
     {
-      "type": "text",
-      "typeSchema": null,
+      "type": "decision",
+      "typeSchema": "public",
       "notNull": true,
       "dimensions": 0,
       "default": null,
@@ -89,8 +153,8 @@
       "table": "post_feedback"
     },
     {
-      "type": "text",
-      "typeSchema": null,
+      "type": "feedback_label",
+      "typeSchema": "public",
       "notNull": true,
       "dimensions": 0,
       "default": null,
@@ -180,8 +244,8 @@
       "table": "posts"
     },
     {
-      "type": "text",
-      "typeSchema": null,
+      "type": "decision",
+      "typeSchema": "public",
       "notNull": true,
       "dimensions": 0,
       "default": null,
@@ -193,8 +257,8 @@
       "table": "posts"
     },
     {
-      "type": "text",
-      "typeSchema": null,
+      "type": "post_source",
+      "typeSchema": "public",
       "notNull": true,
       "dimensions": 0,
       "default": null,
@@ -284,8 +348,8 @@
       "table": "user_activity"
     },
     {
-      "type": "text",
-      "typeSchema": null,
+      "type": "decision",
+      "typeSchema": "public",
       "notNull": true,
       "dimensions": 0,
       "default": null,
@@ -297,8 +361,8 @@
       "table": "user_activity"
     },
     {
-      "type": "text",
-      "typeSchema": null,
+      "type": "activity_source",
+      "typeSchema": "public",
       "notNull": true,
       "dimensions": 0,
       "default": null,
@@ -401,8 +465,8 @@
       "table": "users"
     },
     {
-      "type": "text",
-      "typeSchema": null,
+      "type": "plan",
+      "typeSchema": "public",
       "notNull": true,
       "dimensions": 0,
       "default": "'free'",
@@ -414,8 +478,8 @@
       "table": "users"
     },
     {
-      "type": "text",
-      "typeSchema": null,
+      "type": "plan_status",
+      "typeSchema": "public",
       "notNull": true,
       "dimensions": 0,
       "default": "'inactive'",
@@ -479,6 +543,58 @@
       "table": "users"
     },
     {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "webhook_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "webhook_deliveries"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "event_type",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "webhook_deliveries"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "subscription_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "webhook_deliveries"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "processed_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "webhook_deliveries"
+    },
+    {
       "nameExplicit": true,
       "columns": [
         {
@@ -524,90 +640,6 @@
       "nameExplicit": true,
       "columns": [
         {
-          "value": "author_id",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "idx_posts_author_id",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "posts"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "updated_at",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "idx_posts_updated_at",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "posts"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "user_id",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "idx_activity_user_id",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "user_activity"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "created_at",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "idx_activity_created_at",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "user_activity"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
           "value": "user_id",
           "isExpression": false,
           "asc": true,
@@ -633,6 +665,48 @@
       "table": "user_activity"
     },
     {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "polar_customer_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "idx_users_polar_customer_id",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "users"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "polar_subscription_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "idx_users_polar_subscription_id",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "users"
+    },
+    {
       "nameExplicit": false,
       "columns": [
         "user_id"
@@ -643,7 +717,7 @@
         "id"
       ],
       "onUpdate": "NO ACTION",
-      "onDelete": "NO ACTION",
+      "onDelete": "CASCADE",
       "name": "post_feedback_user_id_users_id_fkey",
       "entityType": "fks",
       "schema": "public",
@@ -660,7 +734,7 @@
         "post_id"
       ],
       "onUpdate": "NO ACTION",
-      "onDelete": "NO ACTION",
+      "onDelete": "CASCADE",
       "name": "post_feedback_post_id_posts_post_id_fkey",
       "entityType": "fks",
       "schema": "public",
@@ -677,7 +751,7 @@
         "id"
       ],
       "onUpdate": "NO ACTION",
-      "onDelete": "NO ACTION",
+      "onDelete": "CASCADE",
       "name": "user_activity_user_id_users_id_fkey",
       "entityType": "fks",
       "schema": "public",
@@ -694,7 +768,7 @@
         "id"
       ],
       "onUpdate": "NO ACTION",
-      "onDelete": "NO ACTION",
+      "onDelete": "CASCADE",
       "name": "user_usage_user_id_users_id_fkey",
       "entityType": "fks",
       "schema": "public",
@@ -752,6 +826,16 @@
       "entityType": "pks"
     },
     {
+      "columns": [
+        "webhook_id"
+      ],
+      "nameExplicit": false,
+      "name": "webhook_deliveries_pkey",
+      "schema": "public",
+      "table": "webhook_deliveries",
+      "entityType": "pks"
+    },
+    {
       "nameExplicit": false,
       "columns": [
         "email"
@@ -761,6 +845,27 @@
       "schema": "public",
       "table": "users",
       "entityType": "uniques"
+    },
+    {
+      "value": "char_length(\"content_text\") <= 4000",
+      "name": "posts_content_text_len_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "posts"
+    },
+    {
+      "value": "\"llm_calls\" >= 0",
+      "name": "user_usage_llm_calls_nonnegative_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "user_usage"
+    },
+    {
+      "value": "date_trunc('month', \"month_start\"::timestamp) = \"month_start\"::timestamp",
+      "name": "user_usage_month_start_month_boundary_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "user_usage"
     }
   ],
   "renames": []

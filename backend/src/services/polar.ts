@@ -121,6 +121,9 @@ interface ClaimWebhookDeliveryByIdInput {
   subscriptionId?: string | null;
 }
 
+type PlanValue = (typeof Plan)[keyof typeof Plan];
+type PlanStatusValue = (typeof PlanStatus)[keyof typeof PlanStatus];
+
 export async function claimWebhookDeliveryById(input: ClaimWebhookDeliveryByIdInput): Promise<WebhookDeliveryClaim> {
   const subscriptionId = input.subscriptionId || null;
 
@@ -190,7 +193,7 @@ export function extractSubscriptionData(data: Record<string, unknown>): Subscrip
   };
 }
 
-async function setUserTier(userId: string, plan: string, planStatus: string, extra: Partial<{
+async function setUserTier(userId: string, plan: PlanValue, planStatus: PlanStatusValue, extra: Partial<{
   polarCustomerId: string;
   polarSubscriptionId: string;
   subscriptionPeriodStart: Date;
