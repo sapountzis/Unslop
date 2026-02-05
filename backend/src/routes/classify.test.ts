@@ -1,10 +1,10 @@
 // Tests for classify endpoint and utilities
-// Uses real OPENROUTER_API_KEY from .env for integration testing
+// Uses real LLM_API_KEY from .env for integration testing
 import 'dotenv/config';
 import { describe, it, expect } from 'bun:test';
 import { normalizeContentText, hashContentText, derivePostId } from '../lib/hash';
 import { generateSessionToken, verifySessionToken } from '../lib/jwt';
-import { checkQuota } from '../services/quota';
+import { checkQuota, getQuotaStatus, incrementUsageBy } from '../services/quota';
 import { classifyPost, composeDecision } from '../services/llm';
 
 const API_URL = process.env.APP_URL || 'http://localhost:3000';
@@ -12,7 +12,7 @@ const API_URL = process.env.APP_URL || 'http://localhost:3000';
 describe('LLM Service', () => {
   it('should classify a post using real API', async () => {
     // Skip if no real API key
-    if (!process.env.OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY.startsWith('sk-or-dummy')) {
+    if (!process.env.LLM_API_KEY || process.env.LLM_API_KEY.startsWith('sk-or-dummy')) {
       console.log('⚠️  Skipping LLM test - no real API key');
       return;
     }
@@ -26,7 +26,7 @@ describe('LLM Service', () => {
 
     expect(['keep', 'dim', 'hide']).toContain(result.decision);
     expect(result.source).toBe('llm');
-    expect(result.model).toBe(process.env.OPENROUTER_MODEL!);
+    expect(result.model).toBe(process.env.LLM_MODEL!);
     expect(result.latency).toBeGreaterThan(0);
   }, 30000); // 30s timeout for API call
 
@@ -153,5 +153,10 @@ describe('JWT Utilities', () => {
 describe('Quota Service', () => {
   it('should check quota function exists', () => {
     expect(typeof checkQuota).toBe('function');
+  });
+
+  it('should expose batch quota helpers', () => {
+    expect(typeof getQuotaStatus).toBe('function');
+    expect(typeof incrementUsageBy).toBe('function');
   });
 });
