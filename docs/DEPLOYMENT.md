@@ -72,7 +72,7 @@ railway variables set MAGIC_LINK_BASE_URL="https://your-domain.railway.app/v1/au
 1. Sign up at https://openrouter.ai
 2. Add funds to your account
 3. Choose a model (e.g., `anthropic/claude-3-haiku`)
-4. Set `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`
+4. Set `LLM_API_KEY`, `LLM_MODEL`
 
 ## Migrations
 

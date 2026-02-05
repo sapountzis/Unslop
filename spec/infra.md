@@ -50,9 +50,9 @@ Billing (Polar):
 - `POLAR_WEBHOOK_SECRET`
 
 LLM provider (OpenRouter):
-- `OPENROUTER_API_KEY`
-- `OPENROUTER_BASE_URL` (default `https://openrouter.ai/api/v1`)
-- `OPENROUTER_MODEL` (single model name for v0.1)
+- `LLM_API_KEY`
+- `LLM_BASE_URL` (default `https://openrouter.ai/api/v1`)
+- `LLM_MODEL` (single model name for v0.1)
 
 Quotas / cache:
 - `FREE_MONTHLY_LLM_CALLS` (default 300)

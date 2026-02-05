@@ -89,7 +89,7 @@ Copy `.env.example` to `.env`. The default `.env` is configured for local develo
 | `JWT_SECRET` | Secret for session tokens | Dev secret (change in prod) |
 | `MAGIC_LINK_SECRET` | Secret for magic links | Dev secret |
 | `RESEND_API_KEY` | Resend API key for emails | Dummy (emails logged to console) |
-| `OPENROUTER_API_KEY` | OpenRouter API key for LLM | Dummy (falls back to "keep") |
+| `LLM_API_KEY` | OpenRouter API key for LLM | Dummy (falls back to "keep") |
 | `POLAR_API_KEY` | Polar API key for billing | Dummy (checkout returns error) |
 
 **Dev Mode Features:**

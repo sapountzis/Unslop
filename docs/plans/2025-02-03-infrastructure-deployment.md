@@ -122,9 +122,9 @@ POLAR_WEBHOOK_SECRET=
 POLAR_PRO_MONTHLY_PRICE_ID=
 
 # LLM (OpenRouter)
-OPENROUTER_API_KEY=
-OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
-OPENROUTER_MODEL=
+LLM_API_KEY=
+LLM_BASE_URL=https://openrouter.ai/api/v1
+LLM_MODEL=
 
 # Quotas
 FREE_MONTHLY_LLM_CALLS=300
@@ -348,7 +348,7 @@ railway variables set MAGIC_LINK_BASE_URL="https://your-domain.railway.app/v1/au
 1. Sign up at https://openrouter.ai
 2. Add funds to your account
 3. Choose a model (e.g., `anthropic/claude-3-haiku`)
-4. Set `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`
+4. Set `LLM_API_KEY`, `LLM_MODEL`
 
 ## Migrations
 

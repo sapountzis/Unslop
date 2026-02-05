@@ -36,15 +36,15 @@ export interface LLMCallResult {
   latency: number;
 }
 
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY!;
-const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1';
-const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL!;
+const LLM_API_KEY = process.env.LLM_API_KEY!;
+const LLM_BASE_URL = process.env.LLM_BASE_URL || 'https://openrouter.ai/api/v1';
+const LLM_MODEL = process.env.LLM_MODEL!;
 
-if (!OPENROUTER_API_KEY) {
-  throw new Error('OPENROUTER_API_KEY environment variable is required');
+if (!LLM_API_KEY) {
+  throw new Error('LLM_API_KEY environment variable is required');
 }
-if (!OPENROUTER_MODEL) {
-  throw new Error('OPENROUTER_MODEL environment variable is required');
+if (!LLM_MODEL) {
+  throw new Error('LLM_MODEL environment variable is required');
 }
 
 const SYSTEM_PROMPT = `You are a strict JSON generator. Your job is to decide if a LinkedIn post should be kept, dimmed, or hidden.
@@ -66,15 +66,15 @@ export async function classifyPost(post: PostInput): Promise<LLMCallResult> {
 Content: ${post.content_text}`;
 
   try {
-    const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+    const response = await fetch(`${LLM_BASE_URL}/chat/completions`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'Authorization': `Bearer ${LLM_API_KEY}`,
         'Content-Type': 'application/json',
         'HTTP-Referer': 'https://getunslop.com',
       },
       body: JSON.stringify({
-        model: OPENROUTER_MODEL,
+        model: LLM_MODEL,
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: userMessage },
@@ -106,7 +106,7 @@ Content: ${post.content_text}`;
 
     return {
       decision: parsed.decision,
-      model: OPENROUTER_MODEL,
+      model: LLM_MODEL,
       latency,
     };
   } catch (err) {
@@ -114,7 +114,7 @@ Content: ${post.content_text}`;
     console.error('LLM classification failed:', err);
     return {
       decision: 'keep',
-      model: OPENROUTER_MODEL,
+      model: LLM_MODEL,
       latency: Date.now() - startTime,
     };
   }
