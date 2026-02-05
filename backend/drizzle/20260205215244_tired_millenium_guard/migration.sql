@@ -42,8 +42,7 @@ CREATE TABLE "user_usage" (
 	"month_start" date,
 	"llm_calls" integer DEFAULT 0 NOT NULL,
 	CONSTRAINT "user_usage_pkey" PRIMARY KEY("user_id","month_start"),
-	CONSTRAINT "user_usage_llm_calls_nonnegative_check" CHECK ("llm_calls" >= 0),
-	CONSTRAINT "user_usage_month_start_month_boundary_check" CHECK (date_trunc('month', "month_start"::timestamp) = "month_start"::timestamp)
+	CONSTRAINT "user_usage_llm_calls_nonnegative_check" CHECK ("llm_calls" >= 0)
 );
 --> statement-breakpoint
 CREATE TABLE "users" (

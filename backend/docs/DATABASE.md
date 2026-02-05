@@ -6,7 +6,6 @@ Source of truth:
 
 - schema code: `backend/src/db/schema.ts`
 - generated SQL: `backend/drizzle/20260205215244_tired_millenium_guard/migration.sql`
-- docker bootstrap SQL: `backend/drizzle/init.sql`
 
 ## Quick mental model
 
@@ -139,25 +138,24 @@ Indexes and why:
 
 Purpose:
 
-- Tracks quota consumption per user per billing month.
+- Tracks quota consumption per user per billing period.
 
 Important columns:
 
 - `user_id`.
-- `month_start` (date like `2026-02-01`).
+- `month_start` (period anchor date, e.g. `2026-02-01` for free tier, `2026-02-15` for a mid-month Pro activation).
 - `llm_calls` counter.
 
 Primary key design and why:
 
 - Composite PK: `(user_id, month_start)`.
-- Guarantees exactly one usage row per user per month.
+- Guarantees exactly one usage row per user per period anchor date.
 - Makes atomic upsert/update logic simple and safe.
 
 Checks and why:
 
 - `llm_calls >= 0` (no negative counters).
-- `month_start` must be month boundary via `date_trunc('month', ...)`.
-- Prevents accidental invalid periods like `2026-02-14`.
+- No month-boundary check: Pro subscriptions use real cycle anchors from Polar `current_period_start`.
 
 Foreign key and why:
 
@@ -247,6 +245,9 @@ docker compose down -v && docker compose up -d
 From `backend/`:
 
 ```bash
+# apply schema to a fresh local database
+bun run migrate
+
 # generate migration after schema edits
 bun run migrate:generate
 

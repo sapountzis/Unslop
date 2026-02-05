@@ -2,6 +2,7 @@
 import { Resend } from 'resend';
 import { runtime } from '../config/runtime';
 import { logger } from './logger';
+import { buildMagicLinkEmailContent } from './email-template';
 
 const RESEND_API_KEY = runtime.email.resendApiKey;
 const MAGIC_LINK_BASE_URL = runtime.email.magicLinkBaseUrl;
@@ -16,7 +17,14 @@ const resend = RESEND_API_KEY && !RESEND_API_KEY.startsWith('re_dummy')
   : null;
 
 export async function sendMagicLinkEmail(email: string, token: string): Promise<void> {
-  const link = `${MAGIC_LINK_BASE_URL}?token=${encodeURIComponent(token)}`;
+  const linkUrl = new URL(MAGIC_LINK_BASE_URL);
+  linkUrl.searchParams.set('token', token);
+  const link = linkUrl.toString();
+  const content = buildMagicLinkEmailContent({
+    link,
+    appName: 'Unslop',
+    expiresInMinutes: 15,
+  });
 
   // In development with dummy key, log the link instead of sending email
   if (!resend) {
@@ -30,29 +38,29 @@ export async function sendMagicLinkEmail(email: string, token: string): Promise<
     return;
   }
 
-  await resend.emails.send({
+  const response = await resend.emails.send({
     from: 'Unslop <noreply@getunslop.com>',
     to: email,
-    subject: 'Sign in to Unslop',
-    html: `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8">
-          <style>
-            body { font-family: system-ui, -apple-system, sans-serif; line-height: 1.5; }
-            a { color: #0066cc; }
-            .button { display: inline-block; padding: 12px 24px; background: #0066cc; color: white; text-decoration: none; border-radius: 6px; }
-          </style>
-        </head>
-        <body>
-          <h2>Sign in to Unslop</h2>
-          <p>Click the button below to sign in to your account:</p>
-          <p><a href="${link}" class="button">Sign In</a></p>
-          <p>Or copy this link:<br><a href="${link}">${link}</a></p>
-          <p>This link expires in 15 minutes.</p>
-        </body>
-      </html>
-    `,
+    subject: content.subject,
+    text: content.text,
+    html: content.html,
+  });
+
+  if (response.error) {
+    logger.error(
+      'auth_magic_link_send_failed',
+      new Error(response.error.message),
+      {
+        provider: 'resend',
+        code: response.error.name,
+        statusCode: response.error.statusCode,
+      },
+    );
+    throw new Error('email_send_failed');
+  }
+
+  logger.info('auth_magic_link_sent', {
+    provider: 'resend',
+    id: response.data?.id ?? null,
   });
 }

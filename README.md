@@ -46,7 +46,12 @@ docker compose down
 docker compose down -v && docker compose up -d
 ```
 
-The database is automatically initialized with the schema from `backend/drizzle/init.sql`.
+After starting a fresh database volume, apply schema with Drizzle migrations:
+
+```bash
+cd backend
+bun run migrate
+```
 
 **Connection details:**
 - Host: `localhost`

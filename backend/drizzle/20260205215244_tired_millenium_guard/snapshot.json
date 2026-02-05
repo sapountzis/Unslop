@@ -859,13 +859,6 @@
       "entityType": "checks",
       "schema": "public",
       "table": "user_usage"
-    },
-    {
-      "value": "date_trunc('month', \"month_start\"::timestamp) = \"month_start\"::timestamp",
-      "name": "user_usage_month_start_month_boundary_check",
-      "entityType": "checks",
-      "schema": "public",
-      "table": "user_usage"
     }
   ],
   "renames": []

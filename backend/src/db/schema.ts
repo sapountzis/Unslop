@@ -79,15 +79,11 @@ export const postFeedback = pgTable('post_feedback', {
 
 export const userUsage = pgTable('user_usage', {
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  monthStart: date('month_start').notNull(), // YYYY-MM-01 in UTC
+  monthStart: date('month_start').notNull(), // billing period anchor date in UTC (free: month start, pro: subscription start)
   llmCalls: integer('llm_calls').notNull().default(0),
 }, (table) => [
   primaryKey({ columns: [table.userId, table.monthStart] }),
   check('user_usage_llm_calls_nonnegative_check', sql`${table.llmCalls} >= 0`),
-  check(
-    'user_usage_month_start_month_boundary_check',
-    sql`date_trunc('month', ${table.monthStart}::timestamp) = ${table.monthStart}::timestamp`
-  ),
 ]);
 
 // Track individual classification events per user for statistics
