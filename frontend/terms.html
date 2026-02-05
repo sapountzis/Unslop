@@ -18,16 +18,22 @@
 
   <header class="header">
     <nav class="nav container">
+      <input type="checkbox" id="nav-toggle" class="nav__toggle" aria-hidden="true" />
+      
       <a class="brand" href="index.html#top" aria-label="Unslop home">
         <span class="brand__mark" aria-hidden="true">U</span>
         <span class="brand__name">Unslop</span>
       </a>
 
+      <label for="nav-toggle" class="nav__hamburger" aria-label="Toggle">
+        <span></span>
+      </label>
+
       <div class="nav__links" role="navigation" aria-label="Primary">
         <a href="index.html#how">How it works</a>
         <a href="index.html#pricing">Pricing</a>
         <a href="privacy.html">Privacy</a>
-        <a class="nav__pill" href="https://chrome.google.com/webstore" target="_blank" rel="noreferrer">Install</a>
+        <a class="nav__pill btn--full-mobile" href="https://chrome.google.com/webstore" target="_blank" rel="noreferrer">Install</a>
       </div>
     </nav>
   </header>
@@ -118,5 +124,17 @@
       </div>
     </div>
   </footer>
+  <script>
+    const navToggle = document.getElementById('nav-toggle');
+    const navLinks = document.querySelector('.nav__links');
+    
+    if (navToggle && navLinks) {
+      navLinks.querySelectorAll('a').forEach(link => {
+        link.addEventListener('click', () => {
+          navToggle.checked = false;
+        });
+      });
+    }
+  </script>
 </body>
 </html>
