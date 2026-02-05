@@ -9,6 +9,10 @@ This repo contains **Unslop**, a Chrome extension + backend API that filters the
 - `frontend/` – Static site for `getunslop.com` (landing + privacy/support pages).
 - `spec/` – Source-of-truth specs.
 
+## Submodule constitutions
+
+- For any change under `backend/`, `backend/AGENTS.md` is binding and must be treated as the backend development constitution (quality gates, boundaries, allowed/prohibited behavior).
+
 Start here: `spec/spec.md`.
 
 ## Global rules

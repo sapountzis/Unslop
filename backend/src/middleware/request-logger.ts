@@ -1,18 +1,34 @@
 import type { MiddlewareHandler } from 'hono';
 import { logger } from '../lib/logger';
 
-export const requestLogger: MiddlewareHandler = async (c, next) => {
-  const startedAt = Date.now();
-  const path = c.req.path;
+interface LoggerLike {
+  info: (message: string, meta?: Record<string, unknown>) => void;
+}
 
-  try {
-    await next();
-  } finally {
-    logger.info('http_request', {
-      method: c.req.method,
-      path,
-      status: c.res.status,
-      duration_ms: Date.now() - startedAt,
-    });
-  }
-};
+interface RequestLoggerDeps {
+  logger: LoggerLike;
+  nowMs?: () => number;
+}
+
+export function createRequestLogger(deps: RequestLoggerDeps): MiddlewareHandler {
+  return async (c, next) => {
+    const startedAt = (deps.nowMs ?? Date.now)();
+    const path = c.req.path;
+
+    try {
+      await next();
+    } finally {
+      deps.logger.info('http_request', {
+        method: c.req.method,
+        path,
+        status: c.res.status,
+        duration_ms: (deps.nowMs ?? Date.now)() - startedAt,
+      });
+    }
+  };
+}
+
+export const requestLogger = createRequestLogger({
+  logger,
+  nowMs: () => Date.now(),
+});

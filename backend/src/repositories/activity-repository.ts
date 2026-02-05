@@ -1,5 +1,5 @@
-import { db } from '../db';
 import { userActivity } from '../db/schema';
+import type { Database } from '../db';
 import type { Decision } from '../types/classification';
 
 export interface ActivityInsert {
@@ -9,14 +9,32 @@ export interface ActivityInsert {
   source: 'llm' | 'cache';
 }
 
-export async function insertActivity(input: ActivityInsert): Promise<void> {
-  await db.insert(userActivity).values(input);
+export interface ActivityRepository {
+  insertActivity: (input: ActivityInsert) => Promise<void>;
+  insertActivities: (inputs: ActivityInsert[]) => Promise<void>;
 }
 
-export async function insertActivities(inputs: ActivityInsert[]): Promise<void> {
-  if (inputs.length === 0) {
-    return;
+export interface ActivityRepositoryDeps {
+  db: Database;
+}
+
+export function createActivityRepository(deps: ActivityRepositoryDeps): ActivityRepository {
+  const { db } = deps;
+
+  async function insertActivity(input: ActivityInsert): Promise<void> {
+    await db.insert(userActivity).values(input);
   }
 
-  await db.insert(userActivity).values(inputs);
+  async function insertActivities(inputs: ActivityInsert[]): Promise<void> {
+    if (inputs.length === 0) {
+      return;
+    }
+
+    await db.insert(userActivity).values(inputs);
+  }
+
+  return {
+    insertActivity,
+    insertActivities,
+  };
 }

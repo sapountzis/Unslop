@@ -14,13 +14,19 @@ import {
   check,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
+import {
+  DECISION_VALUES,
+  FEEDBACK_LABEL_VALUES,
+  PLAN_STATUS_VALUES,
+  PLAN_VALUES,
+} from '../lib/domain-constants';
 
-export const planEnum = pgEnum('plan', ['free', 'pro']);
-export const planStatusEnum = pgEnum('plan_status', ['inactive', 'active', 'canceled', 'past_due']);
-export const decisionEnum = pgEnum('decision', ['keep', 'dim', 'hide']);
+export const planEnum = pgEnum('plan', PLAN_VALUES);
+export const planStatusEnum = pgEnum('plan_status', PLAN_STATUS_VALUES);
+export const decisionEnum = pgEnum('decision', DECISION_VALUES);
 export const postSourceEnum = pgEnum('post_source', ['llm', 'cache', 'error']);
 export const activitySourceEnum = pgEnum('activity_source', ['llm', 'cache']);
-export const feedbackLabelEnum = pgEnum('feedback_label', ['should_keep', 'should_hide']);
+export const feedbackLabelEnum = pgEnum('feedback_label', FEEDBACK_LABEL_VALUES);
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),

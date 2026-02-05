@@ -1,8 +1,10 @@
 // Email utility for sending magic link emails via Resend
 import { Resend } from 'resend';
+import { runtime } from '../config/runtime';
+import { logger } from './logger';
 
-const RESEND_API_KEY = process.env.RESEND_API_KEY;
-const MAGIC_LINK_BASE_URL = process.env.MAGIC_LINK_BASE_URL!;
+const RESEND_API_KEY = runtime.email.resendApiKey;
+const MAGIC_LINK_BASE_URL = runtime.email.magicLinkBaseUrl;
 
 if (!MAGIC_LINK_BASE_URL) {
   throw new Error('MAGIC_LINK_BASE_URL environment variable is required');
@@ -18,11 +20,13 @@ export async function sendMagicLinkEmail(email: string, token: string): Promise<
 
   // In development with dummy key, log the link instead of sending email
   if (!resend) {
-    console.log('\n========================================');
-    console.log('📧 MAGIC LINK (dev mode - email not sent)');
-    console.log(`   To: ${email}`);
-    console.log(`   Link: ${link}`);
-    console.log('========================================\n');
+    logger.info('auth_magic_link_dev_mode', {
+      email,
+      link: runtime.email.logMagicLinkUrls ? link : '[redacted]',
+      note: runtime.email.logMagicLinkUrls
+        ? 'Set LOG_MAGIC_LINK_URLS=false to redact magic links from logs.'
+        : 'Set LOG_MAGIC_LINK_URLS=true to log local magic links for manual testing.',
+    });
     return;
   }
 

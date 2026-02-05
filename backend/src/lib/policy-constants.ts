@@ -1,0 +1,19 @@
+export const CONTENT_TEXT_MAX_CHARS = 4000;
+export const CLASSIFY_BATCH_MAX_SIZE = 20;
+export const STATS_LOOKBACK_DAYS = 30;
+
+export const SESSION_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 60;
+export const MAGIC_LINK_TOKEN_TTL_SECONDS = 60 * 15;
+
+export const LLM_RETRY_ATTEMPTS = 3;
+export const LLM_RETRY_MIN_TIMEOUT_MS = 2000;
+export const LLM_RETRY_MAX_TIMEOUT_MS = 20000;
+export const LLM_TEMPERATURE = 0.1;
+export const LLM_MAX_TOKENS = 1000;
+
+export const DEFAULT_BATCH_LLM_CONCURRENCY = 4;
+export const DEFAULT_POST_CACHE_TTL_DAYS = 7;
+export const POLAR_PRICE_CACHE_TTL_MS = 60 * 60 * 1000;
+
+export const DEFAULT_FREE_MONTHLY_LLM_CALLS = 300;
+export const DEFAULT_PRO_MONTHLY_LLM_CALLS = 10000;

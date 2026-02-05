@@ -1,152 +1,139 @@
-// Billing routes
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { validateEvent, WebhookVerificationError } from '@polar-sh/sdk/webhooks';
-import {
-  claimWebhookDeliveryById,
-  createCheckoutSession,
-  handleSubscriptionActive,
-  handleSubscriptionCanceled,
-  handleSubscriptionUncanceled,
-  handleSubscriptionRevoked,
-  handleSubscriptionUpdated,
-  releaseWebhookDeliveryById,
-} from '../services/polar';
+import type { MiddlewareHandler } from 'hono';
 import { BillingError } from '../lib/billing-constants';
-import { authMiddleware } from '../middleware/auth';
-import { logger } from '../lib/logger';
-import type { JWTPayload } from '../lib/jwt';
+import { CHECKOUT_PLAN_VALUES, POLAR_SUBSCRIPTION_EVENT_TYPES } from '../lib/domain-constants';
+import type { PolarService } from '../services/polar';
+import { getSubscriptionIdFromWebhookData } from '../services/polar-webhook-schema';
 
-const billing = new Hono();
+interface LoggerLike {
+  info: (message: string, meta?: Record<string, unknown>) => void;
+  error: (message: string, error: unknown, meta?: Record<string, unknown>) => void;
+}
 
-billing.post('/v1/billing/create-checkout', authMiddleware, zValidator('json', z.object({
-  plan: z.enum(['pro-monthly']),
-})), async (c) => {
-  const user = c.get('user') as JWTPayload;
+export interface BillingRoutesDeps {
+  authMiddleware: MiddlewareHandler;
+  polarService: PolarService;
+  logger: LoggerLike;
+  polarWebhookSecret: string;
+}
 
-  try {
-    const session = await createCheckoutSession(user.sub);
-    return c.json({ checkout_url: session.checkout_url });
-  } catch (err: any) {
-    if (err.message === BillingError.ALREADY_PRO) {
-      return c.json({ error: 'already_pro' }, 409);
-    }
-    logger.error('Checkout creation failed', err);
-    return c.json({ error: 'checkout_failed' }, 500);
-  }
-});
+const subscriptionEventTypes = new Set(POLAR_SUBSCRIPTION_EVENT_TYPES);
 
-const toError = (error: unknown): Error => {
+function toError(error: unknown): Error {
   if (error instanceof Error) {
     return error;
   }
   return new Error(typeof error === 'string' ? error : 'Unknown error');
-};
-
-const subscriptionEventTypes = new Set([
-  'subscription.created',
-  'subscription.active',
-  'subscription.updated',
-  'subscription.uncanceled',
-  'subscription.canceled',
-  'subscription.revoked',
-]);
-
-function getSubscriptionId(data: Record<string, unknown>): string | null {
-  const id = data.id;
-  if (typeof id === 'string' && id.length > 0) {
-    return id;
-  }
-
-  const subscriptionId = data.subscription_id;
-  if (typeof subscriptionId === 'string' && subscriptionId.length > 0) {
-    return subscriptionId;
-  }
-
-  return null;
 }
 
-billing.post('/v1/billing/polar/webhook', async (c) => {
-  const webhookId = c.req.header('webhook-id');
-  if (!webhookId) {
-    return c.json({ error: 'missing_webhook_id' }, 400);
-  }
+export function createBillingRoutes(deps: BillingRoutesDeps): Hono {
+  const billing = new Hono();
 
-  const rawBody = await c.req.text();
-  const headers: Record<string, string> = {
-    'webhook-id': webhookId,
-    'webhook-timestamp': c.req.header('webhook-timestamp') ?? '',
-    'webhook-signature': c.req.header('webhook-signature') ?? '',
-  };
+  billing.post(
+    '/v1/billing/create-checkout',
+    deps.authMiddleware,
+    zValidator('json', z.object({ plan: z.enum(CHECKOUT_PLAN_VALUES) })),
+    async (c) => {
+      const user = c.get('user');
 
-  let event: ReturnType<typeof validateEvent>;
-  try {
-    event = validateEvent(rawBody, headers, process.env.POLAR_WEBHOOK_SECRET!);
-  } catch (error) {
-    if (error instanceof WebhookVerificationError) {
-      return c.json({ received: false }, 403);
+      try {
+        const session = await deps.polarService.createCheckoutSession(user.sub);
+        return c.json({ checkout_url: session.checkout_url });
+      } catch (error) {
+        const err = toError(error);
+        if (err.message === BillingError.ALREADY_PRO) {
+          return c.json({ error: 'already_pro' }, 409);
+        }
+        deps.logger.error('checkout_creation_failed', err);
+        return c.json({ error: 'checkout_failed' }, 500);
+      }
+    },
+  );
+
+  billing.post('/v1/billing/polar/webhook', async (c) => {
+    const webhookId = c.req.header('webhook-id');
+    if (!webhookId) {
+      return c.json({ error: 'missing_webhook_id' }, 400);
     }
 
-    logger.error('billing_webhook_validation_failed', toError(error));
-    return c.json({ received: false }, 500);
-  }
+    const rawBody = await c.req.text();
+    const headers: Record<string, string> = {
+      'webhook-id': webhookId,
+      'webhook-timestamp': c.req.header('webhook-timestamp') ?? '',
+      'webhook-signature': c.req.header('webhook-signature') ?? '',
+    };
 
-  if (!subscriptionEventTypes.has(event.type)) {
+    let event: ReturnType<typeof validateEvent>;
+    try {
+      event = validateEvent(rawBody, headers, deps.polarWebhookSecret);
+    } catch (error) {
+      if (error instanceof WebhookVerificationError) {
+        return c.json({ received: false }, 403);
+      }
+
+      deps.logger.error('billing_webhook_validation_failed', toError(error));
+      return c.json({ received: false }, 500);
+    }
+
+    if (!subscriptionEventTypes.has(event.type as (typeof POLAR_SUBSCRIPTION_EVENT_TYPES)[number])) {
+      return c.json({ received: true });
+    }
+
+    const claim = await deps.polarService.claimWebhookDeliveryById({
+      webhookId,
+      eventType: event.type,
+      subscriptionId: getSubscriptionIdFromWebhookData(event.data),
+    });
+
+    if (claim.isDuplicate) {
+      deps.logger.info('billing_webhook_duplicate', {
+        event_type: event.type,
+        webhook_id: webhookId,
+      });
+      return c.json({ received: true });
+    }
+
+    try {
+      switch (event.type) {
+        case 'subscription.created':
+          if (typeof event.data === 'object' && event.data !== null && 'status' in event.data) {
+            if ((event.data as { status?: unknown }).status === 'active') {
+              await deps.polarService.handleSubscriptionActive(event.data);
+            }
+          }
+          break;
+        case 'subscription.active':
+          await deps.polarService.handleSubscriptionActive(event.data);
+          break;
+        case 'subscription.updated':
+          await deps.polarService.handleSubscriptionUpdated(event.data);
+          break;
+        case 'subscription.uncanceled':
+          await deps.polarService.handleSubscriptionUncanceled(event.data);
+          break;
+        case 'subscription.canceled':
+          await deps.polarService.handleSubscriptionCanceled(event.data);
+          break;
+        case 'subscription.revoked':
+          await deps.polarService.handleSubscriptionRevoked(event.data);
+          break;
+      }
+    } catch (error) {
+      await deps.polarService.releaseWebhookDeliveryById(webhookId);
+      deps.logger.error('billing_webhook_processing_failed', toError(error), {
+        event_type: event.type,
+        webhook_id: webhookId,
+      });
+      return c.json({ received: false }, 500);
+    }
+
     return c.json({ received: true });
-  }
-
-  const data = event.data as Record<string, unknown>;
-  const claim = await claimWebhookDeliveryById({
-    webhookId,
-    eventType: event.type,
-    subscriptionId: getSubscriptionId(data),
   });
 
-  if (claim.isDuplicate) {
-    logger.info('billing_webhook_duplicate', {
-      event_type: event.type,
-      webhook_id: webhookId,
-    });
-    return c.json({ received: true });
-  }
-
-  try {
-    switch (event.type) {
-      case 'subscription.created':
-        if (data.status === 'active') {
-          await handleSubscriptionActive(data);
-        }
-        break;
-      case 'subscription.active':
-        await handleSubscriptionActive(data);
-        break;
-      case 'subscription.updated':
-        await handleSubscriptionUpdated(data);
-        break;
-      case 'subscription.uncanceled':
-        await handleSubscriptionUncanceled(data);
-        break;
-      case 'subscription.canceled':
-        await handleSubscriptionCanceled(data);
-        break;
-      case 'subscription.revoked':
-        await handleSubscriptionRevoked(data);
-        break;
-    }
-  } catch (error) {
-    await releaseWebhookDeliveryById(webhookId);
-    logger.error('billing_webhook_processing_failed', toError(error), {
-      event_type: event.type,
-      webhook_id: webhookId,
-    });
-    return c.json({ received: false }, 500);
-  }
-
-  return c.json({ received: true });
-});
-
-const resultPage = (title: string, color: string, heading: string, message: string) => `
+  const resultPage = (title: string, color: string, heading: string, message: string) => `
 <!DOCTYPE html>
 <html>
 <head>
@@ -167,18 +154,31 @@ const resultPage = (title: string, color: string, heading: string, message: stri
 </body>
 </html>`;
 
-billing.get('/billing/success', (c) => c.html(resultPage(
-  'Payment Successful',
-  '#059669',
-  'Payment Successful!',
-  'Thank you for subscribing to Unslop Pro. You can close this window.'
-)));
+  billing.get(
+    '/billing/success',
+    (c) =>
+      c.html(
+        resultPage(
+          'Payment Successful',
+          '#059669',
+          'Payment Successful!',
+          'Thank you for subscribing to Unslop Pro. You can close this window.',
+        ),
+      ),
+  );
 
-billing.get('/billing/cancel', (c) => c.html(resultPage(
-  'Payment Cancelled',
-  '#dc2626',
-  'Payment Cancelled',
-  'No charges were made. You can close this window.'
-)));
+  billing.get(
+    '/billing/cancel',
+    (c) =>
+      c.html(
+        resultPage(
+          'Payment Cancelled',
+          '#dc2626',
+          'Payment Cancelled',
+          'No charges were made. You can close this window.',
+        ),
+      ),
+  );
 
-export { billing };
+  return billing;
+}

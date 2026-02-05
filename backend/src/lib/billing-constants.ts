@@ -1,28 +1,32 @@
-// Billing constants
+import {
+  PLAN_VALUES,
+  PLAN_STATUS_VALUES,
+  POLAR_SUBSCRIPTION_STATUS_VALUES,
+} from './domain-constants';
 
 export const Plan = {
-    FREE: 'free',
-    PRO: 'pro',
+  FREE: PLAN_VALUES[0],
+  PRO: PLAN_VALUES[1],
 } as const;
 
 export const PlanStatus = {
-    ACTIVE: 'active',
-    CANCELED: 'canceled',
-    PAST_DUE: 'past_due',
-    INACTIVE: 'inactive',
+  INACTIVE: PLAN_STATUS_VALUES[0],
+  ACTIVE: PLAN_STATUS_VALUES[1],
+  CANCELED: PLAN_STATUS_VALUES[2],
+  PAST_DUE: PLAN_STATUS_VALUES[3],
 } as const;
 
 export const PolarStatus = {
-    INCOMPLETE: 'incomplete',
-    INCOMPLETE_EXPIRED: 'incomplete_expired',
-    TRIALING: 'trialing',
-    ACTIVE: 'active',
-    PAST_DUE: 'past_due',
-    CANCELED: 'canceled',
-    UNPAID: 'unpaid',
+  INCOMPLETE: POLAR_SUBSCRIPTION_STATUS_VALUES[0],
+  INCOMPLETE_EXPIRED: POLAR_SUBSCRIPTION_STATUS_VALUES[1],
+  TRIALING: POLAR_SUBSCRIPTION_STATUS_VALUES[2],
+  ACTIVE: POLAR_SUBSCRIPTION_STATUS_VALUES[3],
+  PAST_DUE: POLAR_SUBSCRIPTION_STATUS_VALUES[4],
+  CANCELED: POLAR_SUBSCRIPTION_STATUS_VALUES[5],
+  UNPAID: POLAR_SUBSCRIPTION_STATUS_VALUES[6],
 } as const;
 
 export const BillingError = {
-    ALREADY_PRO: 'ALREADY_PRO',
-    USER_NOT_FOUND: 'USER_NOT_FOUND',
+  ALREADY_PRO: 'ALREADY_PRO',
+  USER_NOT_FOUND: 'USER_NOT_FOUND',
 } as const;

@@ -1,11 +1,9 @@
 import 'dotenv/config';
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
 import { Plan, PlanStatus } from '../lib/billing-constants';
+import { createPolarService } from '../services/polar';
 
 process.env.TEST_MODE = 'true';
-process.env.POLAR_WEBHOOK_SECRET = process.env.POLAR_WEBHOOK_SECRET || 'test-webhook-secret';
-process.env.POLAR_API_KEY = process.env.POLAR_API_KEY || 'test-key';
-process.env.POLAR_PRODUCT_ID = process.env.POLAR_PRODUCT_ID || 'prod_test_123';
 
 let insertReturningRows: unknown[] = [];
 
@@ -32,19 +30,19 @@ const mockInsert = mock(() => ({
   })),
 }));
 
-mock.module('../db', () => ({
-  db: {
-    select: mockSelect,
-    insert: mockInsert,
-    update: mockUpdate,
-  },
+const mockDelete = mock(() => ({
+  where: mock(() => Promise.resolve([])),
 }));
 
-(global as any).fetch = mock((url: string) => {
+const fetchMock = mock((url: string) => {
   if (url.includes('/v1/products/')) {
-    return Promise.resolve(new Response(JSON.stringify({
-      prices: [{ id: 'price_123', type: 'recurring', recurring_interval: 'month' }],
-    })));
+    return Promise.resolve(
+      new Response(
+        JSON.stringify({
+          prices: [{ id: 'price_123', type: 'recurring', recurring_interval: 'month' }],
+        }),
+      ),
+    );
   }
   if (url.includes('/v1/checkouts')) {
     return Promise.resolve(new Response(JSON.stringify({ url: 'https://polar.sh/checkout/test' })));
@@ -52,18 +50,28 @@ mock.module('../db', () => ({
   return Promise.resolve(new Response('{}', { status: 404 }));
 });
 
-const {
-  buildWebhookDeliveryKey,
-  claimWebhookDelivery,
-  createCheckoutSession,
-  extractSubscriptionData,
-  handleSubscriptionActive,
-  handleSubscriptionCanceled,
-  handleSubscriptionPastDue,
-  handleSubscriptionRevoked,
-  handleSubscriptionUncanceled,
-  handleSubscriptionUpdated,
-} = await import('../services/polar');
+function buildService() {
+  return createPolarService({
+    db: {
+      select: mockSelect,
+      insert: mockInsert,
+      update: mockUpdate,
+      delete: mockDelete,
+    } as never,
+    config: {
+      apiKey: 'test-key',
+      apiBase: 'https://sandbox-api.polar.sh',
+      productId: 'prod_test_123',
+      appUrl: 'http://localhost:3000',
+    },
+    fetchImpl: fetchMock as unknown as typeof fetch,
+    logger: {
+      info: mock(() => undefined),
+      warn: mock(() => undefined),
+    },
+    now: () => new Date('2026-02-05T00:00:00.000Z'),
+  });
+}
 
 function mockPayload(overrides: Record<string, unknown> = {}) {
   return {
@@ -95,9 +103,10 @@ describe('createCheckoutSession', () => {
           limit: mock(() => Promise.resolve([{ id: 'u1', email: 'test@example.com', plan: 'free', planStatus: 'inactive' }])),
         })),
       })),
-    } as any);
+    });
 
-    const result = await createCheckoutSession('u1');
+    const service = buildService();
+    const result = await service.createCheckoutSession('u1');
     expect(result.checkout_url).toBe('https://polar.sh/checkout/test');
   });
 
@@ -108,17 +117,19 @@ describe('createCheckoutSession', () => {
           limit: mock(() => Promise.resolve([{ id: 'u1', email: 'pro@example.com', plan: 'pro', planStatus: 'active' }])),
         })),
       })),
-    } as any);
+    });
 
-    await expect(createCheckoutSession('u1')).rejects.toThrow('ALREADY_PRO');
+    const service = buildService();
+    await expect(service.createCheckoutSession('u1')).rejects.toThrow('ALREADY_PRO');
   });
 
   it('throws USER_NOT_FOUND', async () => {
     mockSelect.mockReturnValue({
       from: mock(() => ({ where: mock(() => ({ limit: mock(() => Promise.resolve([])) })) })),
-    } as any);
+    });
 
-    await expect(createCheckoutSession('u1')).rejects.toThrow('USER_NOT_FOUND');
+    const service = buildService();
+    await expect(service.createCheckoutSession('u1')).rejects.toThrow('USER_NOT_FOUND');
   });
 });
 
@@ -129,9 +140,10 @@ describe('webhook idempotency', () => {
   });
 
   it('buildWebhookDeliveryKey is deterministic for event payload', () => {
+    const service = buildService();
     const payload = mockPayload();
-    const key = buildWebhookDeliveryKey(payload as any);
-    const key2 = buildWebhookDeliveryKey(payload as any);
+    const key = service.buildWebhookDeliveryKey(payload);
+    const key2 = service.buildWebhookDeliveryKey(payload);
 
     expect(key).toBe(key2);
     expect(key).toContain('subscription.active');
@@ -140,7 +152,8 @@ describe('webhook idempotency', () => {
 
   it('claimWebhookDelivery returns non-duplicate when insert succeeds', async () => {
     insertReturningRows = [{ webhookId: 'k1' }];
-    const claim = await claimWebhookDelivery(mockPayload() as any);
+    const service = buildService();
+    const claim = await service.claimWebhookDelivery(mockPayload());
 
     expect(claim.isDuplicate).toBe(false);
     expect(claim.webhookId).toContain('subscription.active');
@@ -148,26 +161,10 @@ describe('webhook idempotency', () => {
 
   it('claimWebhookDelivery returns duplicate when row already exists', async () => {
     insertReturningRows = [];
-    const claim = await claimWebhookDelivery(mockPayload() as any);
+    const service = buildService();
+    const claim = await service.claimWebhookDelivery(mockPayload());
 
     expect(claim.isDuplicate).toBe(true);
-  });
-});
-
-describe('extractSubscriptionData', () => {
-  it('extracts valid data', () => {
-    const result = extractSubscriptionData(mockPayload().data as Record<string, unknown>);
-    expect(result).not.toBeNull();
-    expect(result!.subscriptionId).toBe('sub_123');
-    expect(result!.userId).toBe('test-user-id');
-  });
-
-  it('returns null without subscription_id', () => {
-    expect(extractSubscriptionData({ metadata: { user_id: 'u1' } })).toBeNull();
-  });
-
-  it('returns null without user_id', () => {
-    expect(extractSubscriptionData({ id: 'sub_123', metadata: {} })).toBeNull();
   });
 });
 
@@ -177,79 +174,98 @@ describe('webhook handlers', () => {
   });
 
   it('handleSubscriptionActive sets PRO/ACTIVE', async () => {
-    const mockSet = mock(() => ({ where: mock(() => Promise.resolve()) }));
-    mockUpdate.mockReturnValue({ set: mockSet } as any);
+    const mockSet = mock(() => ({ where: mock(() => Promise.resolve([])) }));
+    mockUpdate.mockReturnValue({ set: mockSet });
 
-    await handleSubscriptionActive(mockPayload().data as Record<string, unknown>);
+    const service = buildService();
+    await service.handleSubscriptionActive(mockPayload().data);
 
-    expect(mockSet).toHaveBeenCalledWith(expect.objectContaining({
-      plan: Plan.PRO,
-      planStatus: PlanStatus.ACTIVE,
-    }));
+    expect(mockSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plan: Plan.PRO,
+        planStatus: PlanStatus.ACTIVE,
+      }),
+    );
   });
 
   it('handleSubscriptionCanceled sets PRO/CANCELED', async () => {
-    const mockSet = mock(() => ({ where: mock(() => Promise.resolve()) }));
-    mockUpdate.mockReturnValue({ set: mockSet } as any);
+    const mockSet = mock(() => ({ where: mock(() => Promise.resolve([])) }));
+    mockUpdate.mockReturnValue({ set: mockSet });
 
-    await handleSubscriptionCanceled(mockPayload({ status: 'canceled' }).data as Record<string, unknown>);
+    const service = buildService();
+    await service.handleSubscriptionCanceled(mockPayload({ status: 'canceled' }).data);
 
-    expect(mockSet).toHaveBeenCalledWith(expect.objectContaining({
-      plan: Plan.PRO,
-      planStatus: PlanStatus.CANCELED,
-    }));
+    expect(mockSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plan: Plan.PRO,
+        planStatus: PlanStatus.CANCELED,
+      }),
+    );
   });
 
   it('handleSubscriptionRevoked sets FREE/INACTIVE', async () => {
-    const mockSet = mock(() => ({ where: mock(() => Promise.resolve()) }));
-    mockUpdate.mockReturnValue({ set: mockSet } as any);
+    const mockSet = mock(() => ({ where: mock(() => Promise.resolve([])) }));
+    mockUpdate.mockReturnValue({ set: mockSet });
 
-    await handleSubscriptionRevoked(mockPayload().data as Record<string, unknown>);
+    const service = buildService();
+    await service.handleSubscriptionRevoked(mockPayload().data);
 
-    expect(mockSet).toHaveBeenCalledWith(expect.objectContaining({
-      plan: Plan.FREE,
-      planStatus: PlanStatus.INACTIVE,
-    }));
+    expect(mockSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plan: Plan.FREE,
+        planStatus: PlanStatus.INACTIVE,
+      }),
+    );
   });
 
   it('handleSubscriptionPastDue sets PRO/PAST_DUE', async () => {
-    const mockSet = mock(() => ({ where: mock(() => Promise.resolve()) }));
-    mockUpdate.mockReturnValue({ set: mockSet } as any);
+    const mockSet = mock(() => ({ where: mock(() => Promise.resolve([])) }));
+    mockUpdate.mockReturnValue({ set: mockSet });
 
-    await handleSubscriptionPastDue(mockPayload({ status: 'past_due' }).data as Record<string, unknown>);
+    const service = buildService();
+    await service.handleSubscriptionPastDue(mockPayload({ status: 'past_due' }).data);
 
-    expect(mockSet).toHaveBeenCalledWith(expect.objectContaining({
-      plan: Plan.PRO,
-      planStatus: PlanStatus.PAST_DUE,
-    }));
+    expect(mockSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plan: Plan.PRO,
+        planStatus: PlanStatus.PAST_DUE,
+      }),
+    );
   });
 
   it('handleSubscriptionUncanceled sets PRO/ACTIVE', async () => {
-    const mockSet = mock(() => ({ where: mock(() => Promise.resolve()) }));
-    mockUpdate.mockReturnValue({ set: mockSet } as any);
+    const mockSet = mock(() => ({ where: mock(() => Promise.resolve([])) }));
+    mockUpdate.mockReturnValue({ set: mockSet });
 
-    await handleSubscriptionUncanceled(mockPayload().data as Record<string, unknown>);
+    const service = buildService();
+    await service.handleSubscriptionUncanceled(mockPayload().data);
 
-    expect(mockSet).toHaveBeenCalledWith(expect.objectContaining({
-      plan: Plan.PRO,
-      planStatus: PlanStatus.ACTIVE,
-    }));
+    expect(mockSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plan: Plan.PRO,
+        planStatus: PlanStatus.ACTIVE,
+      }),
+    );
   });
 
   it('handleSubscriptionUpdated routes correctly', async () => {
-    const mockSet = mock(() => ({ where: mock(() => Promise.resolve()) }));
-    mockUpdate.mockReturnValue({ set: mockSet } as any);
+    const mockSet = mock(() => ({ where: mock(() => Promise.resolve([])) }));
+    mockUpdate.mockReturnValue({ set: mockSet });
 
-    await handleSubscriptionUpdated(mockPayload({ status: 'active' }).data as Record<string, unknown>);
+    const service = buildService();
+    await service.handleSubscriptionUpdated(mockPayload({ status: 'active' }).data);
 
-    expect(mockSet).toHaveBeenCalledWith(expect.objectContaining({
-      plan: Plan.PRO,
-      planStatus: PlanStatus.ACTIVE,
-    }));
+    expect(mockSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plan: Plan.PRO,
+        planStatus: PlanStatus.ACTIVE,
+      }),
+    );
   });
 
   it('handles missing user_id gracefully', async () => {
-    await handleSubscriptionActive(mockPayload({ metadata: {} }).data as Record<string, unknown>);
+    const service = buildService();
+    await service.handleSubscriptionActive(mockPayload({ metadata: {} }).data);
     expect(mockUpdate).not.toHaveBeenCalled();
   });
 });

@@ -1,33 +1,34 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
 import { createTestApp } from '../test-utils/app';
-import { generateSessionToken } from '../lib/jwt';
+import { generateSessionToken, verifySessionToken } from '../lib/jwt';
+import { createAuthMiddleware } from '../middleware/auth';
+import { createFeedbackRoutes, feedbackSchema } from './feedback';
+import { DECISION_VALUES, FEEDBACK_LABEL_VALUES } from '../lib/domain-constants';
 
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret-key';
 
-const insertValuesMock = mock(async () => undefined);
-const insertMock = mock(() => ({
-  values: insertValuesMock,
-}));
-
-mock.module('../db', () => ({
-  db: {
-    insert: insertMock,
-  },
-}));
-
-const { feedback } = await import('./feedback');
+const submitFeedbackMock = mock(
+  async (): Promise<'ok' | 'post_not_found'> => 'ok',
+);
 
 const app = createTestApp((testApp) => {
-  testApp.route('/', feedback);
+  testApp.route(
+    '/',
+    createFeedbackRoutes({
+      authMiddleware: createAuthMiddleware({ verifySessionToken }),
+      feedbackService: {
+        submitFeedback: submitFeedbackMock,
+      },
+    }),
+  );
 });
 
 describe('Feedback Routes (unit)', () => {
   const TEST_USER_ID = '00000000-0000-0000-0000-000000000999';
 
   beforeEach(() => {
-    insertMock.mockClear();
-    insertValuesMock.mockClear();
-    insertValuesMock.mockResolvedValue(undefined);
+    submitFeedbackMock.mockClear();
+    submitFeedbackMock.mockResolvedValue('ok');
   });
 
   it('POST /v1/feedback rejects unauthenticated requests', async () => {
@@ -58,7 +59,7 @@ describe('Feedback Routes (unit)', () => {
     expect(res.status).toBe(400);
   });
 
-  it('POST /v1/feedback inserts feedback directly and returns ok', async () => {
+  it('POST /v1/feedback delegates to service and returns ok', async () => {
     const token = await generateSessionToken(TEST_USER_ID, 'feedback@example.com');
     const payload = {
       post_id: 'post-1',
@@ -77,8 +78,7 @@ describe('Feedback Routes (unit)', () => {
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ status: 'ok' });
-    expect(insertMock).toHaveBeenCalledTimes(1);
-    expect(insertValuesMock).toHaveBeenCalledWith({
+    expect(submitFeedbackMock).toHaveBeenCalledWith({
       userId: TEST_USER_ID,
       postId: payload.post_id,
       renderedDecision: payload.rendered_decision,
@@ -86,8 +86,8 @@ describe('Feedback Routes (unit)', () => {
     });
   });
 
-  it('POST /v1/feedback maps FK violation to post_not_found', async () => {
-    insertValuesMock.mockRejectedValueOnce({ code: '23503' });
+  it('POST /v1/feedback maps post_not_found', async () => {
+    submitFeedbackMock.mockResolvedValueOnce('post_not_found');
     const token = await generateSessionToken(TEST_USER_ID, 'feedback@example.com');
 
     const res = await app.request('http://localhost/v1/feedback', {
@@ -105,5 +105,10 @@ describe('Feedback Routes (unit)', () => {
 
     expect(res.status).toBe(404);
     expect(await res.json()).toEqual({ error: 'post_not_found' });
+  });
+
+  it('validator enums are sourced from shared domain constants', () => {
+    expect(feedbackSchema.shape.rendered_decision.options).toEqual(Array.from(DECISION_VALUES));
+    expect(feedbackSchema.shape.user_label.options).toEqual(Array.from(FEEDBACK_LABEL_VALUES));
   });
 });

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
 import { createTestApp } from '../test-utils/app';
+import { createBillingRoutes } from './billing';
 
 process.env.POLAR_WEBHOOK_SECRET = process.env.POLAR_WEBHOOK_SECRET || 'test-webhook-secret';
 
@@ -28,22 +29,33 @@ mock.module('@polar-sh/sdk/webhooks', () => ({
   WebhookVerificationError: TestWebhookVerificationError,
 }));
 
-mock.module('../services/polar', () => ({
-  createCheckoutSession: mock(async () => ({ checkout_url: 'https://polar.sh/checkout/test' })),
-  claimWebhookDelivery: mock(async () => ({ deliveryKey: 'legacy', isDuplicate: false })),
-  claimWebhookDeliveryById: claimWebhookDeliveryByIdMock,
-  releaseWebhookDeliveryById: releaseWebhookDeliveryByIdMock,
-  handleSubscriptionActive: mock(async () => undefined),
-  handleSubscriptionCanceled: mock(async () => undefined),
-  handleSubscriptionUncanceled: mock(async () => undefined),
-  handleSubscriptionRevoked: mock(async () => undefined),
-  handleSubscriptionUpdated: handleSubscriptionUpdatedMock,
-}));
-
-const { billing } = await import('./billing');
-
 const app = createTestApp((testApp) => {
-  testApp.route('/', billing);
+  testApp.route(
+    '/',
+    createBillingRoutes({
+      authMiddleware: async (_c, next) => {
+        await next();
+      },
+      polarService: {
+        createCheckoutSession: mock(async () => ({ checkout_url: 'https://polar.sh/checkout/test' })),
+        buildWebhookDeliveryKey: mock(() => 'legacy'),
+        claimWebhookDelivery: mock(async () => ({ webhookId: 'legacy', isDuplicate: false })),
+        claimWebhookDeliveryById: claimWebhookDeliveryByIdMock,
+        releaseWebhookDeliveryById: releaseWebhookDeliveryByIdMock,
+        handleSubscriptionActive: mock(async () => undefined),
+        handleSubscriptionCanceled: mock(async () => undefined),
+        handleSubscriptionUncanceled: mock(async () => undefined),
+        handleSubscriptionRevoked: mock(async () => undefined),
+        handleSubscriptionPastDue: mock(async () => undefined),
+        handleSubscriptionUpdated: handleSubscriptionUpdatedMock,
+      },
+      logger: {
+        info: mock(() => undefined),
+        error: mock(() => undefined),
+      },
+      polarWebhookSecret: process.env.POLAR_WEBHOOK_SECRET!,
+    }),
+  );
 });
 
 describe('Billing webhook route', () => {

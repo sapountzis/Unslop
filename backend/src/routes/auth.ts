@@ -1,141 +1,96 @@
-// Auth routes: POST /v1/auth/start, GET /v1/auth/callback, GET /v1/me
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import { db } from '../db';
-import { users } from '../db/schema';
-import { eq } from 'drizzle-orm';
-import {
-  generateMagicLinkToken,
-  generateSessionToken,
-  verifyMagicLinkToken,
-} from '../lib/jwt';
-import { sendMagicLinkEmail } from '../lib/email';
-import { authMiddleware } from '../middleware/auth';
-import { getOrCreateUserByEmail } from '../repositories/user-repository';
-import { logger } from '../lib/logger';
+import type { MiddlewareHandler } from 'hono';
+import type { AuthService } from '../services/auth-service';
 
-const auth = new Hono();
+interface LoggerLike {
+  error: (message: string, error: unknown, meta?: Record<string, unknown>) => void;
+}
+
+export interface AuthRoutesDeps {
+  authMiddleware: MiddlewareHandler;
+  authService: AuthService;
+  logger: LoggerLike;
+}
 
 const startAuthSchema = z.object({
   email: z.string().email(),
 });
 
-// POST /v1/auth/start
-auth.post('/v1/auth/start', zValidator('json', startAuthSchema), async (c) => {
-  try {
-    const { email } = c.req.valid('json');
+export function createAuthRoutes(deps: AuthRoutesDeps): Hono {
+  const auth = new Hono();
 
-    // Normalize email
-    const normalizedEmail = email.toLowerCase().trim();
+  auth.post('/v1/auth/start', zValidator('json', startAuthSchema), async (c) => {
+    try {
+      const { email } = c.req.valid('json');
+      await deps.authService.startAuth(email);
+      return c.json({ status: 'accepted' }, 202);
+    } catch (error) {
+      deps.logger.error('auth_start_failed', error);
+      return c.json({ error: 'internal_error' }, 500);
+    }
+  });
 
-    const user = await getOrCreateUserByEmail(normalizedEmail);
+  auth.get('/v1/auth/callback', async (c) => {
+    const token = c.req.query('token');
 
-    // Generate magic link token
-    const token = await generateMagicLinkToken(user.id);
-
-    // Send email
-    await sendMagicLinkEmail(normalizedEmail, token);
-
-    return c.json({ status: 'accepted' }, 202);
-  } catch (error) {
-    logger.error('auth_start_failed', error);
-    return c.json({ error: 'internal_error' }, 500);
-  }
-});
-
-// GET /v1/auth/callback
-auth.get('/v1/auth/callback', async (c) => {
-  const token = c.req.query('token');
-
-  if (!token) {
-    return c.html(
-      `<html>
-        <body><h1>Invalid callback</h1><p>No token provided.</p></body>
-      </html>`,
-      400
-    );
-  }
-
-  try {
-    const { userId } = await verifyMagicLinkToken(token);
-
-    // Get user email
-    const userRecords = await db
-      .select({
-        id: users.id,
-        email: users.email,
-      })
-      .from(users)
-      .where(eq(users.id, userId))
-      .limit(1);
-
-    if (userRecords.length === 0) {
-      throw new Error('User not found');
+    if (!token) {
+      return c.html(
+        `<html>
+          <body><h1>Invalid callback</h1><p>No token provided.</p></body>
+        </html>`,
+        400,
+      );
     }
 
-    const user = userRecords[0];
+    try {
+      const { sessionToken } = await deps.authService.completeMagicLink(token);
 
-    // Generate session JWT
-    const sessionToken = await generateSessionToken(user.id, user.email);
-
-    return c.html(
-      `<!DOCTYPE html>
-      <html>
-        <head>
-          <title>Sign In - Unslop</title>
-          <meta name="unslop-jwt" content="${sessionToken}">
-        </head>
-        <body>
-          <h1>Sign in successful</h1>
-          <p>You can close this tab and return to the extension.</p>
-        </body>
-      </html>`,
-      200,
-      {
-        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
-        Pragma: 'no-cache',
-        Expires: '0',
-      }
-    );
-  } catch {
-    return c.html(
-      `<html>
-        <body><h1>Invalid or expired link</h1><p>Please try again.</p></body>
-      </html>`,
-      400
-    );
-  }
-});
-
-// GET /v1/me
-auth.get('/v1/me', authMiddleware, async (c) => {
-  const user = c.get('user');
-
-  // Get fresh user data from DB
-  const userRecords = await db
-    .select({
-      id: users.id,
-      email: users.email,
-      plan: users.plan,
-      planStatus: users.planStatus,
-    })
-    .from(users)
-    .where(eq(users.id, user.sub))
-    .limit(1);
-
-  if (userRecords.length === 0) {
-    return c.json({ error: 'User not found' }, 404);
-  }
-
-  const userData = userRecords[0];
-
-  return c.json({
-    user_id: userData.id,
-    email: userData.email,
-    plan: userData.plan,
-    plan_status: userData.planStatus,
+      return c.html(
+        `<!DOCTYPE html>
+        <html>
+          <head>
+            <title>Sign In - Unslop</title>
+            <meta name="unslop-jwt" content="${sessionToken}">
+          </head>
+          <body>
+            <h1>Sign in successful</h1>
+            <p>You can close this tab and return to the extension.</p>
+          </body>
+        </html>`,
+        200,
+        {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+          Pragma: 'no-cache',
+          Expires: '0',
+        },
+      );
+    } catch {
+      return c.html(
+        `<html>
+          <body><h1>Invalid or expired link</h1><p>Please try again.</p></body>
+        </html>`,
+        400,
+      );
+    }
   });
-});
 
-export { auth };
+  auth.get('/v1/me', deps.authMiddleware, async (c) => {
+    const user = c.get('user');
+    const userData = await deps.authService.getCurrentUser(user.sub);
+
+    if (!userData) {
+      return c.json({ error: 'User not found' }, 404);
+    }
+
+    return c.json({
+      user_id: userData.id,
+      email: userData.email,
+      plan: userData.plan,
+      plan_status: userData.planStatus,
+    });
+  });
+
+  return auth;
+}

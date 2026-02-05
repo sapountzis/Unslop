@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
-import { db } from '../db';
 import { users } from '../db/schema';
+import type { Database } from '../db';
+import { Plan, PlanStatus } from '../lib/billing-constants';
 
 export type UserSummary = {
   id: string;
@@ -8,6 +9,15 @@ export type UserSummary = {
   plan: string;
   planStatus: string;
 };
+
+export interface UserRepository {
+  getOrCreateUserByEmail: (normalizedEmail: string) => Promise<UserSummary>;
+  findUserById: (userId: string) => Promise<UserSummary | null>;
+}
+
+export interface UserRepositoryDeps {
+  db: Database;
+}
 
 const userSummarySelect = {
   id: users.id,
@@ -30,30 +40,49 @@ function toUserSummary(row: {
   };
 }
 
-export async function getOrCreateUserByEmail(normalizedEmail: string): Promise<UserSummary> {
-  const inserted = await db
-    .insert(users)
-    .values({
-      email: normalizedEmail,
-      plan: 'free',
-      planStatus: 'inactive',
-    })
-    .onConflictDoNothing({ target: users.email })
-    .returning();
+export function createUserRepository(deps: UserRepositoryDeps): UserRepository {
+  const { db } = deps;
 
-  if (inserted.length > 0) {
-    return toUserSummary(inserted[0]);
+  async function getOrCreateUserByEmail(normalizedEmail: string): Promise<UserSummary> {
+    const inserted = await db
+      .insert(users)
+      .values({
+        email: normalizedEmail,
+        plan: Plan.FREE,
+        planStatus: PlanStatus.INACTIVE,
+      })
+      .onConflictDoNothing({ target: users.email })
+      .returning();
+
+    if (inserted.length > 0) {
+      return toUserSummary(inserted[0]);
+    }
+
+    const existing = await db
+      .select(userSummarySelect)
+      .from(users)
+      .where(eq(users.email, normalizedEmail))
+      .limit(1);
+
+    if (existing.length === 0) {
+      throw new Error('USER_UPSERT_FAILED');
+    }
+
+    return toUserSummary(existing[0]);
   }
 
-  const existing = await db
-    .select(userSummarySelect)
-    .from(users)
-    .where(eq(users.email, normalizedEmail))
-    .limit(1);
+  async function findUserById(userId: string): Promise<UserSummary | null> {
+    const existing = await db
+      .select(userSummarySelect)
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
 
-  if (existing.length === 0) {
-    throw new Error('USER_UPSERT_FAILED');
+    return existing.length > 0 ? toUserSummary(existing[0]) : null;
   }
 
-  return toUserSummary(existing[0]);
+  return {
+    getOrCreateUserByEmail,
+    findUserById,
+  };
 }

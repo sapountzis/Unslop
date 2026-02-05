@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'bun:test';
-import { classifyPost } from './llm';
+import { createLlmService } from './llm';
 import { ScoringEngine } from './scoring';
+import { runtime } from '../config/runtime';
+import { logger } from '../lib/logger';
 
 async function skipIfNoRealLlmKey(): Promise<boolean> {
   if (!process.env.LLM_API_KEY || process.env.LLM_API_KEY.startsWith('sk-or-dummy')) {
@@ -18,7 +20,16 @@ describe('LLM Service (integration)', () => {
   it('classifies a post using the configured provider', async () => {
     if (await skipIfNoRealLlmKey()) return;
 
-    const result = await classifyPost({
+    const llmService = createLlmService({
+      config: {
+        apiKey: runtime.llm.apiKey,
+        model: runtime.llm.model,
+        baseUrl: runtime.llm.baseUrl,
+      },
+      logger,
+    });
+
+    const result = await llmService.classifyPost({
       post_id: 'test-post-1',
       author_id: 'author-1',
       author_name: 'Test Author',

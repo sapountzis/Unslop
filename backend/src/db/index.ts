@@ -1,29 +1,45 @@
-// Database connection for Unslop backend
-// Supports both local PostgreSQL (via postgres.js) and Neon (via serverless driver)
-
 import { drizzle as drizzleNeon } from 'drizzle-orm/neon-http';
 import { drizzle as drizzlePostgres } from 'drizzle-orm/postgres-js';
 import * as schema from './schema';
 import { logger } from '../lib/logger';
+import { runtime, type DbDriver } from '../config/runtime';
 
-const DATABASE_URL = process.env.DATABASE_URL;
-
-if (!DATABASE_URL) {
-  throw new Error('DATABASE_URL environment variable is required');
+interface LoggerLike {
+  info: (message: string, meta?: Record<string, unknown>) => void;
 }
 
-// Detect if we're connecting to Neon (production) or local PostgreSQL (development)
-// Neon URLs contain "neon.tech" or start with postgres:// on their infrastructure
-const isNeonDatabase = DATABASE_URL.includes('neon.tech') || DATABASE_URL.includes('neon.com');
+interface DbFactoryOptions {
+  url: string;
+  driver: DbDriver;
+  logger?: LoggerLike;
+  factories?: {
+    neon: (url: string) => unknown;
+    postgres: (url: string) => unknown;
+  };
+}
 
-function createDb() {
-  if (isNeonDatabase) {
-    logger.info('db_connect', { provider: 'neon-http', mode: 'serverless' });
-    return drizzleNeon(DATABASE_URL!, { schema });
-  } else {
-    logger.info('db_connect', { provider: 'postgres-js', mode: 'standard' });
-    return drizzlePostgres(DATABASE_URL!, { schema });
+const defaultFactories = {
+  neon: (url: string) => drizzleNeon(url, { schema }),
+  postgres: (url: string) => drizzlePostgres(url, { schema }),
+};
+
+export function createDb(options: DbFactoryOptions): unknown {
+  const dbLogger = options.logger ?? logger;
+  const factories = options.factories ?? defaultFactories;
+
+  if (options.driver === 'neon') {
+    dbLogger.info('db_connect', { provider: 'neon-http', mode: 'serverless' });
+    return factories.neon(options.url);
   }
+
+  dbLogger.info('db_connect', { provider: 'postgres-js', mode: 'standard' });
+  return factories.postgres(options.url);
 }
 
-export const db = createDb();
+export const db = createDb({
+  url: runtime.db.url,
+  driver: runtime.db.driver,
+  logger,
+}) as ReturnType<typeof drizzlePostgres<typeof schema>>;
+
+export type Database = typeof db;

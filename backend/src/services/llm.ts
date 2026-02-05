@@ -1,11 +1,17 @@
-// LLM classification service using OpenRouter and OpenAI SDK
 import OpenAI from 'openai';
 import { z } from 'zod';
 import { zodResponseFormat } from 'openai/helpers/zod';
 import retry from 'async-retry';
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { SYSTEM_PROMPT, USER_PROMPT } from './prompts';
-import { ScoreResult } from '../types/classification';
-import { logger } from '../lib/logger';
+import type { ScoreResult } from '../types/classification';
+import {
+  LLM_MAX_TOKENS,
+  LLM_RETRY_ATTEMPTS,
+  LLM_RETRY_MAX_TIMEOUT_MS,
+  LLM_RETRY_MIN_TIMEOUT_MS,
+  LLM_TEMPERATURE,
+} from '../lib/policy-constants';
 
 export interface PostInput {
   post_id: string;
@@ -21,8 +27,26 @@ export interface LLMCallResult {
   latency: number;
 }
 
+export interface LlmRuntimeConfig {
+  apiKey: string;
+  model: string;
+  baseUrl: string;
+}
 
-// Define the schema using Zod - only abbreviated scores
+export interface LoggerLike {
+  warn: (message: string, meta?: Record<string, unknown>) => void;
+  error: (message: string, error: unknown, meta?: Record<string, unknown>) => void;
+}
+
+export interface LlmService {
+  classifyPost: (post: PostInput) => Promise<LLMCallResult>;
+}
+
+export interface LlmServiceDeps {
+  config: LlmRuntimeConfig;
+  logger: LoggerLike;
+}
+
 const DecisionSchema = z.object({
   u: z.number(),
   d: z.number(),
@@ -36,54 +60,40 @@ const DecisionSchema = z.object({
   x: z.number(),
 });
 
-
-function getOpenRouterConfig(): { apiKey: string; baseUrl: string; model: string } {
-  const apiKey = process.env.LLM_API_KEY;
-  const model = process.env.LLM_MODEL;
-
-  if (!apiKey) {
-    throw new Error('LLM_API_KEY environment variable is required');
-  }
-  if (!model) {
-    throw new Error('LLM_MODEL environment variable is required');
-  }
-
-  return {
-    apiKey,
-    baseUrl: process.env.LLM_BASE_URL || 'https://openrouter.ai/api/v1',
-    model,
-  };
-}
-
 function constructUserPrompt(post: PostInput): string {
-  // We prepend author info to the content to provide context, 
-  // as the prompt placeholder {{POST_TEXT}} implies just the text, 
-  // but author info is valuable for "ego_bait" assessment.
   const contentWithContext = `Author: ${post.author_name}\n\n${post.content_text}`;
   return USER_PROMPT.replace('{{POST_TEXT}}', contentWithContext);
 }
 
-/**
- * Executes the LLM call with retry logic for transient failures
- */
-async function callLLMWithRetry(openai: OpenAI, model: string, messages: any[]) {
-  return await retry(
+function hasHttpStatus(error: unknown): error is { status: number } {
+  return typeof error === 'object' && error !== null && 'status' in error && typeof (error as { status: unknown }).status === 'number';
+}
+
+async function callLLMWithRetry(
+  openai: OpenAI,
+  model: string,
+  messages: ChatCompletionMessageParam[],
+  logger: LoggerLike,
+) {
+  return retry(
     async (bail) => {
       try {
         const completion = await openai.chat.completions.create({
-          model: model,
-          messages: messages,
-          temperature: 0.1,
-          max_tokens: 1000,
+          model,
+          messages,
+          temperature: LLM_TEMPERATURE,
+          max_tokens: LLM_MAX_TOKENS,
           response_format: zodResponseFormat(DecisionSchema, 'classification'),
         });
 
-        const message = completion.choices[0].message;
+        const message = completion.choices[0]?.message;
+        if (!message) {
+          throw new Error('No completion choices returned');
+        }
 
         if (message.refusal) {
-          // If the model refuses, do not retry
-          bail(new Error(`LLM Refusal: ${message.refusal}`));
-          return completion; // TypeScript requires return even after bail
+          bail(new Error(`LLM refusal: ${message.refusal}`));
+          return completion;
         }
 
         if (!message.content) {
@@ -91,27 +101,26 @@ async function callLLMWithRetry(openai: OpenAI, model: string, messages: any[]) 
         }
 
         return completion;
-      } catch (error: any) {
-        // Stop retrying on 401/403 errors (auth issues)
-        if (error.status === 401 || error.status === 403) {
+      } catch (error) {
+        if (hasHttpStatus(error) && (error.status === 401 || error.status === 403)) {
           bail(error);
-          return null as any;
+          throw error;
         }
-        throw error; // Retry other errors
+        throw error;
       }
     },
     {
-      retries: 3,
-      minTimeout: 2000,
-      maxTimeout: 20000,
-      randomize: true, // Jitter
-      onRetry: (err: any, attempt) => {
+      retries: LLM_RETRY_ATTEMPTS,
+      minTimeout: LLM_RETRY_MIN_TIMEOUT_MS,
+      maxTimeout: LLM_RETRY_MAX_TIMEOUT_MS,
+      randomize: true,
+      onRetry: (error, attempt) => {
         logger.warn('llm_retry', {
           attempt,
-          error: err instanceof Error ? err.message : String(err),
+          error: error instanceof Error ? error.message : String(error),
         });
-      }
-    }
+      },
+    },
   );
 }
 
@@ -121,60 +130,61 @@ function parseAndValidateResponse(content: string | null): ScoreResult {
   }
 
   const parsed = JSON.parse(content);
-  // Validate with Zod
   return DecisionSchema.parse(parsed);
 }
 
-export async function classifyPost(post: PostInput): Promise<LLMCallResult> {
-  const startTime = Date.now();
+export function createLlmService(deps: LlmServiceDeps): LlmService {
+  const { config, logger } = deps;
 
-  // Fail fast if no API key (for local dev without key)
-  if (!process.env.LLM_API_KEY || process.env.LLM_API_KEY.startsWith('sk-or-dummy')) {
-    logger.warn('llm_dev_fallback', {
-      reason: 'missing_or_dummy_api_key',
+  async function classifyPost(post: PostInput): Promise<LLMCallResult> {
+    const startTime = Date.now();
+
+    if (!config.apiKey || config.apiKey.startsWith('sk-or-dummy')) {
+      logger.warn('llm_dev_fallback', { reason: 'missing_or_dummy_api_key' });
+      return {
+        scores: null,
+        source: 'error',
+        model: 'dev-fallback',
+        latency: 0,
+      };
+    }
+
+    if (!config.model) {
+      throw new Error('LLM_MODEL environment variable is required');
+    }
+
+    const openai = new OpenAI({
+      apiKey: config.apiKey,
+      baseURL: config.baseUrl,
     });
-    return {
-      scores: null,
-      source: 'error',
-      model: 'dev-fallback',
-      latency: 0,
-    };
+
+    const messages: ChatCompletionMessageParam[] = [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: constructUserPrompt(post) },
+    ];
+
+    try {
+      const completion = await callLLMWithRetry(openai, config.model, messages, logger);
+      const scores = parseAndValidateResponse(completion.choices[0]?.message.content ?? null);
+
+      return {
+        scores,
+        source: 'llm',
+        model: config.model,
+        latency: Date.now() - startTime,
+      };
+    } catch (error) {
+      logger.error('llm_classification_failed', error, { model: config.model });
+      return {
+        scores: null,
+        source: 'error',
+        model: config.model,
+        latency: Date.now() - startTime,
+      };
+    }
   }
 
-  const { apiKey, baseUrl, model } = getOpenRouterConfig();
-
-  const openai = new OpenAI({
-    apiKey: apiKey,
-    baseURL: baseUrl,
-  });
-
-  const userPrompt = constructUserPrompt(post);
-  const messages = [
-    { role: 'system', content: SYSTEM_PROMPT },
-    { role: 'user', content: userPrompt },
-  ];
-
-  try {
-    const completion = await callLLMWithRetry(openai, model, messages);
-    const scores = parseAndValidateResponse(completion.choices[0].message.content);
-    const latency = Date.now() - startTime;
-
-    return {
-      scores,
-      source: 'llm',
-      model: model,
-      latency,
-    };
-  } catch (err) {
-    // On error, fail open to "keep"
-    logger.error('llm_classification_failed', err, {
-      model,
-    });
-    return {
-      scores: null,
-      source: 'error',
-      model: model,
-      latency: Date.now() - startTime,
-    };
-  }
+  return {
+    classifyPost,
+  };
 }

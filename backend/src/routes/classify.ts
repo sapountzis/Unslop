@@ -1,74 +1,76 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import { authMiddleware } from '../middleware/auth';
-import {
-  classifyBatch,
-  classifySingle,
-  QuotaExceededError,
-} from '../services/classification-service';
+import type { MiddlewareHandler } from 'hono';
+import type { ClassificationService } from '../services/classification-service';
+import { QuotaExceededError } from '../services/classification-service';
+import { CLASSIFY_BATCH_MAX_SIZE, CONTENT_TEXT_MAX_CHARS } from '../lib/policy-constants';
 
-const classify = new Hono();
+export interface ClassifyRoutesDeps {
+  authMiddleware: MiddlewareHandler;
+  classificationService: ClassificationService;
+}
 
-const classifySchema = z.object({
-  post: z.object({
-    post_id: z.string(),
-    author_id: z.string(),
-    author_name: z.string(),
-    content_text: z.string().max(4000),
-  }),
+function isQuotaExceededError(error: unknown): boolean {
+  return error instanceof QuotaExceededError
+    || (error instanceof Error && (error.message === 'quota_exceeded' || error.name === 'QuotaExceededError'));
+}
+
+export const classifyPostSchema = z.object({
+  post_id: z.string(),
+  author_id: z.string(),
+  author_name: z.string(),
+  content_text: z.string().max(CONTENT_TEXT_MAX_CHARS),
 });
 
-const batchClassifySchema = z.object({
-  posts: z
-    .array(
-      z.object({
-        post_id: z.string(),
-        author_id: z.string(),
-        author_name: z.string(),
-        content_text: z.string().max(4000),
-      })
-    )
-    .min(1)
-    .max(20),
+export const classifySchema = z.object({
+  post: classifyPostSchema,
 });
 
-classify.post('/v1/classify', authMiddleware, zValidator('json', classifySchema), async (c) => {
-  const user = c.get('user');
-  const { post } = c.req.valid('json');
-
-  try {
-    const result = await classifySingle(user.sub, post);
-    return c.json(result);
-  } catch (error) {
-    if (error instanceof QuotaExceededError) {
-      return c.json({ error: 'quota_exceeded' }, 429);
-    }
-    throw error;
-  }
+export const batchClassifySchema = z.object({
+  posts: z.array(classifyPostSchema).min(1).max(CLASSIFY_BATCH_MAX_SIZE),
 });
 
-classify.post('/v1/classify/batch', authMiddleware, zValidator('json', batchClassifySchema), async (c) => {
-  const user = c.get('user');
-  const { posts } = c.req.valid('json');
-  const encoder = new TextEncoder();
+export function createClassifyRoutes(deps: ClassifyRoutesDeps): Hono {
+  const classify = new Hono();
 
-  const stream = new ReadableStream({
-    async start(controller) {
-      const outcomes = await classifyBatch(user.sub, posts);
+  classify.post('/v1/classify', deps.authMiddleware, zValidator('json', classifySchema), async (c) => {
+    const user = c.get('user');
+    const { post } = c.req.valid('json');
 
-      for (const outcome of outcomes) {
-        controller.enqueue(encoder.encode(`${JSON.stringify(outcome)}\n`));
+    try {
+      const result = await deps.classificationService.classifySingle(user.sub, post);
+      return c.json(result);
+    } catch (error) {
+      if (isQuotaExceededError(error)) {
+        return c.json({ error: 'quota_exceeded' }, 429);
       }
-
-      controller.close();
-    },
+      throw error;
+    }
   });
 
-  return c.body(stream, 200, {
-    'Content-Type': 'application/x-ndjson; charset=utf-8',
-    'Cache-Control': 'no-store',
-  });
-});
+  classify.post('/v1/classify/batch', deps.authMiddleware, zValidator('json', batchClassifySchema), async (c) => {
+    const user = c.get('user');
+    const { posts } = c.req.valid('json');
+    const encoder = new TextEncoder();
 
-export { classify };
+    const stream = new ReadableStream({
+      async start(controller) {
+        const outcomes = await deps.classificationService.classifyBatch(user.sub, posts);
+
+        for (const outcome of outcomes) {
+          controller.enqueue(encoder.encode(`${JSON.stringify(outcome)}\n`));
+        }
+
+        controller.close();
+      },
+    });
+
+    return c.body(stream, 200, {
+      'Content-Type': 'application/x-ndjson; charset=utf-8',
+      'Cache-Control': 'no-store',
+    });
+  });
+
+  return classify;
+}

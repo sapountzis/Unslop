@@ -1,3 +1,4 @@
+import { runtime } from '../config/runtime';
 type Meta = Record<string, unknown>;
 
 const SENSITIVE_KEY_PATTERN = /(token|authorization|password|secret|api[_-]?key|cookie|jwt|session)/i;
@@ -20,7 +21,7 @@ function sanitizeValue(value: unknown, depth = 0): unknown {
     return {
       name: value.name,
       message: value.message,
-      stack: process.env.NODE_ENV === 'production' ? undefined : value.stack,
+      stack: runtime.server.nodeEnv === 'production' ? undefined : value.stack,
     };
   }
 

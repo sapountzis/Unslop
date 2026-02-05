@@ -1,5 +1,6 @@
 // Content hashing utilities
 import { createHash } from 'crypto';
+import { CONTENT_TEXT_MAX_CHARS } from './policy-constants';
 
 /**
  * Normalize content text for hashing and storage
@@ -10,7 +11,7 @@ export function normalizeContentText(text: string): string {
     .toLowerCase()
     .replace(/\s+/g, ' ')
     .trim()
-    .slice(0, 4000);
+    .slice(0, CONTENT_TEXT_MAX_CHARS);
 }
 
 /**

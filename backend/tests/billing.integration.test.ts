@@ -1,118 +1,53 @@
 import { describe, it, beforeAll, afterAll, expect } from 'bun:test';
+import { eq } from 'drizzle-orm';
 import { db } from '../src/db';
 import { users } from '../src/db/schema';
-import { eq } from 'drizzle-orm';
-import { createCheckoutSession } from '../src/services/polar';
-import { generateSessionToken } from '../src/lib/jwt';
+import { createDependencies } from '../src/app/dependencies';
 
-describe('Billing E2E Integration Tests (Polar Sandbox)', () => {
-  let testUser: any;
-  let testUserId: string;
+type IntegrationUser = {
+  id: string;
+  email: string;
+};
+
+describe('Billing integration tests', () => {
+  let testUser: IntegrationUser;
+  const deps = createDependencies({ db });
 
   beforeAll(async () => {
-    const [user] = await db.insert(users).values({
-      email: `integration-test-${Date.now()}@example.com`,
-      plan: 'free',
-      planStatus: 'inactive',
-    }).returning();
+    const [user] = await db
+      .insert(users)
+      .values({
+        email: `integration-test-${Date.now()}@example.com`,
+        plan: 'free',
+        planStatus: 'inactive',
+      })
+      .returning({ id: users.id, email: users.email });
 
     testUser = user;
-    testUserId = user.id;
-    await generateSessionToken(user.id, user.email);
-
-    console.log(`Created test user: ${testUserId}`);
   });
 
   afterAll(async () => {
-    await db.delete(users).where(eq(users.id, testUserId));
-    console.log(`Cleaned up test user: ${testUserId}`);
+    await db.delete(users).where(eq(users.id, testUser.id));
   });
 
-  it.skipIf(!process.env.POLAR_SANDBOX_ACCESS_TOKEN)('should create checkout session with correct metadata', async () => {
-    const session = await createCheckoutSession(testUserId);
+  it.skipIf(!process.env.POLAR_SANDBOX_ACCESS_TOKEN)('creates checkout session with metadata', async () => {
+    const session = await deps.services.polar.createCheckoutSession(testUser.id);
 
     expect(session.checkout_url).toContain('polar.sh/checkout/');
     expect(session.checkout_url).toBeTruthy();
   });
 
-  it('should handle subscription.created webhook', async () => {
-    const webhookPayload = {
-      type: 'subscription.created',
-      timestamp: new Date().toISOString(),
-      data: {
-        id: 'sub_test_1',
-        created_at: new Date().toISOString(),
-        modified_at: new Date().toISOString(),
-        amount: 399,
-        currency: 'EUR',
-        recurring_interval: 'month',
-        recurring_interval_count: 1,
-        current_period_start: new Date().toISOString(),
-        current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-        cancel_at_period_end: false,
-        canceled_at: null,
-        started_at: new Date().toISOString(),
-        ends_at: null,
-        ended_at: null,
-        customer_id: 'cust_test_1',
-        product_id: 'prod_test_1',
-        price_id: 'price_test_1',
-        discount_id: null,
-        checkout_id: null,
-        customer_cancellation_reason: null,
-        customer_cancellation_comment: null,
-        metadata: { user_id: testUserId },
-        status: 'active',
-        customer: {
-          id: 'cust_test_1',
-          created_at: new Date().toISOString(),
-          modified_at: new Date().toISOString(),
-          metadata: {},
-          email: testUser.email,
-          email_verified: true,
-          name: 'Test User',
-          billing_address: { country: 'US' },
-          tax_id: [],
-          organization_id: 'org_test',
-          avatar_url: null,
-          deleted_at: null,
-          external_id: null,
-        },
-        product: {
-          id: 'prod_test_1',
-          created_at: new Date().toISOString(),
-          modified_at: new Date().toISOString(),
-          name: 'Test Product',
-          description: 'Test Description',
-          is_recurring: true,
-          is_archived: false,
-          organization_id: 'org_test',
-          metadata: {},
-          prices: [],
-          benefits: [],
-          medias: [],
-          attached_custom_fields: [],
-          recurring_interval: 'month',
-          recurring_interval_count: 1,
-          trial_interval: 'month',
-          trial_interval_count: 0,
-        },
-        discount: null,
-        trial_start: null,
-        trial_end: null,
-        prices: [],
-        meters: [],
-      },
-    };
+  it('handles subscription.active webhook payload', async () => {
+    await deps.services.polar.handleSubscriptionActive({
+      id: 'sub_test_1',
+      status: 'active',
+      customer_id: 'cust_test_1',
+      metadata: { user_id: testUser.id },
+      current_period_start: new Date().toISOString(),
+      current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    });
 
-    const { handleSubscriptionActive } = await import('../src/services/polar');
-    await handleSubscriptionActive(webhookPayload.data);
-
-    const [updatedUser] = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, testUserId))
-      .limit(1);
+    const [updatedUser] = await db.select().from(users).where(eq(users.id, testUser.id)).limit(1);
 
     expect(updatedUser).toBeDefined();
     expect(updatedUser.plan).toBe('pro');
@@ -123,144 +58,48 @@ describe('Billing E2E Integration Tests (Polar Sandbox)', () => {
     expect(updatedUser.subscriptionPeriodEnd).toBeInstanceOf(Date);
   });
 
-  it('should handle subscription.canceled webhook', async () => {
-    const webhookPayload = {
-      type: 'subscription.canceled',
-      timestamp: new Date().toISOString(),
-      data: {
-        id: 'sub_test_1',
-        status: 'canceled',
-        cancel_at_period_end: true,
-        current_period_start: new Date().toISOString(),
-        current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-        customer_id: 'cust_test_1',
-        subscription_id: 'sub_test_1',
-        metadata: { user_id: testUserId },
-        product: { id: 'prod_test_1' },
-        customer: { id: 'cust_test_1', billing_address: { country: 'US' } },
-        prices: [],
-        meters: [],
-        created_at: new Date().toISOString(),
-        modified_at: new Date().toISOString(),
-        amount: 399,
-        currency: 'EUR',
-        recurring_interval: 'month',
-        recurring_interval_count: 1,
-        canceled_at: new Date().toISOString(),
-        started_at: new Date().toISOString(),
-        ends_at: null,
-        ended_at: null,
-        checkout_id: null,
-        discount_id: null,
-        discount: null,
-        product_id: 'prod_test_1',
-        price_id: 'price_test_1',
-        trial_start: null,
-        trial_end: null,
-      },
-    };
+  it('handles subscription.canceled webhook payload', async () => {
+    await deps.services.polar.handleSubscriptionCanceled({
+      id: 'sub_test_1',
+      status: 'canceled',
+      customer_id: 'cust_test_1',
+      metadata: { user_id: testUser.id },
+      current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    });
 
-    const { handleSubscriptionCanceled } = await import('../src/services/polar');
-    await handleSubscriptionCanceled(webhookPayload.data);
-
-    const [updatedUser] = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, testUserId))
-      .limit(1);
+    const [updatedUser] = await db.select().from(users).where(eq(users.id, testUser.id)).limit(1);
 
     expect(updatedUser.planStatus).toBe('canceled');
   });
 
-  it('should handle subscription.uncancelled (via updated)', async () => {
-    const cancelPayload = {
-      type: 'subscription.updated',
-      timestamp: new Date().toISOString(),
-      data: {
-        id: 'sub_test_1',
-        status: 'canceled',
-        cancel_at_period_end: true,
-        current_period_start: new Date().toISOString(),
-        current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-        customer_id: 'cust_test_1',
-        subscription_id: 'sub_test_1',
-        metadata: { user_id: testUserId },
-        product: { id: 'prod_test_1' },
-        customer: { id: 'cust_test_1', billing_address: { country: 'US' } },
-        prices: [],
-        meters: [],
-        created_at: new Date().toISOString(),
-        modified_at: new Date().toISOString(),
-      },
-    };
+  it('handles uncancel via explicit uncanceled event', async () => {
+    await deps.services.polar.handleSubscriptionUncanceled({
+      id: 'sub_test_1',
+      status: 'active',
+      customer_id: 'cust_test_1',
+      metadata: { user_id: testUser.id },
+      current_period_start: new Date().toISOString(),
+      current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    });
 
-    const { handleSubscriptionCanceled } = await import('../src/services/polar');
-    await handleSubscriptionCanceled(cancelPayload.data);
-
-    const uncancelledPayload = {
-      type: 'subscription.updated',
-      timestamp: new Date().toISOString(),
-      data: {
-        id: 'sub_test_1',
-        status: 'active',
-        cancel_at_period_end: false,
-        current_period_start: new Date().toISOString(),
-        current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-        customer_id: 'cust_test_1',
-        subscription_id: 'sub_test_1',
-        metadata: { user_id: testUserId },
-        product: { id: 'prod_test_1' },
-        customer: { id: 'cust_test_1', billing_address: { country: 'US' } },
-        prices: [],
-        meters: [],
-        created_at: new Date().toISOString(),
-        modified_at: new Date().toISOString(),
-      },
-    };
-
-    const { handleSubscriptionUncanceled } = await import('../src/services/polar');
-    await handleSubscriptionUncanceled(uncancelledPayload.data);
-
-    const [updatedUser] = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, testUserId))
-      .limit(1);
+    const [updatedUser] = await db.select().from(users).where(eq(users.id, testUser.id)).limit(1);
 
     expect(updatedUser.planStatus).toBe('active');
   });
 
-  it('should handle webhook with missing user_id gracefully', async () => {
-    await db.update(users).set({ plan: 'free', planStatus: 'inactive' }).where(eq(users.id, testUserId));
+  it('ignores webhook payload missing metadata.user_id', async () => {
+    await db.update(users).set({ plan: 'free', planStatus: 'inactive' }).where(eq(users.id, testUser.id));
 
-    const webhookPayload = {
-      type: 'subscription.created',
-      timestamp: new Date().toISOString(),
-      data: {
-        id: 'sub_no_user',
-        status: 'active',
-        metadata: {},
-        current_period_start: new Date().toISOString(),
-        current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-        customer_id: 'cust_no_user',
-        subscription_id: 'sub_no_user',
-        product: { id: 'prod_test_1' },
-        customer: { id: 'cust_no_user', billing_address: { country: 'US' } },
-        prices: [],
-        meters: [],
-        created_at: new Date().toISOString(),
-        modified_at: new Date().toISOString(),
-      },
-    };
+    await deps.services.polar.handleSubscriptionActive({
+      id: 'sub_no_user',
+      status: 'active',
+      customer_id: 'cust_no_user',
+      metadata: {},
+      current_period_start: new Date().toISOString(),
+      current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    });
 
-    const { handleSubscriptionActive } = await import('../src/services/polar');
-    await handleSubscriptionActive(webhookPayload.data);
-
-    const [user] = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, testUserId))
-      .limit(1);
+    const [user] = await db.select().from(users).where(eq(users.id, testUser.id)).limit(1);
 
     expect(user.plan).toBe('free');
     expect(user.planStatus).toBe('inactive');

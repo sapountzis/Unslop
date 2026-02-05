@@ -1,71 +1,45 @@
 import { describe, expect, it, mock } from 'bun:test';
 import { createTestApp } from '../test-utils/app';
+import { generateSessionToken, verifySessionToken } from '../lib/jwt';
+import { createAuthMiddleware } from '../middleware/auth';
+import { createAuthRoutes } from './auth';
 
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret-key';
 
-const dbChain = {
-  select: mock(() => dbChain),
-  from: mock(() => dbChain),
-  where: mock(() => dbChain),
-  limit: mock(async () => [
-    {
-      id: 'test-user-id',
-      email: 'callback-test@example.com',
-      plan: 'free',
-      planStatus: 'inactive',
-    },
-  ]),
-  insert: mock(() => dbChain),
-  values: mock(() => ({ returning: mock(async () => [{ id: 'test-user-id' }]) })),
-};
-
-const verifyMagicLinkTokenMock = mock(async (token: string) => {
+const startAuthMock = mock(async () => undefined);
+const completeMagicLinkMock = mock(async (token: string) => {
   if (token === 'valid-token') {
-    return { userId: 'test-user-id' };
+    return { sessionToken: 'session-jwt-token' };
   }
-
   throw new Error('invalid token');
 });
 
-const getOrCreateUserByEmailMock = mock(async (email: string) => ({
-  id: 'test-user-id',
-  email,
-  plan: 'free',
-  planStatus: 'inactive',
-}));
-
-mock.module('../db', () => ({
-  db: dbChain,
-}));
-
-mock.module('../lib/email', () => ({
-  sendMagicLinkEmail: mock(async () => undefined),
-}));
-
-mock.module('../repositories/user-repository', () => ({
-  getOrCreateUserByEmail: getOrCreateUserByEmailMock,
-}));
-
-mock.module('../lib/jwt', () => ({
-  generateMagicLinkToken: mock(async () => 'magic-link-token'),
-  generateSessionToken: mock(async () => 'session-jwt-token'),
-  verifyMagicLinkToken: verifyMagicLinkTokenMock,
-  verifySessionToken: mock(async () => ({
-    sub: 'test-user-id',
-    email: 'test@example.com',
-    iat: Math.floor(Date.now() / 1000),
-    exp: Math.floor(Date.now() / 1000) + 60,
+const authService = {
+  startAuth: startAuthMock,
+  completeMagicLink: completeMagicLinkMock,
+  getCurrentUser: mock(async (userId: string) => ({
+    id: userId,
+    email: 'callback-test@example.com',
+    plan: 'free',
+    planStatus: 'inactive',
   })),
-}));
-
-const { auth } = await import('./auth');
+};
 
 const app = createTestApp((testApp) => {
-  testApp.route('/', auth);
+  testApp.route(
+    '/',
+    createAuthRoutes({
+      authMiddleware: createAuthMiddleware({ verifySessionToken }),
+      authService,
+      logger: {
+        error: mock(() => undefined),
+      },
+    }),
+  );
 });
 
 describe('Auth Routes (unit)', () => {
-  it('POST /v1/auth/start accepts valid email and normalizes before upsert', async () => {
+  it('POST /v1/auth/start accepts valid email and delegates to service', async () => {
     const res = await app.request('http://localhost/v1/auth/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -73,7 +47,7 @@ describe('Auth Routes (unit)', () => {
     });
 
     expect(res.status).toBe(202);
-    expect(getOrCreateUserByEmailMock).toHaveBeenCalledWith('test@example.com');
+    expect(startAuthMock).toHaveBeenCalledWith('TEST@Example.com');
   });
 
   it('POST /v1/auth/start remains idempotent under concurrent requests', async () => {
@@ -91,10 +65,7 @@ describe('Auth Routes (unit)', () => {
       expect(response.status).toBe(202);
     }
 
-    const normalizedArgs = getOrCreateUserByEmailMock.mock.calls.map((call) => call[0]);
-    const uniqueNormalized = new Set(normalizedArgs.slice(-8));
-    expect(uniqueNormalized.size).toBe(1);
-    expect(Array.from(uniqueNormalized)[0]).toBe('race@test.com');
+    expect(startAuthMock).toHaveBeenCalledTimes(9);
   });
 
   it('POST /v1/auth/start rejects invalid email', async () => {
@@ -132,5 +103,20 @@ describe('Auth Routes (unit)', () => {
     const res = await app.request('http://localhost/v1/me');
 
     expect(res.status).toBe(401);
+  });
+
+  it('GET /v1/me returns user payload when authenticated', async () => {
+    const token = await generateSessionToken('test-user-id', 'user@example.com');
+    const res = await app.request('http://localhost/v1/me', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      user_id: 'test-user-id',
+      email: 'callback-test@example.com',
+      plan: 'free',
+      plan_status: 'inactive',
+    });
   });
 });

@@ -3,6 +3,9 @@ import { createTestApp } from '../test-utils/app';
 import { normalizeContentText, hashContentText, derivePostId } from '../lib/hash';
 import { generateSessionToken, verifySessionToken } from '../lib/jwt';
 import { ScoringEngine } from '../services/scoring';
+import { batchClassifySchema, classifyPostSchema, createClassifyRoutes } from './classify';
+import { createAuthMiddleware } from '../middleware/auth';
+import { CLASSIFY_BATCH_MAX_SIZE, CONTENT_TEXT_MAX_CHARS } from '../lib/policy-constants';
 
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret-key';
 
@@ -19,37 +22,24 @@ const classifySingleMock = mock(async () => ({
   source: 'llm' as const,
 }));
 
-const classifyBatchMock = mock(async () => ([
-  { post_id: 'post-1', decision: 'dim', source: 'cache' },
-  { post_id: 'post-2', error: 'quota_exceeded' },
-]));
+const classifyBatchMock = mock(async () => [
+  { post_id: 'post-1', decision: 'dim' as const, source: 'cache' as const },
+  { post_id: 'post-2', error: 'quota_exceeded' as const },
+]);
 
-const dbChain = {
-  select: mock(() => dbChain),
-  from: mock(() => dbChain),
-  where: mock(() => dbChain),
-  limit: mock(async () => []),
-  insert: mock(() => ({
-    values: mock(() => ({
-      onConflictDoUpdate: mock(async () => undefined),
-    })),
-  })),
-};
-
-mock.module('../db', () => ({
-  db: dbChain,
-}));
-
-mock.module('../services/classification-service', () => ({
-  classifySingle: classifySingleMock,
-  classifyBatch: classifyBatchMock,
-  QuotaExceededError: TestQuotaExceededError,
-}));
-
-const { classify } = await import('./classify');
+const authMiddleware = createAuthMiddleware({ verifySessionToken });
 
 const app = createTestApp((testApp) => {
-  testApp.route('/', classify);
+  testApp.route(
+    '/',
+    createClassifyRoutes({
+      authMiddleware,
+      classificationService: {
+        classifySingle: classifySingleMock,
+        classifyBatch: classifyBatchMock,
+      },
+    }),
+  );
 });
 
 describe('Classify Routes (unit)', () => {
@@ -229,6 +219,47 @@ describe('Classify Routes (unit)', () => {
       { post_id: 'post-1', decision: 'dim', source: 'cache' },
       { post_id: 'post-2', error: 'quota_exceeded' },
     ]);
+  });
+
+  it('validators use shared policy constants', () => {
+    expect(
+      classifyPostSchema.safeParse({
+        post_id: 'p1',
+        author_id: 'a1',
+        author_name: 'n1',
+        content_text: 'a'.repeat(CONTENT_TEXT_MAX_CHARS),
+      }).success,
+    ).toBe(true);
+    expect(
+      classifyPostSchema.safeParse({
+        post_id: 'p1',
+        author_id: 'a1',
+        author_name: 'n1',
+        content_text: 'a'.repeat(CONTENT_TEXT_MAX_CHARS + 1),
+      }).success,
+    ).toBe(false);
+
+    expect(
+      batchClassifySchema.safeParse({
+        posts: Array.from({ length: CLASSIFY_BATCH_MAX_SIZE }, (_, index) => ({
+          post_id: `p-${index}`,
+          author_id: 'a1',
+          author_name: 'n1',
+          content_text: 'x',
+        })),
+      }).success,
+    ).toBe(true);
+
+    expect(
+      batchClassifySchema.safeParse({
+        posts: Array.from({ length: CLASSIFY_BATCH_MAX_SIZE + 1 }, (_, index) => ({
+          post_id: `p-${index}`,
+          author_id: 'a1',
+          author_name: 'n1',
+          content_text: 'x',
+        })),
+      }).success,
+    ).toBe(false);
   });
 });
 

@@ -259,15 +259,19 @@ bun run migrate:push
 
 ## Driver behavior
 
-`backend/src/db/index.ts` chooses the DB driver automatically:
+`backend/src/db/index.ts` uses explicit runtime driver config:
 
-- Neon URL -> `drizzle-orm/neon-http`
-- other Postgres URL -> `drizzle-orm/postgres-js`
+- `DB_DRIVER=neon` -> `drizzle-orm/neon-http`
+- `DB_DRIVER=postgres` -> `drizzle-orm/postgres-js`
+
+Fallback:
+
+- when `DB_DRIVER` is not set, runtime infers from URL (`*.neon.*` => `neon`, otherwise `postgres`).
 
 Why:
 
-- Neon HTTP is optimized for serverless.
-- `postgres-js` is straightforward and fast for local/dev standard Postgres.
+- Explicit driver selection is clearer and safer than implicit URL heuristics alone.
+- Fallback inference preserves local convenience for existing environments.
 
 ## Practical guardrails for future changes
 
@@ -276,4 +280,3 @@ Why:
 3. Keep constraints close to business rules.
 4. Add indexes only for real query paths (not speculative indexes).
 5. Run `bun run type-check && bun run test:unit` after schema changes.
-
