@@ -1,10 +1,8 @@
 // Quota enforcement service
+import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../db';
-import { users, userUsage } from '../db/schema';
-import { eq, and, sql } from 'drizzle-orm';
-
-const FREE_MONTHLY_LLM_CALLS = parseInt(process.env.FREE_MONTHLY_LLM_CALLS || '300');
-const PRO_MONTHLY_LLM_CALLS = parseInt(process.env.PRO_MONTHLY_LLM_CALLS || '10000');
+import { userUsage } from '../db/schema';
+import { resolveQuotaContext } from './quota-context';
 
 export interface QuotaCheckResult {
   allowed: boolean;
@@ -19,49 +17,14 @@ export interface QuotaStatus extends QuotaCheckResult {
   isPro: boolean;
 }
 
-interface QuotaContext {
-  plan: string;
-  isPro: boolean;
-  limit: number;
+export interface QuotaConsumeResult {
+  allowed: boolean;
+  remaining: number;
   periodStart: string;
 }
 
-async function getQuotaContext(userId: string): Promise<QuotaContext | null> {
-  const userRecords = await db
-    .select({
-      plan: users.plan,
-      planStatus: users.planStatus,
-      subscriptionPeriodStart: users.subscriptionPeriodStart,
-    })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
-
-  if (userRecords.length === 0) return null;
-
-  const user = userRecords[0];
-  const isPro = user.plan === 'pro' && user.planStatus === 'active';
-  const limit = isPro ? PRO_MONTHLY_LLM_CALLS : FREE_MONTHLY_LLM_CALLS;
-
-  let periodStartStr: string;
-  if (isPro && user.subscriptionPeriodStart) {
-    periodStartStr = user.subscriptionPeriodStart.toISOString().split('T')[0];
-  } else {
-    const now = new Date();
-    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-    periodStartStr = monthStart.toISOString().split('T')[0];
-  }
-
-  return {
-    plan: user.plan,
-    isPro,
-    limit,
-    periodStart: periodStartStr,
-  };
-}
-
 export async function getQuotaStatus(userId: string): Promise<QuotaStatus> {
-  const context = await getQuotaContext(userId);
+  const context = await resolveQuotaContext(userId);
   if (!context) {
     return {
       allowed: false,
@@ -75,7 +38,7 @@ export async function getQuotaStatus(userId: string): Promise<QuotaStatus> {
   }
 
   const usageRecords = await db
-    .select()
+    .select({ llmCalls: userUsage.llmCalls })
     .from(userUsage)
     .where(
       and(
@@ -109,6 +72,78 @@ export async function checkQuota(userId: string): Promise<QuotaCheckResult> {
   };
 }
 
+export async function tryConsumeQuota(userId: string, units = 1): Promise<QuotaConsumeResult> {
+  if (units <= 0) {
+    const status = await getQuotaStatus(userId);
+    return {
+      allowed: status.allowed,
+      remaining: status.remaining,
+      periodStart: status.periodStart,
+    };
+  }
+
+  const context = await resolveQuotaContext(userId);
+  if (!context) {
+    return {
+      allowed: false,
+      remaining: 0,
+      periodStart: '',
+    };
+  }
+
+  await db
+    .insert(userUsage)
+    .values({
+      userId,
+      monthStart: context.periodStart,
+      llmCalls: 0,
+    })
+    .onConflictDoNothing({
+      target: [userUsage.userId, userUsage.monthStart],
+    });
+
+  const updated = await db
+    .update(userUsage)
+    .set({
+      llmCalls: sql`${userUsage.llmCalls} + ${units}`,
+    })
+    .where(
+      and(
+        eq(userUsage.userId, userId),
+        eq(userUsage.monthStart, context.periodStart),
+        sql`${userUsage.llmCalls} + ${units} <= ${context.limit}`
+      )
+    )
+    .returning({ llmCalls: userUsage.llmCalls });
+
+  if (updated.length === 0) {
+    const existing = await db
+      .select({ llmCalls: userUsage.llmCalls })
+      .from(userUsage)
+      .where(
+        and(
+          eq(userUsage.userId, userId),
+          eq(userUsage.monthStart, context.periodStart)
+        )
+      )
+      .limit(1);
+
+    const currentUsage = existing[0]?.llmCalls || 0;
+    return {
+      allowed: false,
+      remaining: Math.max(0, context.limit - currentUsage),
+      periodStart: context.periodStart,
+    };
+  }
+
+  const remaining = Math.max(0, context.limit - updated[0].llmCalls);
+  return {
+    allowed: true,
+    remaining,
+    periodStart: context.periodStart,
+  };
+}
+
 export async function incrementUsageBy(
   userId: string,
   count: number,
@@ -118,7 +153,7 @@ export async function incrementUsageBy(
 
   let periodStartStr = periodStart;
   if (!periodStartStr) {
-    const context = await getQuotaContext(userId);
+    const context = await resolveQuotaContext(userId);
     if (!context) return;
     periodStartStr = context.periodStart;
   }

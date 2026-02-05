@@ -43,7 +43,15 @@ async function getPriceId(): Promise<string> {
 }
 
 export async function createCheckoutSession(userId: string): Promise<{ checkout_url: string }> {
-  const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  const [user] = await db
+    .select({
+      email: users.email,
+      plan: users.plan,
+      planStatus: users.planStatus,
+    })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
   if (!user) throw new Error(BillingError.USER_NOT_FOUND);
   if (user.plan === Plan.PRO && user.planStatus === PlanStatus.ACTIVE) {
     throw new Error(BillingError.ALREADY_PRO);

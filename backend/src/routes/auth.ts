@@ -12,6 +12,7 @@ import {
 } from '../lib/jwt';
 import { sendMagicLinkEmail } from '../lib/email';
 import { authMiddleware } from '../middleware/auth';
+import { getOrCreateUserByEmail } from '../repositories/user-repository';
 
 const auth = new Hono();
 
@@ -27,32 +28,10 @@ auth.post('/v1/auth/start', zValidator('json', startAuthSchema), async (c) => {
     // Normalize email
     const normalizedEmail = email.toLowerCase().trim();
 
-    // Upsert user
-    const existingUser = await db
-      .select()
-      .from(users)
-      .where(eq(users.email, normalizedEmail))
-      .limit(1);
-
-    let userId: string;
-
-    if (existingUser.length > 0) {
-      userId = existingUser[0].id;
-    } else {
-      const newUser = await db
-        .insert(users)
-        .values({
-          email: normalizedEmail,
-          plan: 'free',
-          planStatus: 'inactive',
-        })
-        .returning();
-
-      userId = newUser[0].id;
-    }
+    const user = await getOrCreateUserByEmail(normalizedEmail);
 
     // Generate magic link token
-    const token = await generateMagicLinkToken(userId);
+    const token = await generateMagicLinkToken(user.id);
 
     // Send email
     await sendMagicLinkEmail(normalizedEmail, token);
@@ -82,7 +61,10 @@ auth.get('/v1/auth/callback', async (c) => {
 
     // Get user email
     const userRecords = await db
-      .select()
+      .select({
+        id: users.id,
+        email: users.email,
+      })
       .from(users)
       .where(eq(users.id, userId))
       .limit(1);
@@ -131,7 +113,12 @@ auth.get('/v1/me', authMiddleware, async (c) => {
 
   // Get fresh user data from DB
   const userRecords = await db
-    .select()
+    .select({
+      id: users.id,
+      email: users.email,
+      plan: users.plan,
+      planStatus: users.planStatus,
+    })
     .from(users)
     .where(eq(users.id, user.sub))
     .limit(1);

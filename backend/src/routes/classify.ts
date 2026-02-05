@@ -7,7 +7,7 @@ import { posts, userActivity } from '../db/schema';
 import { eq, inArray } from 'drizzle-orm';
 import { classifyPost } from '../services/llm';
 import { ScoringEngine } from '../services/scoring';
-import { checkQuota, getQuotaStatus, incrementUsage, incrementUsageBy } from '../services/quota';
+import { tryConsumeQuota } from '../services/quota';
 import { hashContentText, normalizeContentText } from '../lib/hash';
 import { authMiddleware } from '../middleware/auth';
 
@@ -47,7 +47,10 @@ classify.post('/v1/classify', authMiddleware, zValidator('json', classifySchema)
 
   // Check cache first
   const cached = await db
-    .select()
+    .select({
+      decision: posts.decision,
+      updatedAt: posts.updatedAt,
+    })
     .from(posts)
     .where(eq(posts.postId, postId))
     .limit(1);
@@ -72,10 +75,8 @@ classify.post('/v1/classify', authMiddleware, zValidator('json', classifySchema)
     });
   }
 
-  // Check quota
-  const quotaCheck = await checkQuota(user.sub);
-
-  if (!quotaCheck.allowed) {
+  const consumed = await tryConsumeQuota(user.sub);
+  if (!consumed.allowed) {
     return c.json({ error: 'quota_exceeded' }, 429);
   }
 
@@ -112,11 +113,6 @@ classify.post('/v1/classify', authMiddleware, zValidator('json', classifySchema)
         updatedAt: new Date(),
       },
     });
-
-  // Increment usage only on successful LLM calls (not errors or cache)
-  if (llmResult.source === 'llm') {
-    await incrementUsage(user.sub);
-  }
 
   // Record activity for stats (both llm and cache, not errors)
   if (llmResult.source !== 'error') {
@@ -161,7 +157,11 @@ classify.post('/v1/classify/batch', authMiddleware, zValidator('json', batchClas
 
       const postIds = normalizedPosts.map((post) => post.post_id);
       const cachedRows = await db
-        .select()
+        .select({
+          postId: posts.postId,
+          decision: posts.decision,
+          updatedAt: posts.updatedAt,
+        })
         .from(posts)
         .where(inArray(posts.postId, postIds));
 
@@ -206,23 +206,19 @@ classify.post('/v1/classify/batch', authMiddleware, zValidator('json', batchClas
         return;
       }
 
-      const quotaStatus = await getQuotaStatus(user.sub);
-      const allowedCount = Math.min(quotaStatus.remaining, misses.length);
-      const allowedMisses = misses.slice(0, allowedCount);
-      const overQuota = misses.slice(allowedCount);
-
-      for (const post of overQuota) {
-        writeLine({ post_id: post.post_id, error: 'quota_exceeded' });
-      }
-
-      const queue = [...allowedMisses];
+      const queue = [...misses];
       const engine = new ScoringEngine();
-      let llmCallCount = 0;
 
       const workers = Array.from({ length: Math.min(BATCH_LLM_CONCURRENCY, queue.length) }, async () => {
         while (queue.length > 0) {
           const post = queue.shift();
           if (!post) return;
+
+          const consumed = await tryConsumeQuota(user.sub);
+          if (!consumed.allowed) {
+            writeLine({ post_id: post.post_id, error: 'quota_exceeded' });
+            continue;
+          }
 
           const llmResult = await classifyPost({
             post_id: post.post_id,
@@ -255,10 +251,6 @@ classify.post('/v1/classify/batch', authMiddleware, zValidator('json', batchClas
               },
             });
 
-          if (llmResult.source === 'llm') {
-            llmCallCount += 1;
-          }
-
           if (llmResult.source !== 'error') {
             activityRows.push({
               userId: user.sub,
@@ -280,10 +272,6 @@ classify.post('/v1/classify/batch', authMiddleware, zValidator('json', batchClas
 
       if (activityRows.length > 0) {
         await db.insert(userActivity).values(activityRows);
-      }
-
-      if (llmCallCount > 0) {
-        await incrementUsageBy(user.sub, llmCallCount, quotaStatus.periodStart);
       }
 
       controller.close();

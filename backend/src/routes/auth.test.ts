@@ -27,12 +27,23 @@ const verifyMagicLinkTokenMock = mock(async (token: string) => {
   throw new Error('invalid token');
 });
 
+const getOrCreateUserByEmailMock = mock(async (email: string) => ({
+  id: 'test-user-id',
+  email,
+  plan: 'free',
+  planStatus: 'inactive',
+}));
+
 mock.module('../db', () => ({
   db: dbChain,
 }));
 
 mock.module('../lib/email', () => ({
   sendMagicLinkEmail: mock(async () => undefined),
+}));
+
+mock.module('../repositories/user-repository', () => ({
+  getOrCreateUserByEmail: getOrCreateUserByEmailMock,
 }));
 
 mock.module('../lib/jwt', () => ({
@@ -54,6 +65,38 @@ const app = createTestApp((testApp) => {
 });
 
 describe('Auth Routes (unit)', () => {
+  it('POST /v1/auth/start accepts valid email and normalizes before upsert', async () => {
+    const res = await app.request('http://localhost/v1/auth/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'TEST@Example.com' }),
+    });
+
+    expect(res.status).toBe(202);
+    expect(getOrCreateUserByEmailMock).toHaveBeenCalledWith('test@example.com');
+  });
+
+  it('POST /v1/auth/start remains idempotent under concurrent requests', async () => {
+    const requests = Array.from({ length: 8 }, (_, index) => {
+      const email = index % 2 === 0 ? 'RACE@Test.com' : 'race@test.com';
+      return app.request('http://localhost/v1/auth/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+    });
+
+    const responses = await Promise.all(requests);
+    for (const response of responses) {
+      expect(response.status).toBe(202);
+    }
+
+    const normalizedArgs = getOrCreateUserByEmailMock.mock.calls.map((call) => call[0]);
+    const uniqueNormalized = new Set(normalizedArgs.slice(-8));
+    expect(uniqueNormalized.size).toBe(1);
+    expect(Array.from(uniqueNormalized)[0]).toBe('race@test.com');
+  });
+
   it('POST /v1/auth/start rejects invalid email', async () => {
     const res = await app.request('http://localhost/v1/auth/start', {
       method: 'POST',

@@ -1,9 +1,10 @@
 // Statistics endpoint
 import { Hono } from 'hono';
 import { db } from '../db';
-import { userActivity, userUsage, users } from '../db/schema';
-import { eq, and, gte, sql, count, desc } from 'drizzle-orm';
+import { userActivity, userUsage } from '../db/schema';
+import { eq, and, gte, sql, count } from 'drizzle-orm';
 import { authMiddleware } from '../middleware/auth';
+import { resolveQuotaContext } from '../services/quota-context';
 
 const stats = new Hono();
 
@@ -102,71 +103,32 @@ stats.get('/v1/usage', authMiddleware, async (c) => {
     const user = c.get('user');
     const userId = user.sub;
 
-    const FREE_MONTHLY_LLM_CALLS = parseInt(process.env.FREE_MONTHLY_LLM_CALLS || '300');
-    const PRO_MONTHLY_LLM_CALLS = parseInt(process.env.PRO_MONTHLY_LLM_CALLS || '10000');
-
-    // Get user's plan
-    const userRecords = await db
-        .select()
-        .from(users)
-        .where(eq(users.id, userId))
-        .limit(1);
-
-    if (userRecords.length === 0) {
+    const context = await resolveQuotaContext(userId);
+    if (!context) {
         return c.json({ error: 'User not found' }, 404);
     }
 
-    const userData = userRecords[0];
-    const isPro = userData.plan === 'pro' && userData.planStatus === 'active';
-    const limit = isPro ? PRO_MONTHLY_LLM_CALLS : FREE_MONTHLY_LLM_CALLS;
-
-    const now = new Date();
-    let periodStartStr: string;
-    let resetDate: string;
-
-    if (isPro && userData.subscriptionPeriodStart) {
-        // Use actual subscription period
-        periodStartStr = userData.subscriptionPeriodStart.toISOString().split('T')[0];
-        // Reset date is the period end
-        if (userData.subscriptionPeriodEnd) {
-            resetDate = userData.subscriptionPeriodEnd.toISOString();
-        } else {
-            // Fallback if end date missing? Assume 1 month from start
-            const start = new Date(userData.subscriptionPeriodStart);
-            const end = new Date(start);
-            end.setMonth(end.getMonth() + 1);
-            resetDate = end.toISOString();
-        }
-    } else {
-        // Fallback to calendar month
-        const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-        periodStartStr = monthStart.toISOString().split('T')[0];
-        // Reset date is 1st of next month
-        const nextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
-        resetDate = nextMonth.toISOString();
-    }
-
     const usageRecords = await db
-        .select()
+        .select({ llmCalls: userUsage.llmCalls })
         .from(userUsage)
         .where(
             and(
                 eq(userUsage.userId, userId),
-                eq(userUsage.monthStart, periodStartStr)
+                eq(userUsage.monthStart, context.periodStart)
             )
         )
         .limit(1);
 
     const currentUsage = usageRecords[0]?.llmCalls || 0;
-    const remaining = Math.max(0, limit - currentUsage);
+    const remaining = Math.max(0, context.limit - currentUsage);
 
     return c.json({
         current_usage: currentUsage,
-        limit: limit,
+        limit: context.limit,
         remaining: remaining,
-        plan: userData.plan,
-        plan_status: userData.planStatus,
-        reset_date: resetDate,
+        plan: context.plan,
+        plan_status: context.planStatus,
+        reset_date: context.resetDate,
     });
 });
 
