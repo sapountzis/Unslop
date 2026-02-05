@@ -102,6 +102,56 @@ describe('Classify Endpoint E2E', () => {
   });
 });
 
+describe('Batch Classify Endpoint E2E', () => {
+  const TEST_USER_ID = '00000000-0000-0000-0000-000000000001';
+
+  it('should reject unauthenticated batch requests', async () => {
+    const res = await fetch(`${API_URL}/v1/classify/batch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ posts: [] }),
+    });
+
+    expect(res.status).toBe(401);
+  });
+
+  it('should reject invalid batch payload', async () => {
+    const token = await generateSessionToken(TEST_USER_ID, 'test@example.com');
+
+    const res = await fetch(`${API_URL}/v1/classify/batch`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ invalid: 'payload' }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('should enforce max batch size', async () => {
+    const token = await generateSessionToken(TEST_USER_ID, 'test@example.com');
+    const posts = Array.from({ length: 21 }, (_, index) => ({
+      post_id: `batch-max-${index}`,
+      author_id: 'author-123',
+      author_name: 'Batch Test',
+      content_text: 'Short test content.',
+    }));
+
+    const res = await fetch(`${API_URL}/v1/classify/batch`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ posts }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+});
+
 describe('Hash Utilities', () => {
   it('should normalize content text', () => {
     const input = '  EXCESSIVE   WHITESPACE\n\nand  CAPS  ';
