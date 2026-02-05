@@ -13,7 +13,7 @@ Backend:
 - Runtime: **Bun v1.3.8**
 - Language: **TypeScript 5.9.x**
 - HTTP Framework: **Hono 4.11.x**
-- ORM: **Drizzle ORM 0.45.x** (Neon HTTP driver)
+- ORM: **Drizzle ORM 1.0.0-beta.13** (Neon HTTP + postgres-js drivers)
 - Hosting: **Railway** (container)
 - Database: **Neon Postgres**
 

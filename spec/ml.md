@@ -1,50 +1,70 @@
 # LLM Classification (v0.1)
 
-This project uses an external LLM to produce a **single decision** for a LinkedIn post:
+The backend uses one external LLM call path and a deterministic scoring layer.
 
-- `keep` – do nothing
-- `dim` – visually de-emphasize
-- `hide` – remove/collapse from the feed
+## Scope
 
-## In scope
+- One configured model via inference provider (OpenRouter-compatible).
+- Strict JSON output from model.
+- No training, no student model, no heuristic classifier.
+- Final API decision remains: `keep` | `dim` | `hide`.
 
-- One model call path, via an inference provider (e.g. OpenRouter).
-- Strict JSON output for parsing.
-- No training, no student models, no heuristics.
+## Model Input
 
-## Prompt contract
+Per post:
 
-### Input to the model
+- `post_id` (string)
+- `author_id` (string)
+- `author_name` (string)
+- `content_text` (normalized + truncated to <= 4000 chars)
 
-We send a single post:
+## Model Output Contract
 
-- author_id (string)
-- post_id (string)
-- content_text (string; normalized + truncated)
-
-### Output from the model (must parse)
-
-**JSON only**:
+Model must return JSON with numeric scores:
 
 ```json
 {
-  "decision": "keep" | "dim" | "hide"
+  "u": 0.0,
+  "d": 0.0,
+  "c": 0.0,
+  "h": 0.0,
+  "rb": 0.0,
+  "eb": 0.0,
+  "sp": 0.0,
+  "ts": 0.0,
+  "sf": 0.0,
+  "x": 0.0
 }
 ```
 
-No additional keys are required in v0.1.
+All fields are expected in `[0, 1]`.
 
-## Parsing
+## Decision Derivation
 
-- Backend must treat any parse failure as:
-  - `decision = "keep"` and `source = "error"`
-  - and it must not crash the request handler.
+Backend scoring engine:
 
-## Model selection
+1. Clamps model scores into `[0,1]`.
+2. Computes value/slop aggregates with RMS power mean.
+3. Computes ladder score: `0.5 + (value - slop) / 2`.
+4. Applies thresholds:
+   - `ladder >= 0.6` => `keep`
+   - `0.4 <= ladder < 0.6` => `dim`
+   - `ladder < 0.4` => `hide`
 
-Configured via env vars (see `infra.md`), e.g.:
-- API key
-- base URL
-- model name
+## Failure Handling
 
-v0.1 uses exactly one configured model.
+If model call fails or response parsing/validation fails:
+
+- classification falls open to decision `keep`
+- response source is `error`
+- request handler must not crash
+
+## Configuration
+
+Runtime configuration is environment-driven:
+
+- `LLM_API_KEY`
+- `LLM_BASE_URL` (default `https://openrouter.ai/api/v1`)
+- `LLM_MODEL`
+
+v0.1 uses one model configuration at a time.

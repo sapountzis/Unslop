@@ -73,8 +73,8 @@ bun run dev
 # Type check
 bun run type-check
 
-# Run tests
-bun test
+# Run deterministic unit tests
+bun run test
 ```
 
 **Server runs at:** `http://localhost:3000`

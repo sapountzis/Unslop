@@ -2,125 +2,76 @@
 
 ## Provider
 
-- **Polar** is the Merchant of Record.
-- Backend creates checkout sessions and consumes Polar webhooks to update user plan status.
+- Polar is the Merchant of Record.
+- Backend creates checkout sessions and consumes Polar webhooks.
 
 ## Plans
 
 ### Free
 
-- Price: €0 / month
-- Monthly quota: `FREE_MONTHLY_LLM_CALLS` teacher calls (default 300)
-- Behavior when quota exceeded:
-  - `/v1/classify` returns HTTP `429` with `{ "error": "quota_exceeded" }`
+- Price: EUR 0 / month
+- Monthly quota: `FREE_MONTHLY_LLM_CALLS` (default 300)
 
 ### Pro
 
-- Price: €3.99 / month
-- Monthly quota: `PRO_MONTHLY_LLM_CALLS` teacher calls (default 10,000)
-- Behavior when quota exceeded:
-  - Same as Free (429). Rare; mainly a safety cap.
+- Price: EUR 3.99 / month
+- Monthly quota: `PRO_MONTHLY_LLM_CALLS` (default 10000)
 
-## What counts as usage
+Quota exhaustion behavior (both plans):
 
-**Usage unit:** 1 teacher LLM call for a post that is not served from cache.
+- `/v1/classify` returns `429` with `{ "error": "quota_exceeded" }`
+- `/v1/classify/batch` emits per-item `{ "post_id": "...", "error": "quota_exceeded" }`
 
-- Cache hit (fresh row in `posts`) → usage does not increase.
-- Cache miss → usage += 1 (after a successful LLM call attempt).
+## What Counts as Usage
 
-## Polar integration (minimal)
+Usage unit: one attempted non-cached LLM classification.
 
-### Backend endpoint
+- cache hit (`source=cache`) does not consume quota
+- cache miss consumes quota atomically before LLM attempt
 
-- `POST /v1/billing/create-checkout`
-  - Auth required
-  - Returns a `checkout_url`
-
-### Webhook endpoint
-
-- `POST /v1/billing/polar/webhook`
-  - Verifies signature via `POLAR_WEBHOOK_SECRET`
-  - Uses header-based idempotency:
-    - `webhook-id` request header is persisted as the idempotency key.
-    - Duplicate deliveries with the same `webhook-id` are acknowledged and skipped.
-  - **Handles the following Polar events**:
-    - `subscription.created` → activate Pro subscription.
-    - `subscription.updated` → inspect `data.status`:
-      - `active` (and `cancel_at_period_end: false`) → (re)activate Pro.
-      - `canceled` → set `plan='pro'`, `plan_status='canceled'`.
-      - `past_due` → set `plan='pro'`, `plan_status='past_due'`.
-      - `revoked` → set `plan='free'`, `plan_status='inactive'`.
-  - Updates `users.plan`, `users.plan_status`, `users.polarCustomerId`, `users.polarSubscriptionId`, `users.subscriptionPeriodStart`, `users.subscriptionPeriodEnd`.
-  - Stores each processed webhook in `webhook_deliveries` table to guarantee **idempotent** handling.
-  - Handler errors return non-2xx so Polar retries delivery.
-
-### Plan status semantics
-
-- `active` → user currently has a valid Pro subscription
-- `inactive` → user does not
-
-Pro is enabled iff `plan='pro' AND plan_status='active'`.
-
-## Out of scope
-
-- Customer portal links, proration, upgrades/downgrades UI
-- Multiple plans, annual billing, add‑ons, metered billing
-- Detailed handling of `order.created` beyond optional logging
-
-
-Billing is required in v0.1 because usage quotas depend on subscription status.
-
-## Provider
-
-- **Polar** is the Merchant of Record.
-- Backend creates checkout sessions and consumes Polar webhooks to update user plan status.
-
-## Plans
-
-### Free
-
-- Price: €0 / month
-- Monthly quota: `FREE_MONTHLY_LLM_CALLS` teacher calls (default 300)
-- Behavior when quota exceeded:
-  - `/v1/classify` returns HTTP `429` with `{ "error": "quota_exceeded" }`
-
-### Pro
-
-- Price: €3.99 / month
-- Monthly quota: `PRO_MONTHLY_LLM_CALLS` teacher calls (default 10,000)
-- Behavior when quota exceeded:
-  - Same as Free (429). Rare; mainly a safety cap.
-
-## What counts as usage
-
-**Usage unit:** 1 teacher LLM call for a post that is not served from cache.
-
-- Cache hit (fresh row in `posts`) → usage does not increase.
-- Cache miss → usage += 1 (after a successful LLM call attempt).
-
-## Polar integration (minimal)
-
-### Backend endpoint
+## Checkout Endpoint
 
 - `POST /v1/billing/create-checkout`
-  - Auth required
-  - Returns a `checkout_url`
+- Auth required
+- Request body: `{ "plan": "pro-monthly" }`
+- Response: `{ "checkout_url": "..." }`
+- Already-active Pro returns `409 { "error": "already_pro" }`
 
-### Webhook endpoint
+## Webhook Endpoint
 
 - `POST /v1/billing/polar/webhook`
-  - Verifies signature via `POLAR_WEBHOOK_SECRET`
-  - Processes subscription events idempotently and updates `users.plan` / `users.plan_status`
-  - Returns non-2xx on handler errors so provider retries
+- Signature verification via `POLAR_WEBHOOK_SECRET`
+- Header-based idempotency:
+  - `webhook-id` is the idempotency key
+  - duplicates are acknowledged and skipped
+- Processing failures return non-2xx so Polar retries
 
-Plan status semantics:
+Handled subscription events:
 
-- `active` → user currently has a valid Pro subscription
-- `inactive` → user does not
+- `subscription.created` (only activates when payload status is active)
+- `subscription.active`
+- `subscription.updated`
+- `subscription.uncanceled`
+- `subscription.canceled`
+- `subscription.revoked`
 
-Pro is enabled iff `plan='pro' AND plan_status='active'`.
+State updates:
 
-## Out of scope
+- activation/uncancel => `plan='pro'`, `plan_status='active'`
+- canceled => `plan='pro'`, `plan_status='canceled'`
+- past_due/unpaid (via updated) => `plan='pro'`, `plan_status='past_due'`
+- revoked => `plan='free'`, `plan_status='inactive'`
 
-- Customer portal links, proration, upgrades/downgrades UI
-- Multiple plans, annual billing, add-ons, metered billing
+Webhook processing persists idempotency records in `webhook_deliveries`.
+
+## Plan Status Semantics
+
+- Pro access is enabled only when:
+  - `plan='pro' AND plan_status='active'`
+- non-active states (`canceled`, `past_due`, `inactive`) do not grant Pro quota.
+
+## Out of Scope
+
+- Multiple plans, annual plans, add-ons, metered billing
+- Customer portal/proration UX
+- Order-level fulfillment workflows

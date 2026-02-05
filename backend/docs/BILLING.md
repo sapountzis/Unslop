@@ -1,83 +1,74 @@
 # Billing Operations Guide
 
-## Setup
+Operational reference for Polar checkout + webhook handling in the backend.
 
-1. Create Polar Sandbox organization: https://polar.sh/
-2. Get access token: https://polar.sh/settings/access-tokens
-3. Set environment variables:
-   ```
-   POLAR_ENV=sandbox
-   POLAR_API_KEY=<your_sandbox_token>
-   POLAR_WEBHOOK_SECRET=<webhook_secret_from_endpoint_creation>
-   ```
+## Required Environment
 
-## Testing Webhooks Manually
+- `POLAR_ENV` (`sandbox` or `production`)
+- `POLAR_API_KEY`
+- `POLAR_PRODUCT_ID`
+- `POLAR_WEBHOOK_SECRET`
+- `APP_URL`
 
-### 1. Create Test User
+## Checkout Flow
 
-```bash
-curl -X POST http://localhost:3000/v1/auth/start \
-  -H "Content-Type: application/json" \
-  -d '{"email": "test@example.com"}'
-```
+1. Client calls `POST /v1/billing/create-checkout` with auth.
+2. Backend resolves monthly recurring price for `POLAR_PRODUCT_ID`.
+3. Backend creates Polar checkout session with `metadata.user_id`.
+4. Response: `{ "checkout_url": "..." }`.
 
-Follow the magic link to get JWT, then extract from browser storage or use the `/v1/me` endpoint.
+Guardrails:
 
-### 2. Create Checkout
+- active Pro users get `409 { "error": "already_pro" }`
+- checkout API failures return `500 { "error": "checkout_failed" }`
 
-```bash
-curl -X POST http://localhost:3000/v1/billing/create-checkout \
-  -H "Authorization: Bearer <jwt>" \
-  -H "Content-Type: application/json" \
-  -d '{"plan": "pro-monthly"}'
-```
+## Webhook Flow
 
-Response: `{"checkout_url": "https://polar.sh/checkout/..."}`
+Endpoint: `POST /v1/billing/polar/webhook`
 
-### 3. Complete Checkout
+Processing steps:
 
-1. Open the checkout_url in browser
-2. Complete payment in Polar Sandbox (use test card)
-3. Webhook should fire to your local server
+1. Read raw body and required webhook headers.
+2. Verify signature with `@polar-sh/sdk/webhooks.validateEvent`.
+3. Use `webhook-id` header as idempotency key in `webhook_deliveries`.
+4. If duplicate key exists: ack and no-op.
+5. Apply subscription state transition.
+6. On processing failure: delete idempotency claim and return non-2xx so Polar retries.
 
-### 4. Trigger Webhook via Polar Dashboard
+## Subscription State Mapping
 
-For testing without full checkout flow:
+- `subscription.created` (when status is active) => `plan=pro`, `plan_status=active`
+- `subscription.active` => `plan=pro`, `plan_status=active`
+- `subscription.uncanceled` => `plan=pro`, `plan_status=active`
+- `subscription.canceled` => `plan=pro`, `plan_status=canceled`
+- `subscription.updated`:
+  - `active|trialing` => active
+  - `canceled` => canceled
+  - `past_due|unpaid` => past_due
+- `subscription.revoked` => `plan=free`, `plan_status=inactive`
 
-1. Go to Polar Sandbox Dashboard → Subscriptions
-2. Find your test subscription
-3. Click "Cancel" to trigger `subscription.canceled`
-4. Click "Reactivate" to trigger `subscription.uncancelled`
+## Manual Validation Checklist
 
-### 5. Verify User State
+1. Trigger checkout in sandbox and complete payment.
+2. Verify user state via `GET /v1/me`.
+3. Re-deliver same webhook in Polar dashboard and confirm no duplicate state side effects.
+4. Force transient DB failure and verify webhook returns non-2xx.
+5. Confirm retry eventually succeeds and final user state is correct.
 
-```bash
-curl http://localhost:3000/v1/me \
-  -H "Authorization: Bearer <jwt>"
-```
+## Troubleshooting
 
-Should show:
-```json
-{
-  "user_id": "...",
-  "email": "test@example.com",
-  "plan": "pro",
-  "plan_status": "active"
-}
-```
+### Signature failures
 
-## Common Issues
+- confirm endpoint secret matches `POLAR_WEBHOOK_SECRET`
+- ensure raw request body is verified (no JSON re-serialization)
 
-### Webhook not received
-- Check server is running and accessible publicly (use ngrok for local)
-- Verify webhook secret matches
-- Check Polar Dashboard → Webhooks → Deliveries for error logs
+### Duplicate processing
 
-### User stays "inactive" after payment
-- Check console logs for webhook processing errors
-- Verify `user_id` is in checkout metadata
-- Check `webhook_deliveries` table for failed attempts
+- inspect `webhook_deliveries` for repeated `webhook_id`
+- confirm webhook route is using header idempotency, not payload-only keying
 
-### Duplicate webhook processing
-- Verify idempotency layer is working
-- Check `webhook_deliveries` table for duplicate records
+### User not updated
+
+- ensure checkout metadata includes `user_id`
+- inspect backend logs for `billing_webhook_processing_failed`
+- verify payload contains subscription `id` and metadata `user_id`

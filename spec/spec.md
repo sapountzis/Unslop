@@ -40,7 +40,7 @@ Ship the smallest product that:
 
 - **Database**
   - Neon Postgres.
-  - Tables: `users`, `posts`, `post_feedback`, `user_usage`.
+  - Tables: `users`, `posts`, `post_feedback`, `user_usage`, `user_activity`, `webhook_deliveries`.
 
 - **Billing**
   - Polar checkout + webhooks.
@@ -52,9 +52,11 @@ Ship the smallest product that:
 
 ## “Teacher call” definition
 
-A **teacher call** is an external LLM request performed by `/v1/classify` for a post that is not served from cache.
+A **teacher call** is an external LLM request performed by classification endpoints (`/v1/classify` or `/v1/classify/batch`) for a post that is not served from cache.
 
 If the backend returns a cached decision (fresh row in `posts`), it does **not** count towards quota.
+
+Quota is consumed atomically before each non-cached LLM attempt.
 
 ## Document map
 

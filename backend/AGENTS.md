@@ -10,6 +10,7 @@ Minimal responsibilities:
 - Persistence: store post decision + minimal metadata in Postgres.
 - Feedback: store user feedback on rendered decisions.
 - Billing: Polar checkout + webhook updates.
+- Billing webhooks: signature verification + `webhook-id` idempotency.
 - Usage quotas: enforce monthly teacher-call caps by plan.
 
 Refer to:
@@ -27,6 +28,7 @@ From `backend/`:
 - `bun run test` (deterministic unit tests only; no live DB/network/server)
 - `bun run test:integration` (DB/service dependent tests)
 - `bun run test:e2e` (requires running API server at `APP_URL`)
+- `bun run type-check`
 
 ## Boundaries
 

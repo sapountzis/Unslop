@@ -3,12 +3,11 @@
 Base URL: `https://api.getunslop.com/v1`
 
 Auth:
-- JWT in `Authorization: Bearer <token>` for authenticated endpoints.
-- JWT issued after email magic-link login.
 
-All responses are JSON unless otherwise noted.
+- JWT via `Authorization: Bearer <token>` on authenticated endpoints.
+- JWT is issued by magic-link callback.
 
----
+All responses are JSON unless noted.
 
 ## Auth
 
@@ -16,57 +15,40 @@ All responses are JSON unless otherwise noted.
 
 Start magic-link login.
 
-**Request body:**
+Request:
 
 ```json
 { "email": "user@example.com" }
 ```
 
-**Behavior:**
-- Normalize email (lowercase + trim).
-- Upsert user row if needed.
-- Generate short-lived token (15 min) encoding `user_id`.
-- Send email with link: `${MAGIC_LINK_BASE_URL}?token=<token>`.
-- Return `202 Accepted`.
+Behavior:
 
----
+- normalizes email (`lowercase + trim`)
+- get-or-create user row (race-safe)
+- sends magic link email
+- returns `202 { "status": "accepted" }`
+
+Validation errors return `400`.
+Unexpected server failures return `500 { "error": "internal_error" }`.
 
 ### GET /v1/auth/callback?token=...
 
-Magic-link verification.
+Verifies magic-link token and returns HTML.
 
-**Behavior:**
-- Verify token signature + expiry.
-- If valid:
-  - Create a JWT session token (default expiry 60 days).
-  - Render a small HTML page that includes the JWT in the DOM:
-    - e.g. `<meta name="unslop-jwt" content="<jwt>">`
-  - The extension has a content script on `https://api.getunslop.com/*` that reads the meta tag and sends the token to background.
-- If invalid:
-  - Render an error HTML page.
+Behavior:
 
-JWT payload:
-
-```json
-{
-  "sub": "user_id",
-  "email": "user@example.com",
-  "iat": 1234567890,
-  "exp": 1234567890
-}
-```
-
-No refresh tokens in v0.1.
-
----
+- on success:
+  - creates session JWT
+  - renders HTML containing `<meta name="unslop-jwt" content="<jwt>">`
+  - sets no-cache headers
+- on invalid/missing token:
+  - returns error HTML with `400`
 
 ### GET /v1/me
 
-Return minimal user info.
+Auth required.
 
-**Auth:** required.
-
-**Response:**
+Response:
 
 ```json
 {
@@ -77,17 +59,13 @@ Return minimal user info.
 }
 ```
 
----
-
 ## Classification
 
 ### POST /v1/classify
 
-Return a decision for a single post.
+Auth required.
 
-**Auth:** required.
-
-**Request body:**
+Request:
 
 ```json
 {
@@ -100,7 +78,7 @@ Return a decision for a single post.
 }
 ```
 
-**Response:**
+Success response:
 
 ```json
 {
@@ -111,33 +89,30 @@ Return a decision for a single post.
 ```
 
 Where:
+
 - `decision ∈ {'keep','dim','hide'}`
 - `source ∈ {'llm','cache','error'}`
 
-**Backend behavior (required):**
-1. Validate request.
-2. Enforce quota:
-   - If user exceeds monthly limit → HTTP 429 `{ "error": "quota_exceeded" }`
-3. Cache lookup:
-   - If `posts.post_id` exists and `updated_at` is within `POST_CACHE_TTL_DAYS` (default 7):
-     - return cached decision with `source="cache"`
-4. Otherwise call LLM using prompt contract in `ml.md`.
-5. Persist to `posts` (insert or update).
-6. Increment `user_usage` only on LLM calls.
-7. Return response.
+Behavior:
 
-**Failure handling (required):**
-- If LLM call fails or JSON parsing fails:
-  - return decision `keep` with `source="error"`
-  - do not crash
+1. validate request
+2. check fresh cache by `post_id` and TTL (`POST_CACHE_TTL_DAYS`)
+3. on cache hit: return cached decision, record `user_activity` source `cache`
+4. on cache miss: atomically consume quota (`tryConsumeQuota`)
+5. if quota unavailable: return `429 { "error": "quota_exceeded" }`
+6. call LLM + scoring
+7. upsert `posts`
+8. for non-error sources, insert `user_activity` row
+
+Failure handling:
+
+- model/parsing failures return `decision="keep"` with `source="error"`
 
 ### POST /v1/classify/batch
 
-Return decisions for multiple posts in a single request, streaming results as NDJSON.
+Auth required.
 
-**Auth:** required.
-
-**Request body:**
+Request:
 
 ```json
 {
@@ -153,49 +128,42 @@ Return decisions for multiple posts in a single request, streaming results as ND
 ```
 
 Constraints:
-- `posts.length <= 20` (reject with HTTP 400 if exceeded).
 
-**Response (NDJSON stream):**
-One JSON object per line, in any order, until all items are emitted.
+- `1 <= posts.length <= 20`
+
+Response:
+
+- NDJSON (`application/x-ndjson`)
+- one JSON object per line, order not guaranteed
 
 Success line:
+
 ```json
 { "post_id": "id", "decision": "keep", "source": "llm" }
 ```
 
-Error line:
+Quota line:
+
 ```json
 { "post_id": "id", "error": "quota_exceeded" }
 ```
 
-Where:
-- `decision ∈ {'keep','dim','hide'}`
-- `source ∈ {'llm','cache','error'}`
+Behavior:
 
-**Backend behavior (required):**
-1. Validate request and enforce max batch size.
-2. Cache lookup for all posts in a single query.
-3. Stream cached decisions immediately.
-4. Enforce quota once at start and again once after completion:
-   - If remaining quota is exhausted, stream `quota_exceeded` for remaining items.
-5. Call LLM for misses with bounded concurrency.
-6. Persist results to `posts` (insert or update) and `user_activity`.
-7. Increment usage once with total LLM calls.
-
-**Failure handling (required):**
-- Per item only. Do not fail the entire batch if a single item fails.
-
----
+1. validates payload
+2. bulk cache fetch for requested post IDs
+3. returns cache hits as `source=cache`
+4. processes cache misses with bounded concurrency (`BATCH_LLM_CONCURRENCY`)
+5. consumes quota atomically per miss; quota failures become per-item errors
+6. upserts `posts` and inserts `user_activity` for non-error outcomes
 
 ## Feedback
 
 ### POST /v1/feedback
 
-Submit user feedback.
+Auth required.
 
-**Auth:** required.
-
-**Request body:**
+Request:
 
 ```json
 {
@@ -206,67 +174,108 @@ Submit user feedback.
 ```
 
 Constraints:
+
 - `rendered_decision ∈ {'keep','dim','hide'}`
 - `user_label ∈ {'should_keep','should_hide'}`
 
-**Behavior:**
-- Insert row into `post_feedback`.
+Behavior:
 
-**Response:**
+- directly inserts into `post_feedback`
+- maps FK violation to `404 { "error": "post_not_found" }`
+
+Response:
 
 ```json
 { "status": "ok" }
 ```
 
----
+## Stats & Usage
+
+### GET /v1/stats
+
+Auth required.
+
+Response:
+
+```json
+{
+  "all_time": { "keep": 0, "dim": 0, "hide": 0, "total": 0 },
+  "last_30_days": { "keep": 0, "dim": 0, "hide": 0, "total": 0 },
+  "today": { "keep": 0, "dim": 0, "hide": 0, "total": 0 },
+  "daily_breakdown": [
+    { "date": "2026-02-05", "decision": "keep", "count": 2 }
+  ]
+}
+```
+
+### GET /v1/usage
+
+Auth required.
+
+Response:
+
+```json
+{
+  "current_usage": 42,
+  "limit": 300,
+  "remaining": 258,
+  "plan": "free",
+  "plan_status": "inactive",
+  "reset_date": "2026-03-01T00:00:00.000Z"
+}
+```
+
+If user context cannot be resolved: `404 { "error": "User not found" }`.
 
 ## Billing
 
 ### POST /v1/billing/create-checkout
 
-Create a checkout session for Pro via Polar.
+Auth required.
 
-**Auth:** required.
-
-**Request body:**
+Request:
 
 ```json
 { "plan": "pro-monthly" }
 ```
 
-**Behavior:**
-- If already active Pro: HTTP 409 `{ "error": "already_pro" }`
-- Otherwise create Polar checkout and return URL.
+Behavior:
 
-**Response:**
+- active Pro user: `409 { "error": "already_pro" }`
+- otherwise returns checkout URL
+
+Response:
 
 ```json
 { "checkout_url": "https://polar.sh/checkout/..." }
 ```
 
----
-
 ### POST /v1/billing/polar/webhook
 
-Receive Polar webhooks.
+Signature verification with `POLAR_WEBHOOK_SECRET`.
 
-**Auth:** signature verification using `POLAR_WEBHOOK_SECRET`.
+Behavior:
 
-**Behavior:**
-- Verify signature.
-- Process subscription events idempotently:
-  - Idempotency key: `webhook-id` request header.
-  - If the same `webhook-id` is seen again, treat as duplicate and no-op.
-- On activation/renewal:
-  - set `users.plan='pro'` and `users.plan_status='active'`
-- On cancel/expire:
-  - set `users.plan_status` to a non-active terminal state (`canceled` or `past_due`)
-- On revoke:
-  - set `users.plan='free'` and `users.plan_status='inactive'`
-- Handler failures are not swallowed; backend returns non-2xx so provider retries.
+- requires `webhook-id` header
+- validates payload signature via Polar SDK
+- idempotency key is `webhook-id` (duplicates are acknowledged and skipped)
+- processes subscription events:
+  - `subscription.created` (active only)
+  - `subscription.active`
+  - `subscription.updated`
+  - `subscription.uncanceled`
+  - `subscription.canceled`
+  - `subscription.revoked`
+- processing failures return non-2xx so provider retries
 
-**Response:**
+Typical success response:
 
 ```json
 { "received": true }
 ```
+
+Common error responses:
+
+- missing `webhook-id` => `400 { "error": "missing_webhook_id" }`
+- signature verification failure => `403 { "received": false }`
+- processing failure => `500 { "received": false }`
