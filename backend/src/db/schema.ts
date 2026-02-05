@@ -70,3 +70,15 @@ export const userActivity = pgTable('user_activity', {
   index('idx_activity_created_at').on(table.createdAt),
   index('idx_activity_user_id_created_at').on(table.userId, table.createdAt),
 ]);
+
+export const webhookDeliveries = pgTable('webhook_deliveries', {
+  webhookId: text('webhook_id').primaryKey(),
+  eventType: text('event_type').notNull(),
+  subscriptionId: text('subscription_id'),
+  processedAt: timestamp('processed_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index('idx_webhook_deliveries_event_type').on(table.eventType),
+  index('idx_webhook_deliveries_webhook_id').on(table.webhookId),
+  index('idx_webhook_deliveries_subscription_id').on(table.subscriptionId),
+  index('idx_webhook_deliveries_processed_at').on(table.processedAt),
+]);

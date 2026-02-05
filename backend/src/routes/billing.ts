@@ -2,14 +2,16 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import { Webhooks } from '@polar-sh/hono';
+import { validateEvent, WebhookVerificationError } from '@polar-sh/sdk/webhooks';
 import {
+  claimWebhookDeliveryById,
   createCheckoutSession,
   handleSubscriptionActive,
   handleSubscriptionCanceled,
   handleSubscriptionUncanceled,
   handleSubscriptionRevoked,
   handleSubscriptionUpdated,
+  releaseWebhookDeliveryById,
 } from '../services/polar';
 import { BillingError } from '../lib/billing-constants';
 import { authMiddleware } from '../middleware/auth';
@@ -35,30 +37,114 @@ billing.post('/v1/billing/create-checkout', authMiddleware, zValidator('json', z
   }
 });
 
-const wrapHandler = (handler: (data: Record<string, unknown>) => Promise<void>, eventType: string) => {
-  return async (payload: { data: unknown }) => {
-    try {
-      await handler(payload.data as Record<string, unknown>);
-    } catch (err) {
-      logger.error(`Failed to handle ${eventType}`, err as Error);
-    }
-  };
+const toError = (error: unknown): Error => {
+  if (error instanceof Error) {
+    return error;
+  }
+  return new Error(typeof error === 'string' ? error : 'Unknown error');
 };
 
-billing.post(
-  '/v1/billing/polar/webhook',
-  Webhooks({
-    webhookSecret: process.env.POLAR_WEBHOOK_SECRET!,
-    onSubscriptionCreated: wrapHandler(async (data) => {
-      if (data.status === 'active') await handleSubscriptionActive(data);
-    }, 'subscription.created'),
-    onSubscriptionActive: wrapHandler(handleSubscriptionActive, 'subscription.active'),
-    onSubscriptionUpdated: wrapHandler(handleSubscriptionUpdated, 'subscription.updated'),
-    onSubscriptionUncanceled: wrapHandler(handleSubscriptionUncanceled, 'subscription.uncanceled'),
-    onSubscriptionCanceled: wrapHandler(handleSubscriptionCanceled, 'subscription.canceled'),
-    onSubscriptionRevoked: wrapHandler(handleSubscriptionRevoked, 'subscription.revoked'),
-  })
-);
+const subscriptionEventTypes = new Set([
+  'subscription.created',
+  'subscription.active',
+  'subscription.updated',
+  'subscription.uncanceled',
+  'subscription.canceled',
+  'subscription.revoked',
+]);
+
+function getSubscriptionId(data: Record<string, unknown>): string | null {
+  const id = data.id;
+  if (typeof id === 'string' && id.length > 0) {
+    return id;
+  }
+
+  const subscriptionId = data.subscription_id;
+  if (typeof subscriptionId === 'string' && subscriptionId.length > 0) {
+    return subscriptionId;
+  }
+
+  return null;
+}
+
+billing.post('/v1/billing/polar/webhook', async (c) => {
+  const webhookId = c.req.header('webhook-id');
+  if (!webhookId) {
+    return c.json({ error: 'missing_webhook_id' }, 400);
+  }
+
+  const rawBody = await c.req.text();
+  const headers: Record<string, string> = {
+    'webhook-id': webhookId,
+    'webhook-timestamp': c.req.header('webhook-timestamp') ?? '',
+    'webhook-signature': c.req.header('webhook-signature') ?? '',
+  };
+
+  let event: ReturnType<typeof validateEvent>;
+  try {
+    event = validateEvent(rawBody, headers, process.env.POLAR_WEBHOOK_SECRET!);
+  } catch (error) {
+    if (error instanceof WebhookVerificationError) {
+      return c.json({ received: false }, 403);
+    }
+
+    logger.error('billing_webhook_validation_failed', toError(error));
+    return c.json({ received: false }, 500);
+  }
+
+  if (!subscriptionEventTypes.has(event.type)) {
+    return c.json({ received: true });
+  }
+
+  const data = event.data as Record<string, unknown>;
+  const claim = await claimWebhookDeliveryById({
+    webhookId,
+    eventType: event.type,
+    subscriptionId: getSubscriptionId(data),
+  });
+
+  if (claim.isDuplicate) {
+    logger.info('billing_webhook_duplicate', {
+      event_type: event.type,
+      webhook_id: webhookId,
+    });
+    return c.json({ received: true });
+  }
+
+  try {
+    switch (event.type) {
+      case 'subscription.created':
+        if (data.status === 'active') {
+          await handleSubscriptionActive(data);
+        }
+        break;
+      case 'subscription.active':
+        await handleSubscriptionActive(data);
+        break;
+      case 'subscription.updated':
+        await handleSubscriptionUpdated(data);
+        break;
+      case 'subscription.uncanceled':
+        await handleSubscriptionUncanceled(data);
+        break;
+      case 'subscription.canceled':
+        await handleSubscriptionCanceled(data);
+        break;
+      case 'subscription.revoked':
+        await handleSubscriptionRevoked(data);
+        break;
+    }
+  } catch (error) {
+    await releaseWebhookDeliveryById(webhookId);
+    logger.error('billing_webhook_processing_failed', toError(error), {
+      event_type: event.type,
+      webhook_id: webhookId,
+    });
+    return c.json({ received: false }, 500);
+  }
+
+  return c.json({ received: true });
+});
 
 const resultPage = (title: string, color: string, heading: string, message: string) => `
 <!DOCTYPE html>

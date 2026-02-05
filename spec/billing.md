@@ -40,15 +40,19 @@
 
 - `POST /v1/billing/polar/webhook`
   - Verifies signature via `POLAR_WEBHOOK_SECRET`
+  - Uses header-based idempotency:
+    - `webhook-id` request header is persisted as the idempotency key.
+    - Duplicate deliveries with the same `webhook-id` are acknowledged and skipped.
   - **Handles the following Polar events**:
     - `subscription.created` → activate Pro subscription.
     - `subscription.updated` → inspect `data.status`:
       - `active` (and `cancel_at_period_end: false`) → (re)activate Pro.
-      - `canceled` → deactivate subscription (`planStatus='inactive'`).
-      - `past_due` → deactivate subscription (`planStatus='inactive'`).
-      - `revoked` → deactivate subscription (`planStatus='inactive'`).
+      - `canceled` → set `plan='pro'`, `plan_status='canceled'`.
+      - `past_due` → set `plan='pro'`, `plan_status='past_due'`.
+      - `revoked` → set `plan='free'`, `plan_status='inactive'`.
   - Updates `users.plan`, `users.plan_status`, `users.polarCustomerId`, `users.polarSubscriptionId`, `users.subscriptionPeriodStart`, `users.subscriptionPeriodEnd`.
-  - Stores each processed webhook in `webhookDeliveries` table to guarantee **idempotent** handling.
+  - Stores each processed webhook in `webhook_deliveries` table to guarantee **idempotent** handling.
+  - Handler errors return non-2xx so Polar retries delivery.
 
 ### Plan status semantics
 
@@ -106,7 +110,8 @@ Billing is required in v0.1 because usage quotas depend on subscription status.
 
 - `POST /v1/billing/polar/webhook`
   - Verifies signature via `POLAR_WEBHOOK_SECRET`
-  - Updates `users.plan` and `users.plan_status`
+  - Processes subscription events idempotently and updates `users.plan` / `users.plan_status`
+  - Returns non-2xx on handler errors so provider retries
 
 Plan status semantics:
 

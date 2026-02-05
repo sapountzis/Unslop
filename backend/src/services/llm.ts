@@ -5,6 +5,7 @@ import { zodResponseFormat } from 'openai/helpers/zod';
 import retry from 'async-retry';
 import { SYSTEM_PROMPT, USER_PROMPT } from './prompts';
 import { ScoreResult } from '../types/classification';
+import { logger } from '../lib/logger';
 
 export interface PostInput {
   post_id: string;
@@ -105,7 +106,10 @@ async function callLLMWithRetry(openai: OpenAI, model: string, messages: any[]) 
       maxTimeout: 20000,
       randomize: true, // Jitter
       onRetry: (err: any, attempt) => {
-        console.warn(`LLM call attempt ${attempt} failed: ${err.message}`);
+        logger.warn('llm_retry', {
+          attempt,
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     }
   );
@@ -126,7 +130,9 @@ export async function classifyPost(post: PostInput): Promise<LLMCallResult> {
 
   // Fail fast if no API key (for local dev without key)
   if (!process.env.LLM_API_KEY || process.env.LLM_API_KEY.startsWith('sk-or-dummy')) {
-    console.log('⚠️ No real OpenRouter API key found, defaulting to "keep" (dev mode)');
+    logger.warn('llm_dev_fallback', {
+      reason: 'missing_or_dummy_api_key',
+    });
     return {
       scores: null,
       source: 'error',
@@ -161,7 +167,9 @@ export async function classifyPost(post: PostInput): Promise<LLMCallResult> {
     };
   } catch (err) {
     // On error, fail open to "keep"
-    console.error('LLM classification failed after retries:', err);
+    logger.error('llm_classification_failed', err, {
+      model,
+    });
     return {
       scores: null,
       source: 'error',

@@ -20,13 +20,23 @@ let quotaContext: {
   resetDate: '2026-03-01T00:00:00.000Z',
 };
 
+let terminalResults: unknown[] = [];
+
+const selectMock = mock(() => dbChain);
+
 const dbChain = {
-  select: mock(() => dbChain),
+  select: selectMock,
   from: mock(() => dbChain),
   where: mock(() => dbChain),
   groupBy: mock(() => dbChain),
-  orderBy: mock(async () => []),
-  limit: mock(async () => [{ llmCalls: 42 }]),
+  orderBy: mock(async () => {
+    const value = terminalResults.shift();
+    return (value ?? []) as unknown[];
+  }),
+  limit: mock(async () => {
+    const value = terminalResults.shift();
+    return (value ?? []) as unknown[];
+  }),
 };
 
 const resolveQuotaContextMock = mock(async () => quotaContext);
@@ -57,7 +67,48 @@ describe('Stats Routes (unit)', () => {
       periodStart: '2026-02-01',
       resetDate: '2026-03-01T00:00:00.000Z',
     };
-    dbChain.limit.mockResolvedValue([{ llmCalls: 42 }]);
+    terminalResults = [];
+    selectMock.mockClear();
+    resolveQuotaContextMock.mockClear();
+  });
+
+  it('GET /v1/stats returns expected shape using two queries (summary + daily)', async () => {
+    terminalResults = [
+      [
+        {
+          allKeep: 10,
+          allDim: 4,
+          allHide: 1,
+          last30Keep: 3,
+          last30Dim: 2,
+          last30Hide: 1,
+          todayKeep: 1,
+          todayDim: 1,
+          todayHide: 0,
+        },
+      ],
+      [
+        { date: '2026-02-01', decision: 'keep', count: 2 },
+        { date: '2026-02-01', decision: 'dim', count: 1 },
+      ],
+    ];
+
+    const token = await generateSessionToken(TEST_USER_ID, 'stats@example.com');
+    const res = await app.request('http://localhost/v1/stats', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    expect(res.status).toBe(200);
+    expect(selectMock).toHaveBeenCalledTimes(2);
+    expect(await res.json()).toEqual({
+      all_time: { keep: 10, dim: 4, hide: 1, total: 15 },
+      last_30_days: { keep: 3, dim: 2, hide: 1, total: 6 },
+      today: { keep: 1, dim: 1, hide: 0, total: 2 },
+      daily_breakdown: [
+        { date: '2026-02-01', decision: 'keep', count: 2 },
+        { date: '2026-02-01', decision: 'dim', count: 1 },
+      ],
+    });
   });
 
   it('GET /v1/usage rejects unauthenticated request', async () => {
@@ -66,6 +117,7 @@ describe('Stats Routes (unit)', () => {
   });
 
   it('GET /v1/usage returns usage response with shared quota context', async () => {
+    terminalResults = [[{ llmCalls: 42 }]];
     const token = await generateSessionToken(TEST_USER_ID, 'stats@example.com');
     const res = await app.request('http://localhost/v1/usage', {
       headers: { Authorization: `Bearer ${token}` },
@@ -74,7 +126,7 @@ describe('Stats Routes (unit)', () => {
     expect(res.status).toBe(200);
     expect(resolveQuotaContextMock).toHaveBeenCalledWith(TEST_USER_ID);
 
-    const body = await res.json() as {
+    const body = (await res.json()) as {
       current_usage: number;
       limit: number;
       remaining: number;

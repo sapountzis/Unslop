@@ -1,6 +1,6 @@
 // Polar billing service
 import { db } from '../db';
-import { users } from '../db/schema';
+import { users, webhookDeliveries } from '../db/schema';
 import { eq } from 'drizzle-orm';
 import { logger } from '../lib/logger';
 import { Plan, PlanStatus, PolarStatus, BillingError } from '../lib/billing-constants';
@@ -72,6 +72,89 @@ export async function createCheckoutSession(userId: string): Promise<{ checkout_
 
   const data = await res.json() as { url: string };
   return { checkout_url: data.url };
+}
+
+export interface BillingWebhookPayload {
+  type: string;
+  timestamp: Date | string;
+  data: Record<string, unknown>;
+}
+
+export interface WebhookDeliveryClaim {
+  webhookId: string;
+  isDuplicate: boolean;
+}
+
+function asIsoTimestamp(timestamp: Date | string): string {
+  if (timestamp instanceof Date) {
+    return timestamp.toISOString();
+  }
+
+  const parsed = new Date(timestamp);
+  if (Number.isNaN(parsed.getTime())) {
+    return '';
+  }
+  return parsed.toISOString();
+}
+
+function extractSubscriptionId(data: Record<string, unknown>): string {
+  const id = data.id;
+  if (typeof id === 'string' && id.length > 0) {
+    return id;
+  }
+
+  const subscriptionId = data.subscription_id;
+  if (typeof subscriptionId === 'string' && subscriptionId.length > 0) {
+    return subscriptionId;
+  }
+
+  return 'unknown';
+}
+
+export function buildWebhookDeliveryKey(payload: BillingWebhookPayload): string {
+  return `${payload.type}:${extractSubscriptionId(payload.data)}:${asIsoTimestamp(payload.timestamp)}`;
+}
+
+interface ClaimWebhookDeliveryByIdInput {
+  webhookId: string;
+  eventType: string;
+  subscriptionId?: string | null;
+}
+
+export async function claimWebhookDeliveryById(input: ClaimWebhookDeliveryByIdInput): Promise<WebhookDeliveryClaim> {
+  const subscriptionId = input.subscriptionId || null;
+
+  const inserted = await db
+    .insert(webhookDeliveries)
+    .values({
+      webhookId: input.webhookId,
+      eventType: input.eventType,
+      subscriptionId: subscriptionId === 'unknown' ? null : subscriptionId,
+    })
+    .onConflictDoNothing({
+      target: webhookDeliveries.webhookId,
+    })
+    .returning();
+
+  return {
+    webhookId: input.webhookId,
+    isDuplicate: inserted.length === 0,
+  };
+}
+
+export async function releaseWebhookDeliveryById(webhookId: string): Promise<void> {
+  await db.delete(webhookDeliveries).where(eq(webhookDeliveries.webhookId, webhookId));
+}
+
+// Backward-compatible fallback for callers that only have payload data.
+export async function claimWebhookDelivery(payload: BillingWebhookPayload): Promise<WebhookDeliveryClaim> {
+  const deliveryKey = buildWebhookDeliveryKey(payload);
+  const subscriptionId = extractSubscriptionId(payload.data);
+  return claimWebhookDeliveryById({
+    webhookId: deliveryKey,
+    eventType: payload.type,
+    subscriptionId,
+  });
 }
 
 export interface SubscriptionData {

@@ -6,43 +6,23 @@ import { ScoringEngine } from '../services/scoring';
 
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret-key';
 
-let allowedQuota = Infinity;
-let consumedQuota = 0;
+class TestQuotaExceededError extends Error {
+  constructor() {
+    super('quota_exceeded');
+    this.name = 'QuotaExceededError';
+  }
+}
 
-const classifyPostMock = mock(async () => ({
-  scores: {
-    u: 0.7,
-    d: 0.7,
-    c: 0.7,
-    h: 0.7,
-    rb: 0.2,
-    eb: 0.2,
-    sp: 0.2,
-    ts: 0.2,
-    sf: 0.2,
-    x: 0.2,
-  },
+const classifySingleMock = mock(async () => ({
+  post_id: 'post-1',
+  decision: 'keep' as const,
   source: 'llm' as const,
-  model: 'test-model',
-  latency: 1,
 }));
 
-const tryConsumeQuotaMock = mock(async () => {
-  if (consumedQuota < allowedQuota) {
-    consumedQuota += 1;
-    return {
-      allowed: true,
-      remaining: Math.max(0, allowedQuota - consumedQuota),
-      periodStart: '2026-02-01',
-    };
-  }
-
-  return {
-    allowed: false,
-    remaining: 0,
-    periodStart: '2026-02-01',
-  };
-});
+const classifyBatchMock = mock(async () => ([
+  { post_id: 'post-1', decision: 'dim', source: 'cache' },
+  { post_id: 'post-2', error: 'quota_exceeded' },
+]));
 
 const dbChain = {
   select: mock(() => dbChain),
@@ -60,12 +40,10 @@ mock.module('../db', () => ({
   db: dbChain,
 }));
 
-mock.module('../services/llm', () => ({
-  classifyPost: classifyPostMock,
-}));
-
-mock.module('../services/quota', () => ({
-  tryConsumeQuota: tryConsumeQuotaMock,
+mock.module('../services/classification-service', () => ({
+  classifySingle: classifySingleMock,
+  classifyBatch: classifyBatchMock,
+  QuotaExceededError: TestQuotaExceededError,
 }));
 
 const { classify } = await import('./classify');
@@ -78,11 +56,8 @@ describe('Classify Routes (unit)', () => {
   const TEST_USER_ID = '00000000-0000-0000-0000-000000000001';
 
   beforeEach(() => {
-    allowedQuota = Infinity;
-    consumedQuota = 0;
-    classifyPostMock.mockClear();
-    tryConsumeQuotaMock.mockClear();
-    dbChain.limit.mockResolvedValue([]);
+    classifySingleMock.mockClear();
+    classifyBatchMock.mockClear();
   });
 
   it('POST /v1/classify rejects unauthenticated requests', async () => {
@@ -117,38 +92,53 @@ describe('Classify Routes (unit)', () => {
     expect(res.status).toBe(400);
   });
 
-  it('POST /v1/classify enforces quota atomically under concurrent requests', async () => {
-    allowedQuota = 2;
-
+  it('POST /v1/classify delegates classification to service', async () => {
     const token = await generateSessionToken(TEST_USER_ID, 'test@example.com');
-    const requests = Array.from({ length: 5 }, (_, index) =>
-      app.request('http://localhost/v1/classify', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+    const payload = {
+      post: {
+        post_id: 'svc-1',
+        author_id: 'author-1',
+        author_name: 'Test Author',
+        content_text: 'Useful content.',
+      },
+    };
+
+    const res = await app.request('http://localhost/v1/classify', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    expect(res.status).toBe(200);
+    expect(classifySingleMock).toHaveBeenCalledTimes(1);
+    expect(classifySingleMock).toHaveBeenCalledWith(TEST_USER_ID, payload.post);
+  });
+
+  it('POST /v1/classify maps quota domain error to 429', async () => {
+    classifySingleMock.mockRejectedValueOnce(new TestQuotaExceededError());
+    const token = await generateSessionToken(TEST_USER_ID, 'test@example.com');
+
+    const res = await app.request('http://localhost/v1/classify', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        post: {
+          post_id: 'quota-1',
+          author_id: 'author-1',
+          author_name: 'Test Author',
+          content_text: 'Useful content.',
         },
-        body: JSON.stringify({
-          post: {
-            post_id: `atomic-${index}`,
-            author_id: 'author-1',
-            author_name: 'Test Author',
-            content_text: 'Useful, high-signal content.',
-          },
-        }),
-      })
-    );
+      }),
+    });
 
-    const responses = await Promise.all(requests);
-    const statusCounts = responses.reduce<Record<number, number>>((acc, response) => {
-      acc[response.status] = (acc[response.status] || 0) + 1;
-      return acc;
-    }, {});
-
-    expect(statusCounts[200]).toBe(2);
-    expect(statusCounts[429]).toBe(3);
-    expect(classifyPostMock).toHaveBeenCalledTimes(2);
-    expect(tryConsumeQuotaMock).toHaveBeenCalledTimes(5);
+    expect(res.status).toBe(429);
+    expect(await res.json()).toEqual({ error: 'quota_exceeded' });
   });
 
   it('POST /v1/classify/batch rejects unauthenticated batch requests', async () => {
@@ -195,6 +185,50 @@ describe('Classify Routes (unit)', () => {
     });
 
     expect(res.status).toBe(400);
+  });
+
+  it('POST /v1/classify/batch streams service outcomes as ndjson', async () => {
+    const token = await generateSessionToken(TEST_USER_ID, 'test@example.com');
+    const payload = {
+      posts: [
+        {
+          post_id: 'post-1',
+          author_id: 'author-1',
+          author_name: 'A',
+          content_text: 'one',
+        },
+        {
+          post_id: 'post-2',
+          author_id: 'author-2',
+          author_name: 'B',
+          content_text: 'two',
+        },
+      ],
+    };
+
+    const res = await app.request('http://localhost/v1/classify/batch', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Type')).toContain('application/x-ndjson');
+    expect(classifyBatchMock).toHaveBeenCalledTimes(1);
+    expect(classifyBatchMock).toHaveBeenCalledWith(TEST_USER_ID, payload.posts);
+
+    const lines = (await res.text())
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+
+    expect(lines).toEqual([
+      { post_id: 'post-1', decision: 'dim', source: 'cache' },
+      { post_id: 'post-2', error: 'quota_exceeded' },
+    ]);
   });
 });
 

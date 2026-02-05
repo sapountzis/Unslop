@@ -13,6 +13,7 @@ import {
 import { sendMagicLinkEmail } from '../lib/email';
 import { authMiddleware } from '../middleware/auth';
 import { getOrCreateUserByEmail } from '../repositories/user-repository';
+import { logger } from '../lib/logger';
 
 const auth = new Hono();
 
@@ -38,8 +39,8 @@ auth.post('/v1/auth/start', zValidator('json', startAuthSchema), async (c) => {
 
     return c.json({ status: 'accepted' }, 202);
   } catch (error) {
-    console.error('Error in /v1/auth/start:', error);
-    throw error;
+    logger.error('auth_start_failed', error);
+    return c.json({ error: 'internal_error' }, 500);
   }
 });
 

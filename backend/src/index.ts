@@ -7,6 +7,7 @@ import { auth } from './routes/auth';
 import { feedback } from './routes/feedback';
 import { stats } from './routes/stats';
 import { requestLogger } from './middleware/request-logger';
+import { logger } from './lib/logger';
 
 const app = new Hono();
 
@@ -22,6 +23,14 @@ app.use('*', cors({
   allowHeaders: ['Content-Type', 'Authorization'],
   allowMethods: ['GET', 'POST', 'OPTIONS'],
 }));
+
+app.onError((error, c) => {
+  logger.error('unhandled_request_error', error, {
+    method: c.req.method,
+    path: c.req.path,
+  });
+  return c.json({ error: 'internal_error' }, 500);
+});
 
 // Health check
 app.get('/', (c) => c.json({ status: 'ok' }));
@@ -54,7 +63,7 @@ app.route('/', stats);
 // Start server
 const port = parseInt(process.env.PORT || '3000');
 
-console.log(`Server starting on port ${port}`);
+logger.info('server_start', { port });
 
 export default {
   port,

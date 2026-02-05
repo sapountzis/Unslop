@@ -1,16 +1,13 @@
 import { describe, it, beforeAll, afterAll, expect } from 'bun:test';
 import { db } from '../src/db';
-import { users, webhookDeliveries } from '../src/db/schema';
+import { users } from '../src/db/schema';
 import { eq } from 'drizzle-orm';
 import { createCheckoutSession } from '../src/services/polar';
 import { generateSessionToken } from '../src/lib/jwt';
-import * as setup from './setup-polar-sandbox';
 
 describe('Billing E2E Integration Tests (Polar Sandbox)', () => {
-  let testProduct: any;
   let testUser: any;
   let testUserId: string;
-  let testAuthToken: string;
 
   beforeAll(async () => {
     const [user] = await db.insert(users).values({
@@ -21,14 +18,13 @@ describe('Billing E2E Integration Tests (Polar Sandbox)', () => {
 
     testUser = user;
     testUserId = user.id;
-    testAuthToken = await generateSessionToken(user.id, user.email);
+    await generateSessionToken(user.id, user.email);
 
     console.log(`Created test user: ${testUserId}`);
   });
 
   afterAll(async () => {
     await db.delete(users).where(eq(users.id, testUserId));
-    await db.delete(webhookDeliveries).where(eq(webhookDeliveries.userId, testUserId));
     console.log(`Cleaned up test user: ${testUserId}`);
   });
 
@@ -40,8 +36,6 @@ describe('Billing E2E Integration Tests (Polar Sandbox)', () => {
   });
 
   it('should handle subscription.created webhook', async () => {
-    await db.delete(webhookDeliveries).where(eq(webhookDeliveries.userId, testUserId));
-
     const webhookPayload = {
       type: 'subscription.created',
       timestamp: new Date().toISOString(),
@@ -130,8 +124,6 @@ describe('Billing E2E Integration Tests (Polar Sandbox)', () => {
   });
 
   it('should handle subscription.canceled webhook', async () => {
-    await db.delete(webhookDeliveries).where(eq(webhookDeliveries.userId, testUserId));
-
     const webhookPayload = {
       type: 'subscription.canceled',
       timestamp: new Date().toISOString(),
@@ -168,8 +160,8 @@ describe('Billing E2E Integration Tests (Polar Sandbox)', () => {
       },
     };
 
-    const { handleSubscriptionCancelled } = await import('../src/services/polar');
-    await handleSubscriptionCancelled(webhookPayload.data);
+    const { handleSubscriptionCanceled } = await import('../src/services/polar');
+    await handleSubscriptionCanceled(webhookPayload.data);
 
     const [updatedUser] = await db
       .select()
@@ -177,12 +169,10 @@ describe('Billing E2E Integration Tests (Polar Sandbox)', () => {
       .where(eq(users.id, testUserId))
       .limit(1);
 
-    expect(updatedUser.planStatus).toBe('inactive');
+    expect(updatedUser.planStatus).toBe('canceled');
   });
 
   it('should handle subscription.uncancelled (via updated)', async () => {
-    await db.delete(webhookDeliveries).where(eq(webhookDeliveries.userId, testUserId));
-
     const cancelPayload = {
       type: 'subscription.updated',
       timestamp: new Date().toISOString(),
@@ -204,8 +194,8 @@ describe('Billing E2E Integration Tests (Polar Sandbox)', () => {
       },
     };
 
-    const { handleSubscriptionCancelled } = await import('../src/services/polar');
-    await handleSubscriptionCancelled(cancelPayload.data);
+    const { handleSubscriptionCanceled } = await import('../src/services/polar');
+    await handleSubscriptionCanceled(cancelPayload.data);
 
     const uncancelledPayload = {
       type: 'subscription.updated',
@@ -228,8 +218,8 @@ describe('Billing E2E Integration Tests (Polar Sandbox)', () => {
       },
     };
 
-    const { handleSubscriptionUncancelled } = await import('../src/services/polar');
-    await handleSubscriptionUncancelled(uncancelledPayload.data);
+    const { handleSubscriptionUncanceled } = await import('../src/services/polar');
+    await handleSubscriptionUncanceled(uncancelledPayload.data);
 
     const [updatedUser] = await db
       .select()

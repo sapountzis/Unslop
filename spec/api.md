@@ -254,11 +254,16 @@ Receive Polar webhooks.
 
 **Behavior:**
 - Verify signature.
+- Process subscription events idempotently:
+  - Idempotency key: `webhook-id` request header.
+  - If the same `webhook-id` is seen again, treat as duplicate and no-op.
 - On activation/renewal:
   - set `users.plan='pro'` and `users.plan_status='active'`
 - On cancel/expire:
-  - set `users.plan_status='inactive'`
-  - (optional) set `users.plan='free'`
+  - set `users.plan_status` to a non-active terminal state (`canceled` or `past_due`)
+- On revoke:
+  - set `users.plan='free'` and `users.plan_status='inactive'`
+- Handler failures are not swallowed; backend returns non-2xx so provider retries.
 
 **Response:**
 
