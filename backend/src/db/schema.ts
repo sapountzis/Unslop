@@ -9,7 +9,7 @@ export const users = pgTable('users', {
 
   // plan & billing
   plan: text('plan').notNull().default('free'), // 'free' | 'pro'
-  planStatus: text('plan_status').notNull().default('inactive'), // 'active' | 'inactive'
+  planStatus: text('plan_status').notNull().default('inactive'), // 'active' | 'canceled' | 'past_due' | 'inactive'
   polarCustomerId: text('polar_customer_id'),
   polarSubscriptionId: text('polar_subscription_id'),
   subscriptionPeriodStart: timestamp('subscription_period_start', { withTimezone: true }),
