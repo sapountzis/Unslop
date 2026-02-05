@@ -1,118 +1,58 @@
-// Tests for classify endpoint and utilities
-// Uses real LLM_API_KEY from .env for integration testing
-import 'dotenv/config';
-import { describe, it, expect } from 'bun:test';
+import { describe, expect, it, mock } from 'bun:test';
+import { createTestApp } from '../test-utils/app';
 import { normalizeContentText, hashContentText, derivePostId } from '../lib/hash';
 import { generateSessionToken, verifySessionToken } from '../lib/jwt';
-import { checkQuota, getQuotaStatus, incrementUsageBy } from '../services/quota';
-import { classifyPost } from '../services/llm';
 import { ScoringEngine } from '../services/scoring';
 
-const API_URL = process.env.APP_URL || 'http://localhost:3000';
+process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret-key';
 
-describe('LLM Service', () => {
-  it('should classify a post using real API', async () => {
-    // Skip if no real API key
-    if (!process.env.LLM_API_KEY || process.env.LLM_API_KEY.startsWith('sk-or-dummy')) {
-      console.log('⚠️  Skipping LLM test - no real API key');
-      return;
-    }
+mock.module('../db', () => ({
+  db: {},
+}));
 
-    const result = await classifyPost({
-      post_id: 'test-post-1',
-      author_id: 'author-1',
-      author_name: 'Test Author',
-      content_text: 'Just published my new course on how to 10x your productivity! 🚀 Link in bio. #hustle #grindset',
-    });
+const { classify } = await import('./classify');
 
-    expect(result.source).toBe('llm');
-    expect(result.model).toBe(process.env.LLM_MODEL!);
-    expect(result.latency).toBeGreaterThan(0);
-    expect(result.scores).not.toBeNull();
-
-    const engine = new ScoringEngine();
-    const scored = engine.score(result.scores);
-    expect(['keep', 'dim', 'hide']).toContain(scored.decision);
-  }, 30000); // 30s timeout for API call
-
-  it('should score decisions from scores correctly', () => {
-    const engine = new ScoringEngine();
-    // High positive, low negative = keep
-    expect(engine.score({ u: 0.8, d: 0.7, c: 0.6, h: 0.5, rb: 0.1, eb: 0.1, sp: 0.1, ts: 0.1, sf: 0.1, x: 0.1 }).decision).toBe('keep');
-
-    // Low positive, high negative = hide
-    expect(engine.score({ u: 0.1, d: 0.1, c: 0.1, h: 0.1, rb: 0.8, eb: 0.8, sp: 0.8, ts: 0.8, sf: 0.8, x: 0.8 }).decision).toBe('hide');
-  });
+const app = createTestApp((testApp) => {
+  testApp.route('/', classify);
 });
 
-describe('Classify Endpoint E2E', () => {
-  // Use a valid UUID format for test user
+describe('Classify Routes (unit)', () => {
   const TEST_USER_ID = '00000000-0000-0000-0000-000000000001';
 
-  it('should classify via API with auth', async () => {
-    const token = await generateSessionToken(TEST_USER_ID, 'test@example.com');
-
-    const res = await fetch(`${API_URL}/v1/classify`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        post: {
-          post_id: 'e2e-test-post-1',
-          author_id: 'author-123',
-          author_name: 'E2E Test',
-          content_text: 'This is a genuine helpful post about programming best practices.',
-        },
-      }),
-    });
-
-    // May fail on quota, but should not fail on auth/validation
-    if (res.status === 429) {
-      console.log('⚠️  Quota exceeded - skipping assertion');
-      return;
-    }
-
-    expect(res.status).toBe(200);
-    const data = await res.json() as { post_id: string; decision: string; source: string };
-    expect(data.post_id).toBe('e2e-test-post-1');
-    expect(['keep', 'dim', 'hide']).toContain(data.decision);
-  }, 30000);
-
-  it('should reject unauthenticated requests', async () => {
-    const res = await fetch(`${API_URL}/v1/classify`, {
+  it('POST /v1/classify rejects unauthenticated requests', async () => {
+    const res = await app.request('http://localhost/v1/classify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        post: { post_id: 'x', author_id: 'x', author_name: 'x', content_text: 'x' },
+        post: {
+          post_id: 'x',
+          author_id: 'x',
+          author_name: 'x',
+          content_text: 'x',
+        },
       }),
     });
 
     expect(res.status).toBe(401);
   });
 
-  it('should reject invalid payload', async () => {
+  it('POST /v1/classify rejects invalid payload', async () => {
     const token = await generateSessionToken(TEST_USER_ID, 'test@example.com');
 
-    const res = await fetch(`${API_URL}/v1/classify`, {
+    const res = await app.request('http://localhost/v1/classify', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({ invalid: 'payload' }),
     });
 
     expect(res.status).toBe(400);
   });
-});
 
-describe('Batch Classify Endpoint E2E', () => {
-  const TEST_USER_ID = '00000000-0000-0000-0000-000000000001';
-
-  it('should reject unauthenticated batch requests', async () => {
-    const res = await fetch(`${API_URL}/v1/classify/batch`, {
+  it('POST /v1/classify/batch rejects unauthenticated batch requests', async () => {
+    const res = await app.request('http://localhost/v1/classify/batch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ posts: [] }),
@@ -121,14 +61,14 @@ describe('Batch Classify Endpoint E2E', () => {
     expect(res.status).toBe(401);
   });
 
-  it('should reject invalid batch payload', async () => {
+  it('POST /v1/classify/batch rejects invalid batch payload', async () => {
     const token = await generateSessionToken(TEST_USER_ID, 'test@example.com');
 
-    const res = await fetch(`${API_URL}/v1/classify/batch`, {
+    const res = await app.request('http://localhost/v1/classify/batch', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({ invalid: 'payload' }),
     });
@@ -136,7 +76,7 @@ describe('Batch Classify Endpoint E2E', () => {
     expect(res.status).toBe(400);
   });
 
-  it('should enforce max batch size', async () => {
+  it('POST /v1/classify/batch enforces max batch size', async () => {
     const token = await generateSessionToken(TEST_USER_ID, 'test@example.com');
     const posts = Array.from({ length: 21 }, (_, index) => ({
       post_id: `batch-max-${index}`,
@@ -145,11 +85,11 @@ describe('Batch Classify Endpoint E2E', () => {
       content_text: 'Short test content.',
     }));
 
-    const res = await fetch(`${API_URL}/v1/classify/batch`, {
+    const res = await app.request('http://localhost/v1/classify/batch', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({ posts }),
     });
@@ -158,61 +98,97 @@ describe('Batch Classify Endpoint E2E', () => {
   });
 });
 
+describe('Scoring Engine', () => {
+  const uniform = (value: number, slop: number) => ({
+    u: value,
+    d: value,
+    c: value,
+    h: value,
+    rb: slop,
+    eb: slop,
+    sp: slop,
+    ts: slop,
+    sf: slop,
+    x: slop,
+  });
+
+  it('scores keep for strong value and weak slop', () => {
+    const engine = new ScoringEngine();
+    const result = engine.score(uniform(0.7, 0.5)); // ladder = 0.6
+
+    expect(result.decision).toBe('keep');
+  });
+
+  it('scores dim for ladder values in [0.4, 0.6)', () => {
+    const engine = new ScoringEngine();
+    const atLowerBound = engine.score(uniform(0.5, 0.7)); // ladder = 0.4
+    const middle = engine.score(uniform(0.4, 0.4)); // ladder = 0.5
+    const nearUpperBound = engine.score(uniform(0.69, 0.51)); // ladder = 0.59
+
+    expect(atLowerBound.decision).toBe('dim');
+    expect(middle.decision).toBe('dim');
+    expect(nearUpperBound.decision).toBe('dim');
+  });
+
+  it('scores hide for weak value and strong slop', () => {
+    const engine = new ScoringEngine();
+    const result = engine.score(uniform(0.49, 0.71)); // ladder = 0.39
+
+    expect(result.decision).toBe('hide');
+  });
+
+  it('regression: at least one input produces dim', () => {
+    const engine = new ScoringEngine();
+    const result = engine.score(uniform(0.4, 0.4));
+
+    expect(result.decision).toBe('dim');
+  });
+});
+
 describe('Hash Utilities', () => {
-  it('should normalize content text', () => {
+  it('normalizes content text', () => {
     const input = '  EXCESSIVE   WHITESPACE\n\nand  CAPS  ';
     const normalized = normalizeContentText(input);
     expect(normalized).toBe('excessive whitespace and caps');
   });
 
-  it('should truncate content to 4000 characters', () => {
+  it('truncates content to 4000 characters', () => {
     const longInput = 'a'.repeat(5000);
     const normalized = normalizeContentText(longInput);
     expect(normalized.length).toBe(4000);
   });
 
-  it('should generate consistent hash for same content', () => {
+  it('generates consistent hash for same content', () => {
     const content = 'test content';
     const hash1 = hashContentText(content);
     const hash2 = hashContentText(content);
+
     expect(hash1).toBe(hash2);
     expect(hash1).toMatch(/^[a-f0-9]{64}$/);
   });
 
-  it('should derive post ID from author and content', () => {
+  it('derives post ID from author and content', () => {
     const postId = derivePostId('author-123', 'test content');
-    expect(postId).toMatch(/^[a-f0-9]{64}$/);
-
     const postId2 = derivePostId('author-123', 'test content');
-    expect(postId).toBe(postId2);
-
     const postId3 = derivePostId('author-123', 'different content');
+
+    expect(postId).toMatch(/^[a-f0-9]{64}$/);
+    expect(postId).toBe(postId2);
     expect(postId).not.toBe(postId3);
   });
 });
 
 describe('JWT Utilities', () => {
-  it('should generate and verify session token', async () => {
+  it('generates and verifies session token', async () => {
     const token = await generateSessionToken('user-123', 'test@example.com');
-    expect(typeof token).toBe('string');
-
     const payload = await verifySessionToken(token);
+
+    expect(typeof token).toBe('string');
     expect(payload.sub).toBe('user-123');
     expect(payload.email).toBe('test@example.com');
   });
 
-  it('should reject invalid token', async () => {
+  it('rejects invalid token', async () => {
     await expect(verifySessionToken('invalid-token')).rejects.toThrow();
-  });
-});
-
-describe('Quota Service', () => {
-  it('should check quota function exists', () => {
-    expect(typeof checkQuota).toBe('function');
-  });
-
-  it('should expose batch quota helpers', () => {
-    expect(typeof getQuotaStatus).toBe('function');
-    expect(typeof incrementUsageBy).toBe('function');
   });
 });

@@ -1,17 +1,17 @@
 // Main entry point for Unslop backend
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { logger } from 'hono/logger';
 import { classify } from './routes/classify';
 import { billing } from './routes/billing';
 import { auth } from './routes/auth';
 import { feedback } from './routes/feedback';
 import { stats } from './routes/stats';
+import { requestLogger } from './middleware/request-logger';
 
 const app = new Hono();
 
 // Middleware
-app.use('*', logger());
+app.use('*', requestLogger);
 app.use('*', cors({
   origin: (origin) => {
     if (origin.startsWith('chrome-extension://') || origin === 'https://www.linkedin.com') {

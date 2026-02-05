@@ -24,7 +24,9 @@ From `backend/`:
 
 - `bun install`
 - `bun run dev`
-- `bun test` (if tests exist)
+- `bun run test` (deterministic unit tests only; no live DB/network/server)
+- `bun run test:integration` (DB/service dependent tests)
+- `bun run test:e2e` (requires running API server at `APP_URL`)
 
 ## Boundaries
 

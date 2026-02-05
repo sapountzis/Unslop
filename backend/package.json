@@ -4,8 +4,10 @@
   "scripts": {
     "dev": "bun run src/index.ts",
     "start": "bun run src/index.ts",
-    "test": "for f in $(find src -name '*.test.ts' | grep -v integration); do bun test $f || exit 1; done",
-    "test:integration": "bun test src/routes/auth.test.ts",
+    "test": "bun run test:unit",
+    "test:unit": "for f in $(rg --files src tests | rg '\\.test\\.ts$' | rg -v '\\.(integration|e2e)\\.test\\.ts$'); do bun test \"$f\" || exit 1; done",
+    "test:integration": "for f in $(rg --files src tests | rg '\\.integration\\.test\\.ts$'); do bun test \"$f\" || exit 1; done",
+    "test:e2e": "for f in $(rg --files src tests | rg '\\.e2e\\.test\\.ts$'); do bun test \"$f\" || exit 1; done",
     "type-check": "tsc --noEmit",
     "migrate": "drizzle-kit migrate",
     "migrate:generate": "drizzle-kit generate",

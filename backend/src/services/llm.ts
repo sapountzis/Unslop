@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { zodResponseFormat } from 'openai/helpers/zod';
 import retry from 'async-retry';
 import { SYSTEM_PROMPT, USER_PROMPT } from './prompts';
+import { ScoreResult } from '../types/classification';
 
 export interface PostInput {
   post_id: string;
@@ -13,28 +14,12 @@ export interface PostInput {
 }
 
 export interface LLMCallResult {
-  decision: 'keep' | 'dim' | 'hide';
+  scores: ScoreResult | null;
   source: 'llm' | 'error';
   model: string;
   latency: number;
 }
 
-// enum thresholds
-const KEEP_THRESHOLD = 0.4;
-const DIM_THRESHOLD = 0.3;
-
-// Score result interface
-export interface ScoreResult {
-  u: number;  // usefulness_score (higher is better)
-  d: number;  // educational_depth_score (higher is better)
-  c: number;  // human_connection_score (higher is better)
-  h: number;  // humor_score (higher is better)
-  rb: number; // rage_bait_score (lower is better)
-  eb: number; // ego_bait_score (lower is better)
-  sp: number; // sales_pitch_score (lower is better)
-  ts: number; // template_slop_score (lower is better)
-  sf: number; // spammy_formatting_score (lower is better)
-}
 
 // Define the schema using Zod - only abbreviated scores
 const DecisionSchema = z.object({
@@ -47,44 +32,24 @@ const DecisionSchema = z.object({
   sp: z.number(),
   ts: z.number(),
   sf: z.number(),
+  x: z.number(),
 });
 
-/**
- * Composes a final decision (keep/dim/hide) from orthogonal scores.
- */
-export function composeDecision(scores: ScoreResult): 'keep' | 'dim' | 'hide' {
-  const { u, d, c, h, rb, eb, sp, ts, sf } = scores;
-
-  const positiveSignal = (u + d + c + h);
-  const nPositiveSignals = 4;
-  const negativeSignal = (rb + eb + sp + ts + sf);
-  const nNegativeSignals = 5;
-
-  const compositeSignal = (positiveSignal + nNegativeSignals - negativeSignal) / (nPositiveSignals + nNegativeSignals);
-
-  if (compositeSignal >= KEEP_THRESHOLD) {
-    return 'keep';
-  } else if (compositeSignal >= DIM_THRESHOLD) {
-    return 'dim';
-  } else {
-    return 'hide';
-  }
-}
 
 function getOpenRouterConfig(): { apiKey: string; baseUrl: string; model: string } {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  const model = process.env.OPENROUTER_MODEL;
+  const apiKey = process.env.LLM_API_KEY;
+  const model = process.env.LLM_MODEL;
 
   if (!apiKey) {
-    throw new Error('OPENROUTER_API_KEY environment variable is required');
+    throw new Error('LLM_API_KEY environment variable is required');
   }
   if (!model) {
-    throw new Error('OPENROUTER_MODEL environment variable is required');
+    throw new Error('LLM_MODEL environment variable is required');
   }
 
   return {
     apiKey,
-    baseUrl: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
+    baseUrl: process.env.LLM_BASE_URL || 'https://openrouter.ai/api/v1',
     model,
   };
 }
@@ -160,10 +125,10 @@ export async function classifyPost(post: PostInput): Promise<LLMCallResult> {
   const startTime = Date.now();
 
   // Fail fast if no API key (for local dev without key)
-  if (!process.env.OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY.startsWith('sk-or-dummy')) {
+  if (!process.env.LLM_API_KEY || process.env.LLM_API_KEY.startsWith('sk-or-dummy')) {
     console.log('⚠️ No real OpenRouter API key found, defaulting to "keep" (dev mode)');
     return {
-      decision: 'keep',
+      scores: null,
       source: 'error',
       model: 'dev-fallback',
       latency: 0,
@@ -186,11 +151,10 @@ export async function classifyPost(post: PostInput): Promise<LLMCallResult> {
   try {
     const completion = await callLLMWithRetry(openai, model, messages);
     const scores = parseAndValidateResponse(completion.choices[0].message.content);
-    const decision = composeDecision(scores);
     const latency = Date.now() - startTime;
 
     return {
-      decision,
+      scores,
       source: 'llm',
       model: model,
       latency,
@@ -199,7 +163,7 @@ export async function classifyPost(post: PostInput): Promise<LLMCallResult> {
     // On error, fail open to "keep"
     console.error('LLM classification failed after retries:', err);
     return {
-      decision: 'keep',
+      scores: null,
       source: 'error',
       model: model,
       latency: Date.now() - startTime,

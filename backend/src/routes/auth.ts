@@ -106,14 +106,14 @@ auth.get('/v1/auth/callback', async (c) => {
         <body>
           <h1>Sign in successful</h1>
           <p>You can close this tab and return to the extension.</p>
-          <script>
-            // Send token to extension via postMessage (for content script)
-            if (window.opener) {
-              window.opener.postMessage({ type: 'UNSLOP_AUTH_SUCCESS', token: '${sessionToken}' }, '*');
-            }
-          </script>
         </body>
-      </html>`
+      </html>`,
+      200,
+      {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        Pragma: 'no-cache',
+        Expires: '0',
+      }
     );
   } catch {
     return c.html(
