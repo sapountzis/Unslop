@@ -131,6 +131,60 @@ Where:
   - return decision `keep` with `source="error"`
   - do not crash
 
+### POST /v1/classify/batch
+
+Return decisions for multiple posts in a single request, streaming results as NDJSON.
+
+**Auth:** required.
+
+**Request body:**
+
+```json
+{
+  "posts": [
+    {
+      "post_id": "linkedin-post-id-or-derived-hash",
+      "author_id": "author-id-or-url",
+      "author_name": "Some Person",
+      "content_text": "normalized text from the post (<= 4000 chars)"
+    }
+  ]
+}
+```
+
+Constraints:
+- `posts.length <= 20` (reject with HTTP 400 if exceeded).
+
+**Response (NDJSON stream):**
+One JSON object per line, in any order, until all items are emitted.
+
+Success line:
+```json
+{ "post_id": "id", "decision": "keep", "source": "llm" }
+```
+
+Error line:
+```json
+{ "post_id": "id", "error": "quota_exceeded" }
+```
+
+Where:
+- `decision ∈ {'keep','dim','hide'}`
+- `source ∈ {'llm','cache','error'}`
+
+**Backend behavior (required):**
+1. Validate request and enforce max batch size.
+2. Cache lookup for all posts in a single query.
+3. Stream cached decisions immediately.
+4. Enforce quota once at start and again once after completion:
+   - If remaining quota is exhausted, stream `quota_exceeded` for remaining items.
+5. Call LLM for misses with bounded concurrency.
+6. Persist results to `posts` (insert or update) and `user_activity`.
+7. Increment usage once with total LLM calls.
+
+**Failure handling (required):**
+- Per item only. Do not fail the entire batch if a single item fails.
+
 ---
 
 ## Feedback
