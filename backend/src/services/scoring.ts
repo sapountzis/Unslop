@@ -16,7 +16,7 @@ import { logger } from "../lib/logger";
  * 4. Ladder: Compute a final 0..1 score by pitting Value against Slop.
  */
 
-const KEEP_THRESHOLD = 0.6;
+const KEEP_THRESHOLD = 0.4;
 const DIM_THRESHOLD = 0.4;
 
 type ScoreMap = Record<string, number>;
