@@ -140,3 +140,6 @@ vite.config.ts.timestamp-*
 
 # TypeScript build artifacts in src (compiled next to source)
 extension/src/**/*.js
+
+# Git worktrees
+.worktrees/
