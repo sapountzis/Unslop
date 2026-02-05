@@ -6,7 +6,7 @@
   <title>Terms — Unslop</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
   <link rel="stylesheet" href="css/styles.css" />
-  <link rel="stylesheet" href="css/legal.css" />
+
 </head>
 <body>
   <div class="bg" aria-hidden="true">
@@ -18,25 +18,25 @@
 
   <header class="header">
     <nav class="nav container">
-      <input type="checkbox" id="nav-toggle" class="nav__toggle" aria-hidden="true" />
-      
       <a class="brand" href="index.html#top" aria-label="Unslop home">
         <span class="brand__mark" aria-hidden="true">U</span>
         <span class="brand__name">Unslop</span>
       </a>
 
-      <label for="nav-toggle" class="nav__hamburger" aria-label="Toggle">
+      <button class="nav__hamburger" aria-label="Toggle menu" aria-expanded="false">
         <span></span>
-      </label>
-
-      <div class="nav__links" role="navigation" aria-label="Primary">
-        <a href="index.html#how">How it works</a>
-        <a href="index.html#pricing">Pricing</a>
-        <a href="privacy.html">Privacy</a>
-        <a class="nav__pill btn--full-mobile" href="https://chrome.google.com/webstore" target="_blank" rel="noreferrer">Install</a>
-      </div>
+      </button>
     </nav>
   </header>
+
+  <div class="mobile-nav">
+    <div class="mobile-nav__content">
+      <a href="index.html#how">How it works</a>
+      <a href="index.html#pricing">Pricing</a>
+      <a href="privacy.html">Privacy</a>
+      <a href="https://chrome.google.com/webstore" target="_blank" rel="noreferrer">Install</a>
+    </div>
+  </div>
 
   <main class="legal-wrap">
     <div class="container">
@@ -125,14 +125,25 @@
     </div>
   </footer>
   <script>
-    const navToggle = document.getElementById('nav-toggle');
-    const navLinks = document.querySelector('.nav__links');
-    
-    if (navToggle && navLinks) {
-      navLinks.querySelectorAll('a').forEach(link => {
-        link.addEventListener('click', () => {
-          navToggle.checked = false;
-        });
+    const hamburger = document.querySelector('.nav__hamburger');
+    const mobileNav = document.querySelector('.mobile-nav');
+
+    if (hamburger && mobileNav) {
+      hamburger.addEventListener('click', () => {
+        const isActive = mobileNav.classList.contains('active');
+        mobileNav.classList.toggle('active');
+        hamburger.classList.toggle('active');
+        hamburger.setAttribute('aria-expanded', !isActive);
+        document.body.style.overflow = !isActive ? 'hidden' : '';
+      });
+
+      mobileNav.addEventListener('click', (e) => {
+        if (e.target === mobileNav || e.target.tagName === 'A') {
+          mobileNav.classList.remove('active');
+          hamburger.classList.remove('active');
+          hamburger.setAttribute('aria-expanded', 'false');
+          document.body.style.overflow = '';
+        }
       });
     }
   </script>

@@ -22,28 +22,28 @@
 
   <header class="header">
     <nav class="nav container">
-      <input type="checkbox" id="nav-toggle" class="nav__toggle" aria-hidden="true" />
-      
       <a class="brand" href="#top" aria-label="Unslop home">
         <span class="brand__mark" aria-hidden="true">U</span>
         <span class="brand__name">Unslop</span>
       </a>
 
-      <label for="nav-toggle" class="nav__hamburger" aria-label="Toggle menu">
+      <button class="nav__hamburger" aria-label="Toggle menu" aria-expanded="false">
         <span></span>
-      </label>
+      </button>
 
       <div class="nav__links" role="navigation" aria-label="Primary">
         <a href="#how">How it works</a>
         <a href="#why">Why it feels good</a>
         <a href="#pricing">Pricing</a>
         <a href="#faq">FAQ</a>
-        <a class="nav__pill btn--full-mobile" href="https://chrome.google.com/webstore" target="_blank" rel="noreferrer">
+        <a class="nav__pill" href="https://chrome.google.com/webstore" target="_blank" rel="noreferrer">
           Install
         </a>
       </div>
     </nav>
   </header>
+
+  <div class="nav-overlay"></div>
 
   <main id="main">
     <!-- HERO -->
@@ -446,17 +446,42 @@
       </div>
     </div>
   </footer>
+  <div class="mobile-nav">
+    <div class="mobile-nav__content">
+      <a href="#how">How it works</a>
+      <a href="#why">Why it feels good</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#faq">FAQ</a>
+      <a href="https://chrome.google.com/webstore" target="_blank" rel="noreferrer">
+        Install
+      </a>
+    </div>
+  </div>
+
   <script>
     document.getElementById('year').textContent = new Date().getFullYear();
-    
-    const navToggle = document.getElementById('nav-toggle');
-    const navLinks = document.querySelector('.nav__links');
-    
-    navLinks.querySelectorAll('a').forEach(link => {
-      link.addEventListener('click', () => {
-        navToggle.checked = false;
+
+    const hamburger = document.querySelector('.nav__hamburger');
+    const mobileNav = document.querySelector('.mobile-nav');
+
+    if (hamburger && mobileNav) {
+      hamburger.addEventListener('click', () => {
+        const isActive = mobileNav.classList.contains('active');
+        mobileNav.classList.toggle('active');
+        hamburger.classList.toggle('active');
+        hamburger.setAttribute('aria-expanded', !isActive);
+        document.body.style.overflow = !isActive ? 'hidden' : '';
       });
-    });
+
+      mobileNav.addEventListener('click', (e) => {
+        if (e.target === mobileNav || e.target.tagName === 'A') {
+          mobileNav.classList.remove('active');
+          hamburger.classList.remove('active');
+          hamburger.setAttribute('aria-expanded', 'false');
+          document.body.style.overflow = '';
+        }
+      });
+    }
   </script>
 </body>
 </html>
