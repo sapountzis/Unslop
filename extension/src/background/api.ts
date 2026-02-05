@@ -1,5 +1,7 @@
 // extension/src/background/api.ts
 import {
+  BatchClassifyRequest,
+  BatchClassifyResult,
   ClassifyRequest,
   ClassifyResponse,
   FeedbackRequest,
@@ -8,6 +10,7 @@ import {
   StatsInfo,
 } from '../types';
 import { API_BASE_URL } from '../lib/config';
+import { parseNdjson } from './ndjson';
 
 const API_BASE = `${API_BASE_URL}/v1`;
 
@@ -40,6 +43,37 @@ export async function classifyPost(
   }
 
   return response.json();
+}
+
+export async function classifyPostsBatch(
+  request: BatchClassifyRequest,
+  jwt: string,
+  onItem: (item: BatchClassifyResult) => void
+): Promise<void> {
+  const response = await fetch(`${API_BASE}/classify/batch`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${jwt}`,
+    },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      await chrome.storage.sync.remove('jwt');
+      chrome.runtime.sendMessage({ type: 'AUTH_REQUIRED' });
+    }
+    return;
+  }
+
+  if (!response.body) {
+    return;
+  }
+
+  for await (const item of parseNdjson<BatchClassifyResult>(response.body)) {
+    onItem(item);
+  }
 }
 
 export async function sendFeedback(
@@ -130,4 +164,3 @@ export async function getStats(jwt: string): Promise<StatsInfo | null> {
 
   return response.json();
 }
-

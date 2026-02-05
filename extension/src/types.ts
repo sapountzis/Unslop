@@ -32,6 +32,17 @@ export interface ClassifyResponse {
   source: Source;
 }
 
+export interface BatchClassifyRequest {
+  posts: PostData[];
+}
+
+export interface BatchClassifyResult {
+  post_id: string;
+  decision?: Decision;
+  source?: Source;
+  error?: 'quota_exceeded';
+}
+
 export interface UserInfo {
   user_id: string;
   email: string;

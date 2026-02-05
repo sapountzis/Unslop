@@ -1,6 +1,7 @@
 // extension/src/background/index.ts
 import {
   classifyPost,
+  classifyPostsBatch,
   sendFeedback,
   getUserInfo,
   createCheckout,
@@ -40,6 +41,33 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               source: 'error' as const,
             });
           }
+          return;
+        }
+
+        case 'CLASSIFY_BATCH': {
+          const storage = await chrome.storage.sync.get(['jwt', 'enabled']);
+
+          if (!storage.jwt || storage.enabled === false) {
+            sendResponse({ status: 'disabled' });
+            return;
+          }
+
+          const tabId = sender.tab?.id;
+          if (!tabId) {
+            sendResponse({ status: 'error' });
+            return;
+          }
+
+          classifyPostsBatch(message, storage.jwt, (item) => {
+            chrome.tabs.sendMessage(tabId, {
+              type: 'CLASSIFY_BATCH_RESULT',
+              item,
+            });
+          }).catch((err) => {
+            console.error('Batch classify failed:', err);
+          });
+
+          sendResponse({ status: 'ok' });
           return;
         }
 
