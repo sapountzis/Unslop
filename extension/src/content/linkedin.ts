@@ -2,6 +2,7 @@
 import { extractPostData, applyDecision } from './linkedin-parser';
 import { PostData, Decision, Source } from '../types';
 import { decisionCache, userData } from '../lib/storage';
+import { enqueueBatch, handleBatchResult } from './batch-queue';
 import { SELECTORS, ATTRIBUTES } from '../lib/selectors';
 import '../styles/content.css';
 
@@ -10,6 +11,13 @@ const processedPosts = new Set<string>();
 
 // Run cleanup on startup
 decisionCache.cleanupExpired().catch(console.error);
+
+// Listen for batch results from background
+chrome.runtime.onMessage.addListener((message) => {
+  if (message?.type === 'CLASSIFY_BATCH_RESULT') {
+    handleBatchResult(message.item);
+  }
+});
 
 // ============================================================================
 // Guard Functions (Pure, testable checks)
@@ -58,15 +66,9 @@ async function classifyPost(postData: PostData): Promise<{ decision: Decision; s
     return { decision: cached.decision, source: cached.source };
   }
 
-  // No cache hit, ask server
+  // No cache hit, ask server via batch queue
   try {
-    const response = await chrome.runtime.sendMessage({
-      type: 'CLASSIFY_POST',
-      post: postData,
-    });
-
-    const decision = response.decision || 'keep';
-    const source = response.source || 'error';
+    const { decision, source } = await enqueueBatch(postData);
     console.debug('[Unslop][classify] response', { postId, decision, source });
 
     // Save to cache for next time
