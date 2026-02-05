@@ -7,7 +7,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const { type } = message;
         try {
             switch (type) {
-        case 'CLASSIFY_POST': {
+                case 'CLASSIFY_POST': {
                     const storage = await chrome.storage.sync.get(['jwt', 'enabled']);
                     if (!storage.jwt || storage.enabled === false) {
                         sendResponse({
@@ -28,31 +28,31 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                             source: 'error',
                         });
                     }
-            return;
-        }
-        case 'CLASSIFY_BATCH': {
-            const storage = await chrome.storage.sync.get(['jwt', 'enabled']);
-            if (!storage.jwt || storage.enabled === false) {
-                sendResponse({ status: 'disabled' });
-                return;
-            }
-            const tabId = sender.tab?.id;
-            if (!tabId) {
-                sendResponse({ status: 'error' });
-                return;
-            }
-            classifyPostsBatch(message, storage.jwt, (item) => {
-                chrome.tabs.sendMessage(tabId, {
-                    type: 'CLASSIFY_BATCH_RESULT',
-                    item,
-                });
-            }).catch((err) => {
-                console.error('Batch classify failed:', err);
-            });
-            sendResponse({ status: 'ok' });
-            return;
-        }
-        case 'SEND_FEEDBACK': {
+                    return;
+                }
+                case 'CLASSIFY_BATCH': {
+                    const storage = await chrome.storage.sync.get(['jwt', 'enabled']);
+                    if (!storage.jwt || storage.enabled === false) {
+                        sendResponse({ status: 'disabled' });
+                        return;
+                    }
+                    const tabId = sender.tab?.id;
+                    if (!tabId) {
+                        sendResponse({ status: 'error' });
+                        return;
+                    }
+                    classifyPostsBatch(message, storage.jwt, (item) => {
+                        chrome.tabs.sendMessage(tabId, {
+                            type: 'CLASSIFY_BATCH_RESULT',
+                            item,
+                        });
+                    }).catch((err) => {
+                        console.error('Batch classify failed:', err);
+                    });
+                    sendResponse({ status: 'ok' });
+                    return;
+                }
+                case 'SEND_FEEDBACK': {
                     const storage = await chrome.storage.sync.get('jwt');
                     if (storage.jwt) {
                         await sendFeedback(message, storage.jwt);

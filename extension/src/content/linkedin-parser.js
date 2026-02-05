@@ -135,9 +135,11 @@ export function applyDecision(element, decision, postId) {
             element.prepend(createDimHeader(element, postId));
             break;
         case 'hide':
-            element.style.display = 'none';
-            element.setAttribute(ATTRIBUTES.decision, 'hide');
-            element.parentElement?.insertBefore(createHiddenStub(element, postId), element);
-            break;
+            // delete element
+            element.remove();
+        // element.style.display = 'none';
+        // element.setAttribute(ATTRIBUTES.decision, 'hide');
+        // element.parentElement?.insertBefore(createHiddenStub(element, postId), element);
+        // break;
     }
 }

@@ -167,9 +167,11 @@ export function applyDecision(
       break;
 
     case 'hide':
-      element.style.display = 'none';
-      element.setAttribute(ATTRIBUTES.decision, 'hide');
-      element.parentElement?.insertBefore(createHiddenStub(element, postId), element);
-      break;
+      // delete element
+      element.remove();
+      // element.style.display = 'none';
+      // element.setAttribute(ATTRIBUTES.decision, 'hide');
+      // element.parentElement?.insertBefore(createHiddenStub(element, postId), element);
+      // break;
   }
 }

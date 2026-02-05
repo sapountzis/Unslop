@@ -1,4 +1,4 @@
-// extension/src/content/batch-queue.js
+// extension/src/content/batch-queue.ts
 import { BATCH_MAX_ITEMS, BATCH_WINDOW_MS } from '../lib/config';
 const pending = new Map();
 const queue = [];
