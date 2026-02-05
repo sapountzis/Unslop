@@ -1,7 +1,7 @@
 // extension/src/content/linkedin-parser.ts
 import { normalizeContentText, derivePostId } from '../lib/hash';
 import { PostData, Decision } from '../types';
-import { setCachedDecision } from '../lib/storage';
+import { decisionCache } from '../lib/storage';
 import { SELECTORS, AUTHOR_PATTERNS, ATTRIBUTES } from '../lib/selectors';
 
 /**
@@ -112,7 +112,7 @@ function createDimHeader(element: HTMLElement, postId?: string): HTMLElement {
     header.remove();
     // Save user choice to cache (priority over server)
     if (postId) {
-      await setCachedDecision(postId, 'keep', 'cache');
+      await decisionCache.set(postId, 'keep', 'cache');
     }
   });
 

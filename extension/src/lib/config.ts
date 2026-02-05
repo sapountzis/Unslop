@@ -14,6 +14,7 @@ export const AUTH_CALLBACK_ORIGIN = API_BASE_URL;
 
 // Cache settings
 export const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+export const CACHE_MAX_ITEMS = 10_000;
 
 // Timing settings
 export const FEED_POLL_INTERVAL_MS = 2000; // Backup polling for SPA navigation

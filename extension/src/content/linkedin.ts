@@ -1,7 +1,7 @@
 // extension/src/content/linkedin.ts
 import { extractPostData, applyDecision } from './linkedin-parser';
 import { PostData, Decision, Source } from '../types';
-import { getCachedDecision, setCachedDecision, cleanupExpiredCache } from '../lib/storage';
+import { decisionCache, userData } from '../lib/storage';
 import { SELECTORS, ATTRIBUTES } from '../lib/selectors';
 import '../styles/content.css';
 
@@ -9,7 +9,7 @@ import '../styles/content.css';
 const processedPosts = new Set<string>();
 
 // Run cleanup on startup
-cleanupExpiredCache().catch(console.error);
+decisionCache.cleanupExpired().catch(console.error);
 
 // ============================================================================
 // Guard Functions (Pure, testable checks)
@@ -29,8 +29,7 @@ function shouldSkipElement(element: HTMLElement): boolean {
  * Check if filtering is enabled
  */
 async function isFilteringEnabled(): Promise<boolean> {
-  const storage = await chrome.storage.sync.get('enabled');
-  return storage.enabled !== false;
+  return userData.isEnabled();
 }
 
 /**
@@ -50,10 +49,12 @@ function isPostAlreadyProcessed(postId: string): boolean {
  */
 async function classifyPost(postData: PostData): Promise<{ decision: Decision; source: Source }> {
   const postId = postData.post_id;
+  console.debug('[Unslop][classify] start', { postId });
 
   // Check cache first (user choice or previous server decision)
-  const cached = await getCachedDecision(postId);
+  const cached = await decisionCache.get(postId);
   if (cached) {
+    console.debug('[Unslop][classify] cache-return', { postId, decision: cached.decision });
     return { decision: cached.decision, source: cached.source };
   }
 
@@ -66,9 +67,10 @@ async function classifyPost(postData: PostData): Promise<{ decision: Decision; s
 
     const decision = response.decision || 'keep';
     const source = response.source || 'error';
+    console.debug('[Unslop][classify] response', { postId, decision, source });
 
     // Save to cache for next time
-    await setCachedDecision(postId, decision, source);
+    await decisionCache.set(postId, decision, source);
 
     return { decision, source };
   } catch (err) {
@@ -275,4 +277,3 @@ if (document.readyState === 'loading') {
   attachToFeed();
   setupNavigationDetection();
 }
-
