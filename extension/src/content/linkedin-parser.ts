@@ -133,7 +133,7 @@ function createHiddenStub(element: HTMLElement, postId?: string): HTMLElement {
     stub.remove();
     // Save user choice to cache (priority over server)
     if (postId) {
-      await setCachedDecision(postId, 'keep', 'cache');
+      await decisionCache.set(postId, 'keep', 'cache');
     }
   });
 
