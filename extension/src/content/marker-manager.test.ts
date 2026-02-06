@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { ATTRIBUTES } from '../lib/selectors';
-import { clearUnslopElementState } from './marker-manager';
+import { resetPostElementState } from './marker-manager';
 
 describe('marker manager', () => {
   it('clears unslop markers and UI artifacts from an element', () => {
@@ -32,7 +32,7 @@ describe('marker manager', () => {
       style,
     } as unknown as HTMLElement;
 
-    clearUnslopElementState(element);
+    resetPostElementState(element);
 
     expect(attrs.has(ATTRIBUTES.processing)).toBe(false);
     expect(attrs.has(ATTRIBUTES.processed)).toBe(false);

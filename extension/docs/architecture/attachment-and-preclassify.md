@@ -6,18 +6,16 @@
   - Owns feed/body observer lifecycle.
   - Exposes idempotent `ensureAttached({ routeKey, force })`.
   - Owns liveness (`isLive`) and generation checks.
-- `src/content/preclassify-gate.ts`
-  - Sole owner of preclassify DOM gate toggling.
-  - Enables sync bootstrap and async enabled-state reconciliation.
 - `src/content/linkedin.ts`
   - Orchestrates route sync, watchdog ticks, mutation buffering, and classification flow.
-  - Does not directly mutate preclassify DOM attributes.
+  - Owns preclassify DOM gate toggling inline with runtime lifecycle transitions.
 
 ## Runtime Invariants
 
 - On feed routes, either feed observer or body observer is attached.
 - A stale/disconnected feed root forces reattach on next sync.
 - Preclassify gate is enabled synchronously at content-script bootstrap on feed routes.
+- Preclassify gate is disabled only on disabled/non-feed transitions.
 - Every processed post reaches terminal state via `data-unslop-processed`.
 - Hide decisions keep LinkedIn nodes mounted and collapse them with `display: none`.
 

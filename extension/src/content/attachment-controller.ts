@@ -1,5 +1,3 @@
-import { createFeedLifecycle } from './feed-lifecycle';
-
 type ObserverHandle = {
   disconnect: () => void;
 };
@@ -41,10 +39,10 @@ function isConnected(root: Element | null): boolean {
 }
 
 export function createAttachmentController(options: AttachmentControllerOptions) {
-  const lifecycle = createFeedLifecycle();
-
   let feedObserver: ObserverHandle | null = null;
   let bodyObserver: ObserverHandle | null = null;
+  let generation = 0;
+  let generationAttached = false;
   let state: AttachmentControllerState = {
     routeKey: '',
     generation: 0,
@@ -71,8 +69,8 @@ export function createAttachmentController(options: AttachmentControllerOptions)
   function detachAll(): void {
     disconnectFeedObserver();
     disconnectBodyObserver();
-    lifecycle.detach();
-    state.generation = lifecycle.getState().generation;
+    generationAttached = false;
+    state.generation = generation;
   }
 
   function isLive(routeKey = state.routeKey): boolean {
@@ -91,7 +89,8 @@ export function createAttachmentController(options: AttachmentControllerOptions)
     disconnectFeedObserver();
     disconnectBodyObserver();
 
-    const generation = lifecycle.attach('feed', routeKey);
+    generation += 1;
+    generationAttached = true;
     state.routeKey = routeKey;
     state.generation = generation;
     state.feedRootRef = feedRoot;
@@ -105,8 +104,8 @@ export function createAttachmentController(options: AttachmentControllerOptions)
     disconnectFeedObserver();
     disconnectBodyObserver();
 
-    lifecycle.detach();
-    state.generation = lifecycle.getState().generation;
+    generationAttached = false;
+    state.generation = generation;
     state.routeKey = routeKey;
     state.feedRootRef = null;
 
@@ -169,7 +168,8 @@ export function createAttachmentController(options: AttachmentControllerOptions)
     ensureAttached,
     detachAll,
     isLive,
-    isCurrentGeneration: (generation: number): boolean => lifecycle.isCurrent(generation),
+    isCurrentGeneration: (candidateGeneration: number): boolean =>
+      generationAttached && candidateGeneration === generation,
     getState(): AttachmentControllerState {
       return { ...state };
     },

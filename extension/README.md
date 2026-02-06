@@ -44,7 +44,7 @@ flowchart LR
   H --> A
 
   B --> I[Attachment Controller\nattachment-controller.ts]
-  B --> J[Preclassify Gate\npreclassify-gate.ts]
+  B --> J[Preclassify Gate\ninline in linkedin.ts]
   B --> K[Watchdog\nstarvation-watchdog.ts]
 ```
 
@@ -160,7 +160,7 @@ For each candidate element:
 4. If enabled:
 - check decision cache
 - if miss, enqueue batch classify request
-- wait with timeout wrapper
+- queue timeout is the single fail-open authority (`BATCH_RESULT_TIMEOUT_MS`)
 5. Render terminal decision via `decision-renderer.ts`.
 6. Mark processed.
 
@@ -264,10 +264,10 @@ Invariants:
 
 ### 5.5 Preclassify Gate
 
-`src/content/preclassify-gate.ts`
+`src/content/linkedin.ts` (inline gate helper)
 
-- Only module allowed to set/remove preclassify attribute.
-- Enables sync bootstrap + async enabled-state reconciliation.
+- Gate is toggled by runtime controller transitions (`enterEnabled` / `enterDisabled`).
+- Keeps gate logic close to lifecycle orchestration without extra one-off indirection.
 
 Invariants:
 
@@ -366,8 +366,8 @@ Defined in `src/lib/selectors.ts`:
 `src/lib/config.ts`
 
 - `API_BASE_URL`
-- `CLASSIFY_TIMEOUT_MS` (currently 2000ms)
 - `BATCH_WINDOW_MS`, `BATCH_MAX_ITEMS`, `BATCH_RESULT_TIMEOUT_MS`
+- `DEBUG_CONTENT_RUNTIME` (default `false`)
 - `CACHE_TTL_MS`, `CACHE_MAX_ITEMS`
 - `HIDE_RENDER_MODE` (`collapse` or `stub`)
   - default fallback when storage value is missing/invalid
@@ -388,7 +388,7 @@ User override path:
 Expected fail-open behavior:
 
 - parse error -> `keep`
-- classify timeout -> `keep`
+- queue timeout (`BATCH_RESULT_TIMEOUT_MS`) -> `keep`
 - missing stream result -> `keep`
 - network/auth failure -> no destructive DOM behavior
 

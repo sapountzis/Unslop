@@ -16,10 +16,10 @@ export const CACHE_MAX_ITEMS = 10_000;
 // Batch classify settings
 export const BATCH_WINDOW_MS = 75;
 export const BATCH_MAX_ITEMS = 20;
-export const BATCH_RESULT_TIMEOUT_MS = 4000;
+export const BATCH_RESULT_TIMEOUT_MS = 2000; // Single fail-open timeout authority for classification
 
-// Timing settings
-export const CLASSIFY_TIMEOUT_MS = 2000; // Fail-open timeout for pre-classification hide
+// Runtime diagnostics
+export const DEBUG_CONTENT_RUNTIME = false;
 
 // Hide rendering mode:
 // - 'collapse': fully remove hidden posts from layout (default production behavior)

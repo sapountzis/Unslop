@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
-import { enqueueBatch, __testing } from './batch-queue';
+import { enqueueBatch, __testing, handleBatchResult } from './batch-queue';
 import { PostData } from '../types';
+import { BATCH_RESULT_TIMEOUT_MS } from '../lib/config';
 
 const post: PostData = {
   post_id: 'p1',
@@ -40,6 +41,24 @@ describe('batch queue resilience', () => {
   it('resolves pending entries as fail-open when background stream does not deliver results', async () => {
     const result = await enqueueBatch(post);
     expect(result).toEqual({ decision: 'keep', source: 'error' });
+    expect(__testing.pendingCount()).toBe(0);
+  });
+
+  it('uses queue timeout as the single classification timeout authority (2s)', () => {
+    expect(BATCH_RESULT_TIMEOUT_MS).toBe(2000);
+  });
+
+  it('ignores late batch results after timeout resolution', async () => {
+    const result = await enqueueBatch(post);
+    expect(result).toEqual({ decision: 'keep', source: 'error' });
+    expect(__testing.pendingCount()).toBe(0);
+
+    handleBatchResult({
+      post_id: post.post_id,
+      decision: 'hide',
+      source: 'llm',
+    });
+
     expect(__testing.pendingCount()).toBe(0);
   });
 });

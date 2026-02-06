@@ -4,16 +4,13 @@ import { Decision, PostData, Source } from '../types';
 import { decisionCache, userData } from '../lib/storage';
 import { enqueueBatch, handleBatchResult } from './batch-queue';
 import { SELECTORS, ATTRIBUTES } from '../lib/selectors';
-import { CLASSIFY_TIMEOUT_MS, HIDE_RENDER_MODE, HideRenderMode } from '../lib/config';
-import { classifyPostWithTimeout } from './classification-timeout';
+import { DEBUG_CONTENT_RUNTIME, HIDE_RENDER_MODE, HideRenderMode } from '../lib/config';
 import { MESSAGE_TYPES } from '../lib/messages';
-import { createRuntimeMetrics } from './runtime-metrics';
 import { routeKeyFromUrl, shouldFilterRoute, shouldFilterRouteKey } from './route-detector';
 import { createMutationBuffer } from './mutation-buffer';
 import { createStarvationWatchdog } from './starvation-watchdog';
 import { createAttachmentController } from './attachment-controller';
 import { clearUnslopStateInDocument } from './marker-manager';
-import { disableGate, enableGateImmediately, syncGateWithEnabledState } from './preclassify-gate';
 import { createRuntimeController } from './runtime-controller';
 import { HIDE_RENDER_MODE_STORAGE_KEY, resolveHideRenderMode } from '../lib/hide-render-mode';
 import '../styles/content.css';
@@ -22,11 +19,34 @@ const ROUTE_POLL_MS = 500;
 const WATCHDOG_POLL_MS = 1000;
 const PROCESS_PER_FRAME = 20;
 
-const runtimeMetrics = createRuntimeMetrics();
+const runtimeCounters = {
+  postsProcessed: 0,
+  classifySent: 0,
+};
 
 let frameHandle = 0;
-let currentRouteKey = '';
 let hideRenderMode: HideRenderMode = HIDE_RENDER_MODE;
+
+function setPreclassifyGate(enabled: boolean): void {
+  if (enabled) {
+    document.documentElement.setAttribute(ATTRIBUTES.preclassify, 'true');
+    return;
+  }
+  document.documentElement.removeAttribute(ATTRIBUTES.preclassify);
+}
+
+function debugLog(message: string, context?: unknown): void {
+  if (!DEBUG_CONTENT_RUNTIME) return;
+  if (typeof context === 'undefined') {
+    console.debug(`[Unslop][runtime] ${message}`);
+    return;
+  }
+  console.debug(`[Unslop][runtime] ${message}`, context);
+}
+
+function incrementCounter(key: keyof typeof runtimeCounters): void {
+  runtimeCounters[key] += 1;
+}
 
 const mutationBuffer = createMutationBuffer((element) => {
   processPost(element).catch((err) => {
@@ -44,24 +64,21 @@ function shouldSkipElement(element: HTMLElement): boolean {
 
 async function classifyPost(postData: PostData): Promise<{ decision: Decision; source: Source }> {
   const postId = postData.post_id;
-  console.debug('[Unslop][classify] start', { postId });
-  runtimeMetrics.inc('classify_sent');
+  debugLog('classify start', { postId });
+  incrementCounter('classifySent');
 
   const cached = await decisionCache.get(postId);
   if (cached) {
-    runtimeMetrics.inc('classify_result');
-    console.debug('[Unslop][classify] cache-return', { postId, decision: cached.decision });
+    debugLog('classify cache-hit', { postId, decision: cached.decision });
     return { decision: cached.decision, source: cached.source };
   }
 
   try {
     const result = await enqueueBatch(postData);
-    runtimeMetrics.inc('classify_result');
-    console.debug('[Unslop][classify] response', { postId, decision: result.decision, source: result.source });
+    debugLog('classify response', { postId, decision: result.decision, source: result.source });
     await decisionCache.set(postId, result.decision, result.source);
     return result;
   } catch (err) {
-    runtimeMetrics.inc('process_errors');
     console.error('Classification failed:', err);
     return { decision: 'keep', source: 'error' };
   }
@@ -79,24 +96,20 @@ async function processPost(element: HTMLElement): Promise<void> {
 
     if (!postData) {
       renderDecision(element, 'keep');
-      runtimeMetrics.inc('posts_processed');
+      incrementCounter('postsProcessed');
       return;
     }
 
-    const { decision } = await classifyPostWithTimeout(
-      classifyPost(postData),
-      CLASSIFY_TIMEOUT_MS
-    );
+    const { decision } = await classifyPost(postData);
     if (!runtimeController.isEnabledForProcessing()) return;
     renderDecision(element, decision, postData.post_id, { hideMode: hideRenderMode });
-    runtimeMetrics.inc('posts_processed');
+    incrementCounter('postsProcessed');
   } catch (err) {
-    runtimeMetrics.inc('process_errors');
     console.error('Error processing post:', err);
     if (!runtimeController.isEnabledForProcessing()) return;
     // Fail open and guarantee terminal state so posts cannot remain hidden forever.
     renderDecision(element, 'keep');
-    runtimeMetrics.inc('posts_processed');
+    incrementCounter('postsProcessed');
   } finally {
     element.removeAttribute(ATTRIBUTES.processing);
   }
@@ -118,7 +131,6 @@ function reconcileHiddenPostRenderMode(): void {
 function enqueueCandidate(element: HTMLElement): void {
   if (!runtimeController.isEnabledForProcessing()) return;
   if (!isLikelyFeedPostRoot(element)) return;
-  runtimeMetrics.inc('candidates_seen');
   mutationBuffer.enqueue(element);
 }
 
@@ -178,7 +190,6 @@ function handleMutations(mutations: MutationRecord[], generation: number): void 
   if (!attachmentController.isCurrentGeneration(generation)) return;
 
   for (const mutation of mutations) {
-    runtimeMetrics.inc('mutations_seen');
     for (const node of mutation.addedNodes) {
       collectCandidatesFromNode(node);
     }
@@ -191,9 +202,7 @@ const attachmentController = createAttachmentController({
   isRouteEligible: shouldFilterRouteKey,
   findFeedRoot: () => document.querySelector(SELECTORS.feed),
   attachFeedObserver: ({ routeKey, generation, feedRoot }) => {
-    runtimeMetrics.set('observer_generation', generation);
-    runtimeMetrics.set('active_feed_selector', SELECTORS.feed);
-    runtimeMetrics.set('active_route', routeKey);
+    debugLog('attach feed observer', { routeKey, generation });
 
     const observer = new MutationObserver((mutations) => handleMutations(mutations, generation));
     observer.observe(feedRoot, { childList: true, subtree: true });
@@ -205,7 +214,14 @@ const attachmentController = createAttachmentController({
   },
   attachBodyObserver: ({ routeKey, onFeedAvailable }) => {
     const observer = new MutationObserver(() => {
-      if (currentRouteKey !== routeKey || !shouldFilterRoute(window.location.href)) {
+      const runtimeState = runtimeController.getState();
+      const currentRoute = routeKeyFromUrl(window.location.href);
+      if (
+        runtimeState.mode === 'disabled' ||
+        runtimeState.routeKey !== routeKey ||
+        currentRoute !== routeKey ||
+        !shouldFilterRouteKey(currentRoute)
+      ) {
         return;
       }
 
@@ -228,21 +244,16 @@ const runtimeController = createRuntimeController({
   getRouteKey: () => routeKeyFromUrl(window.location.href),
   isRouteEligible: shouldFilterRouteKey,
   readEnabled: () => userData.isEnabled(),
-  enterDisabled: (routeKey) => {
-    currentRouteKey = routeKey;
+  enterDisabled: () => {
     attachmentController.detachAll();
     stopProcessingLoop();
-    disableGate();
+    setPreclassifyGate(false);
     watchdog.reset();
     clearUnslopStateInDocument();
   },
   enterEnabled: ({ routeKey, forceAttach }) => {
-    syncGateWithEnabledState(true);
-    if (forceAttach) {
-      runtimeMetrics.inc('observer_reattach');
-    }
+    setPreclassifyGate(true);
     attachmentController.ensureAttached({ routeKey, force: forceAttach });
-    currentRouteKey = routeKey;
     scanForPosts();
   },
   isAttachmentLive: (routeKey) => attachmentController.isLive(routeKey),
@@ -280,15 +291,15 @@ function setupNavigationDetection(): void {
   window.setInterval(() => {
     if (document.hidden) return;
     const nextRoute = routeKeyFromUrl(window.location.href);
-    if (nextRoute !== currentRouteKey) {
+    if (nextRoute !== runtimeController.getState().routeKey) {
       scheduleRuntimeReconcile('route');
     }
   }, ROUTE_POLL_MS);
 }
 
 function startWatchdog(): void {
-  let lastProcessed = runtimeMetrics.get('posts_processed');
-  let lastClassify = runtimeMetrics.get('classify_sent');
+  let lastProcessed = runtimeCounters.postsProcessed;
+  let lastClassify = runtimeCounters.classifySent;
 
   window.setInterval(() => {
     if (!runtimeController.isEnabledForProcessing() || document.hidden) return;
@@ -296,8 +307,8 @@ function startWatchdog(): void {
     const state = attachmentController.getState();
     if (!state.feedObserverActive && !state.bodyObserverActive) return;
 
-    const processedNow = runtimeMetrics.get('posts_processed');
-    const classifyNow = runtimeMetrics.get('classify_sent');
+    const processedNow = runtimeCounters.postsProcessed;
+    const classifyNow = runtimeCounters.classifySent;
 
     const processedDelta = processedNow - lastProcessed;
     const classifyDelta = classifyNow - lastClassify;
@@ -353,7 +364,7 @@ async function initializeRuntime(): Promise<void> {
 }
 
 if (shouldFilterRoute(window.location.href)) {
-  enableGateImmediately();
+  setPreclassifyGate(true);
 }
 
 if (document.readyState === 'loading') {

@@ -2,7 +2,7 @@ import { Decision } from '../types';
 import { decisionCache } from '../lib/storage';
 import { ATTRIBUTES } from '../lib/selectors';
 import { HIDE_RENDER_MODE, HideRenderMode } from '../lib/config';
-import { removeScopedChild } from './dom-utils';
+import { resetPostElementState } from './marker-manager';
 
 function createDimHeader(element: HTMLElement, postId?: string): HTMLElement {
   const header = document.createElement('div');
@@ -61,18 +61,8 @@ export function renderDecision(
 ): void {
   const hideMode = options?.hideMode ?? HIDE_RENDER_MODE;
 
-  element.removeAttribute(ATTRIBUTES.processing);
+  resetPostElementState(element);
   element.setAttribute(ATTRIBUTES.processed, 'true');
-
-  // Always clear transitional styles before applying the final decision.
-  element.classList.remove('unslop-hidden-post');
-  element.classList.remove('unslop-hidden-post-stub');
-  removeScopedChild(element, ':scope > .unslop-hidden-stub');
-  removeScopedChild(element, ':scope > .unslop-dim-header');
-  element.style.opacity = '1';
-  if (decision !== 'dim') {
-    element.removeAttribute(ATTRIBUTES.decision);
-  }
 
   switch (decision) {
     case 'keep':
