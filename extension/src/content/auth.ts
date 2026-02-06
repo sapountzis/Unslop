@@ -3,6 +3,7 @@
 // It extracts the JWT from the auth callback page
 
 import { SELECTORS } from '../lib/selectors';
+import { MESSAGE_TYPES } from '../lib/messages';
 import '../styles/content.css';
 
 /**
@@ -23,7 +24,7 @@ function extractJwtFromPage(): string | null {
  */
 function sendJwtToBackground(jwt: string): void {
   chrome.runtime.sendMessage({
-    type: 'SET_JWT',
+    type: MESSAGE_TYPES.SET_JWT,
     jwt,
   });
 }

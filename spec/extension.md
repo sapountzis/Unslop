@@ -14,20 +14,20 @@ The extension must be minimal and must **fail open**.
 
 1. **Content Script (LinkedIn)**
    - Runs on `https://www.linkedin.com/*`.
+   - Starts at `document_start` to enable pre-classification hiding.
    - Detects posts using `MutationObserver`.
    - Extracts `post_id`, `author_id`, `author_name`, `content_text`.
-   - Sends post to background for classification.
+   - Sends posts to background for batch classification.
    - Applies the returned decision to the DOM.
 
 2. **Background Service Worker**
    - Stores JWT and enabled toggle in `chrome.storage.sync`.
    - Calls backend endpoints:
-     - `/v1/classify`
-     - `/v1/feedback`
+     - `/v1/classify/batch`
      - `/v1/me`
      - `/v1/auth/start`
      - `/v1/billing/create-checkout`
-   - Handles 401 by clearing token and notifying popup.
+   - Handles 401 by clearing token.
 
 3. **Content Script (Auth Domain)**
    - Runs on `https://api.getunslop.com/*`.
@@ -84,23 +84,29 @@ Content script → background:
 
 ```ts
 chrome.runtime.sendMessage({
-  type: "CLASSIFY_POST",
-  post: { post_id, author_id, author_name, content_text }
+  type: "CLASSIFY_BATCH",
+  posts: [{ post_id, author_id, author_name, content_text }]
 });
 ```
 
 Background → backend:
-- `POST /v1/classify` with JWT bearer token
+- `POST /v1/classify/batch` with JWT bearer token
 
-Background → content script response:
+Background → content script stream messages:
 
 ```ts
 {
-  post_id: string,
-  decision: "keep" | "dim" | "hide",
-  source: "llm" | "cache" | "error"
+  type: "CLASSIFY_BATCH_RESULT",
+  item: {
+    post_id: string,
+    decision?: "keep" | "dim" | "hide",
+    source?: "llm" | "cache" | "error",
+    error?: "quota_exceeded"
+  }
 }
 ```
+
+The content script uses a fail-open timeout (`2000ms` baseline). If no decision arrives in time, it renders `keep`.
 
 ## Applying decisions (required)
 
@@ -108,17 +114,16 @@ Background → content script response:
 - **dim**:
   - apply CSS: `opacity: 0.35`
 - **hide**:
-  - replace the post element with a stub:
-    - “Unslop hid a post · Show”
-  - clicking “Show” reveals the post once (local only)
+  - keep the LinkedIn post node mounted
+  - collapse it with CSS (`display: none`, no visible replacement text/stub)
+  - do not remove/unmount the node to reduce rerender churn
 
-## Feedback (in-scope)
+## Pre-classification behavior
 
-Background calls `POST /v1/feedback` with:
-
-- `post_id`
-- `rendered_decision` (what was applied)
-- `user_label` (`should_keep` / `should_hide`)
+- While filtering is enabled, unprocessed post nodes are hidden until a decision is applied.
+- The preclassify gate is enabled synchronously at content-script bootstrap on feed routes.
+- Processed `keep` and `dim` posts become visible once marked processed.
+- This prevents "appear then disappear" flicker for posts that end up hidden.
 
 ## Failure modes (required)
 

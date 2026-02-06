@@ -17,6 +17,7 @@ Refer to:
 - `../spec/extension.md`
 - `../spec/api.md`
 - `../spec/spec.md`
+- `./docs/constitution.md` (binding extension constitution)
 
 ## Setup & dev commands
 
@@ -32,3 +33,9 @@ From `extension/`:
   - If classify fails, do not break LinkedIn. Leave post as-is.
 - Keep UI minimal:
   - No “aggressiveness sliders”, category controls, or per-author rules.
+
+## Documentation Discipline
+
+- `extension/README.md` is a required living technical guide for the extension.
+- Any change to extension behavior, architecture, lifecycle, message contracts, selectors, configuration, or troubleshooting flow must update `extension/README.md` in the same change.
+- Do not ship extension changes with stale README content.

@@ -1,6 +1,7 @@
 // extension/src/stats/index.ts
 import { StatsInfo } from '../types';
 import { Chart, registerables } from 'chart.js';
+import { MESSAGE_TYPES } from '../lib/messages';
 
 // Register Chart.js components
 Chart.register(...registerables);
@@ -24,7 +25,7 @@ async function loadStats(): Promise<void> {
   });
 
   try {
-    const stats = await chrome.runtime.sendMessage({ type: 'GET_STATS' }) as StatsInfo | null;
+    const stats = await chrome.runtime.sendMessage({ type: MESSAGE_TYPES.GET_STATS }) as StatsInfo | null;
 
     if (!stats) {
       contentEl!.innerHTML = `

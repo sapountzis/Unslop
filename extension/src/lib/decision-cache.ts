@@ -49,14 +49,6 @@ export class DecisionCacheService {
     });
   }
 
-  async remove(postId: string): Promise<void> {
-    const decisionCache = await this.read();
-    if (!decisionCache[postId]) return;
-
-    delete decisionCache[postId];
-    await this.write(decisionCache);
-  }
-
   async cleanupExpired(): Promise<void> {
     const decisionCache = await this.read();
 

@@ -1,5 +1,9 @@
 // extension/src/popup/App.ts
 import { UserInfo, UsageInfo } from '../types';
+import { MESSAGE_TYPES } from '../lib/messages';
+import { resolveEnabled } from '../lib/enabled-state';
+import type { HideRenderMode } from '../lib/config';
+import { HIDE_RENDER_MODE_STORAGE_KEY, resolveHideRenderMode } from '../lib/hide-render-mode';
 
 export class App {
   private container: HTMLElement;
@@ -13,7 +17,8 @@ export class App {
   }
 
   async render(): Promise<void> {
-    const storage = await chrome.storage.sync.get(['jwt', 'enabled']);
+    const storage = await chrome.storage.sync.get(['jwt', 'enabled', HIDE_RENDER_MODE_STORAGE_KEY]);
+    const hideRenderMode = resolveHideRenderMode(storage[HIDE_RENDER_MODE_STORAGE_KEY]);
 
     if (!storage.jwt) {
       this.renderSignIn();
@@ -21,7 +26,7 @@ export class App {
       const userInfo = await this.getUserInfo();
       if (userInfo) {
         const usageInfo = await this.getUsageInfo();
-        this.renderDashboard(userInfo, usageInfo, storage.enabled);
+        this.renderDashboard(userInfo, usageInfo, resolveEnabled(storage.enabled), hideRenderMode);
       } else {
         this.renderSignIn();
       }
@@ -30,9 +35,8 @@ export class App {
 
   private async getUserInfo(): Promise<UserInfo | null> {
     try {
-      const response = await chrome.runtime.sendMessage({ type: 'GET_USER_INFO' });
+      const response = await chrome.runtime.sendMessage({ type: MESSAGE_TYPES.GET_USER_INFO });
       if (!response || !response.email) {
-        console.log('Invalid user info response:', response);
         return null;
       }
       return response;
@@ -44,7 +48,7 @@ export class App {
 
   private async getUsageInfo(): Promise<UsageInfo | null> {
     try {
-      const response = await chrome.runtime.sendMessage({ type: 'GET_USAGE' });
+      const response = await chrome.runtime.sendMessage({ type: MESSAGE_TYPES.GET_USAGE });
       return response;
     } catch (err) {
       console.error('GetUsageInfo error:', err);
@@ -82,7 +86,7 @@ export class App {
 
       try {
         await chrome.runtime.sendMessage({
-          type: 'START_AUTH',
+          type: MESSAGE_TYPES.START_AUTH,
           email,
         });
 
@@ -94,7 +98,12 @@ export class App {
     });
   }
 
-  private renderDashboard(userInfo: UserInfo, usageInfo: UsageInfo | null, enabled: boolean): void {
+  private renderDashboard(
+    userInfo: UserInfo,
+    usageInfo: UsageInfo | null,
+    enabled: boolean,
+    hideRenderMode: HideRenderMode
+  ): void {
     const isPro = userInfo.plan === 'pro' && userInfo.plan_status === 'active';
 
     // Usage display
@@ -135,6 +144,14 @@ export class App {
           </label>
         </div>
 
+        <div class="card mb-8">
+          <label for="hide-render-mode" class="setting-label">Hide render mode</label>
+          <select id="hide-render-mode" class="setting-select">
+            <option value="collapse" ${hideRenderMode === 'collapse' ? 'selected' : ''}>Collapse (no placeholder)</option>
+            <option value="stub" ${hideRenderMode === 'stub' ? 'selected' : ''}>Stub (debug + unhide)</option>
+          </select>
+        </div>
+
         ${usageHtml}
 
         <div class="card mb-8">
@@ -155,13 +172,20 @@ export class App {
     // Event listeners
     const enabledToggle = this.container.querySelector('#enabled-toggle') as HTMLInputElement;
     enabledToggle?.addEventListener('change', async () => {
-      const response = await chrome.runtime.sendMessage({ type: 'TOGGLE_ENABLED' });
+      const response = await chrome.runtime.sendMessage({ type: MESSAGE_TYPES.TOGGLE_ENABLED });
       enabledToggle.checked = response.enabled;
+    });
+
+    const hideRenderModeSelect = this.container.querySelector('#hide-render-mode') as HTMLSelectElement;
+    hideRenderModeSelect?.addEventListener('change', async () => {
+      const nextMode = resolveHideRenderMode(hideRenderModeSelect.value);
+      await chrome.storage.sync.set({ [HIDE_RENDER_MODE_STORAGE_KEY]: nextMode });
+      hideRenderModeSelect.value = nextMode;
     });
 
     const upgradeBtn = this.container.querySelector('#upgrade-btn');
     upgradeBtn?.addEventListener('click', async () => {
-      const response = await chrome.runtime.sendMessage({ type: 'CREATE_CHECKOUT' });
+      const response = await chrome.runtime.sendMessage({ type: MESSAGE_TYPES.CREATE_CHECKOUT });
       if (response.checkout_url) {
         chrome.tabs.create({ url: response.checkout_url });
       }
@@ -174,9 +198,8 @@ export class App {
 
     const signoutBtn = this.container.querySelector('#signout-btn');
     signoutBtn?.addEventListener('click', async () => {
-      await chrome.runtime.sendMessage({ type: 'CLEAR_JWT' });
+      await chrome.runtime.sendMessage({ type: MESSAGE_TYPES.CLEAR_JWT });
       this.render();
     });
   }
 }
-

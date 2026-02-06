@@ -1,281 +1,365 @@
-// extension/src/content/linkedin.ts
-import { extractPostData, applyDecision } from './linkedin-parser';
-import { PostData, Decision, Source } from '../types';
+import { extractPostData, isLikelyFeedPostRoot } from './linkedin-parser';
+import { renderDecision } from './decision-renderer';
+import { Decision, PostData, Source } from '../types';
 import { decisionCache, userData } from '../lib/storage';
 import { enqueueBatch, handleBatchResult } from './batch-queue';
 import { SELECTORS, ATTRIBUTES } from '../lib/selectors';
+import { CLASSIFY_TIMEOUT_MS, HIDE_RENDER_MODE, HideRenderMode } from '../lib/config';
+import { classifyPostWithTimeout } from './classification-timeout';
+import { MESSAGE_TYPES } from '../lib/messages';
+import { createRuntimeMetrics } from './runtime-metrics';
+import { routeKeyFromUrl, shouldFilterRoute, shouldFilterRouteKey } from './route-detector';
+import { createMutationBuffer } from './mutation-buffer';
+import { createStarvationWatchdog } from './starvation-watchdog';
+import { createAttachmentController } from './attachment-controller';
+import { clearUnslopStateInDocument } from './marker-manager';
+import { disableGate, enableGateImmediately, syncGateWithEnabledState } from './preclassify-gate';
+import { createRuntimeController } from './runtime-controller';
+import { HIDE_RENDER_MODE_STORAGE_KEY, resolveHideRenderMode } from '../lib/hide-render-mode';
 import '../styles/content.css';
 
-// Track posts we've already classified
-const processedPosts = new Set<string>();
+const ROUTE_POLL_MS = 500;
+const WATCHDOG_POLL_MS = 1000;
+const PROCESS_PER_FRAME = 20;
 
-// Run cleanup on startup
-decisionCache.cleanupExpired().catch(console.error);
+const runtimeMetrics = createRuntimeMetrics();
 
-// Listen for batch results from background
-chrome.runtime.onMessage.addListener((message) => {
-  if (message?.type === 'CLASSIFY_BATCH_RESULT') {
-    handleBatchResult(message.item);
-  }
+let frameHandle = 0;
+let currentRouteKey = '';
+let hideRenderMode: HideRenderMode = HIDE_RENDER_MODE;
+
+const mutationBuffer = createMutationBuffer((element) => {
+  processPost(element).catch((err) => {
+    console.error('[Unslop] process post failed', err);
+  });
 });
 
-// ============================================================================
-// Guard Functions (Pure, testable checks)
-// ============================================================================
-
-/**
- * Check if element should be skipped (already processed or currently processing)
- */
 function shouldSkipElement(element: HTMLElement): boolean {
   return (
+    !isLikelyFeedPostRoot(element) ||
     element.hasAttribute(ATTRIBUTES.processed) ||
     element.hasAttribute(ATTRIBUTES.processing)
   );
 }
 
-/**
- * Check if filtering is enabled
- */
-async function isFilteringEnabled(): Promise<boolean> {
-  return userData.isEnabled();
-}
-
-/**
- * Check if post was already processed by ID
- */
-function isPostAlreadyProcessed(postId: string): boolean {
-  return processedPosts.has(postId);
-}
-
-// ============================================================================
-// Classification Logic
-// ============================================================================
-
-/**
- * Classify a single post with cache priority
- * Priority: user choice (cache) > server decision
- */
 async function classifyPost(postData: PostData): Promise<{ decision: Decision; source: Source }> {
   const postId = postData.post_id;
   console.debug('[Unslop][classify] start', { postId });
+  runtimeMetrics.inc('classify_sent');
 
-  // Check cache first (user choice or previous server decision)
   const cached = await decisionCache.get(postId);
   if (cached) {
+    runtimeMetrics.inc('classify_result');
     console.debug('[Unslop][classify] cache-return', { postId, decision: cached.decision });
     return { decision: cached.decision, source: cached.source };
   }
 
-  // No cache hit, ask server via batch queue
   try {
-    const { decision, source } = await enqueueBatch(postData);
-    console.debug('[Unslop][classify] response', { postId, decision, source });
-
-    // Save to cache for next time
-    await decisionCache.set(postId, decision, source);
-
-    return { decision, source };
+    const result = await enqueueBatch(postData);
+    runtimeMetrics.inc('classify_result');
+    console.debug('[Unslop][classify] response', { postId, decision: result.decision, source: result.source });
+    await decisionCache.set(postId, result.decision, result.source);
+    return result;
   } catch (err) {
+    runtimeMetrics.inc('process_errors');
     console.error('Classification failed:', err);
     return { decision: 'keep', source: 'error' };
   }
 }
 
-// ============================================================================
-// Post Processing Pipeline
-// ============================================================================
-
-/**
- * Mark element as being processed
- */
-function markProcessing(element: HTMLElement): void {
-  element.setAttribute(ATTRIBUTES.processing, 'true');
-}
-
-/**
- * Unmark element processing state
- */
-function unmarkProcessing(element: HTMLElement): void {
-  element.removeAttribute(ATTRIBUTES.processing);
-}
-
-/**
- * Process a single post element
- * Broken into clear steps for readability
- */
 async function processPost(element: HTMLElement): Promise<void> {
-  // Step 1: Fast guard checks
-  if (shouldSkipElement(element)) {
-    return;
-  }
+  if (!runtimeController.isEnabledForProcessing()) return;
+  if (shouldSkipElement(element)) return;
 
-  // Step 2: Mark as processing to prevent race conditions
-  markProcessing(element);
+  element.setAttribute(ATTRIBUTES.processing, 'true');
 
   try {
-    // Step 3: Extract post data
     const postData = await extractPostData(element);
+    if (!runtimeController.isEnabledForProcessing()) return;
+
     if (!postData) {
+      renderDecision(element, 'keep');
+      runtimeMetrics.inc('posts_processed');
       return;
     }
 
-    // Step 4: Track by post ID
-    if (isPostAlreadyProcessed(postData.post_id)) {
-      return;
-    }
-    processedPosts.add(postData.post_id);
-
-    // Step 5: Check if filtering is enabled
-    if (!await isFilteringEnabled()) {
-      return;
-    }
-
-    // Step 6: Classify and apply decision
-    const { decision } = await classifyPost(postData);
-    applyDecision(element, decision, postData.post_id);
-
-  } catch (e) {
-    console.error('Error processing post:', e);
+    const { decision } = await classifyPostWithTimeout(
+      classifyPost(postData),
+      CLASSIFY_TIMEOUT_MS
+    );
+    if (!runtimeController.isEnabledForProcessing()) return;
+    renderDecision(element, decision, postData.post_id, { hideMode: hideRenderMode });
+    runtimeMetrics.inc('posts_processed');
+  } catch (err) {
+    runtimeMetrics.inc('process_errors');
+    console.error('Error processing post:', err);
+    if (!runtimeController.isEnabledForProcessing()) return;
+    // Fail open and guarantee terminal state so posts cannot remain hidden forever.
+    renderDecision(element, 'keep');
+    runtimeMetrics.inc('posts_processed');
   } finally {
-    unmarkProcessing(element);
+    element.removeAttribute(ATTRIBUTES.processing);
   }
 }
 
-// ============================================================================
-// DOM Observation
-// ============================================================================
+function reconcileHiddenPostRenderMode(): void {
+  if (!runtimeController.isEnabledForProcessing()) return;
+  const hiddenPosts = document.querySelectorAll(
+    `${SELECTORS.candidatePostRoot}[${ATTRIBUTES.decision}="hide"]`
+  );
 
-/**
- * Handle new mutations efficiently
- */
-function handleMutations(mutations: MutationRecord[]): void {
-  for (const mutation of mutations) {
-    for (const node of mutation.addedNodes) {
-      if (node instanceof HTMLElement) {
-        // Direct match
-        if (node.matches(SELECTORS.post)) {
-          processPost(node);
-        }
-        // Container match - look for children
-        else {
-          const posts = node.querySelectorAll(SELECTORS.post);
-          posts.forEach((post) => {
-            if (post instanceof HTMLElement) {
-              processPost(post);
-            }
-          });
-        }
-      }
+  for (const post of hiddenPosts) {
+    if (post instanceof HTMLElement) {
+      renderDecision(post, 'hide', undefined, { hideMode: hideRenderMode });
     }
   }
 }
 
-// Global observer for the feed
-let feedObserver: MutationObserver | null = null;
+function enqueueCandidate(element: HTMLElement): void {
+  if (!runtimeController.isEnabledForProcessing()) return;
+  if (!isLikelyFeedPostRoot(element)) return;
+  runtimeMetrics.inc('candidates_seen');
+  mutationBuffer.enqueue(element);
+}
 
-/**
- * Attach observer to the feed container
- */
-function attachToFeed(): void {
-  // Cleanup existing
-  if (feedObserver) {
-    feedObserver.disconnect();
+function collectCandidatesFromNode(node: Node): void {
+  if (!(node instanceof HTMLElement)) return;
+
+  if (node.matches(SELECTORS.candidatePostRoot)) {
+    enqueueCandidate(node);
   }
 
-  const feedContainer = document.querySelector(SELECTORS.feed);
+  const nested = node.querySelectorAll(SELECTORS.candidatePostRoot);
+  for (const child of nested) {
+    if (child instanceof HTMLElement) {
+      enqueueCandidate(child);
+    }
+  }
+}
 
-  if (feedContainer) {
-    console.log('[Unslop] Feed container found, attaching observer.');
-    feedObserver = new MutationObserver(handleMutations);
-    feedObserver.observe(feedContainer, {
-      childList: true,
-      subtree: true,
+function flushMutationBuffer(): void {
+  frameHandle = 0;
+  if (!runtimeController.isEnabledForProcessing()) {
+    mutationBuffer.clear();
+    return;
+  }
+  mutationBuffer.drain(PROCESS_PER_FRAME);
+  if (mutationBuffer.size() > 0) {
+    scheduleBufferFlush();
+  }
+}
+
+function scheduleBufferFlush(): void {
+  if (frameHandle !== 0) return;
+  frameHandle = window.requestAnimationFrame(flushMutationBuffer);
+}
+
+function stopProcessingLoop(): void {
+  mutationBuffer.clear();
+  if (frameHandle !== 0) {
+    window.cancelAnimationFrame(frameHandle);
+    frameHandle = 0;
+  }
+}
+
+function scanForPosts(): void {
+  if (!runtimeController.isEnabledForProcessing()) return;
+
+  const roots = document.querySelectorAll(SELECTORS.candidatePostRoot);
+  for (const root of roots) {
+    if (root instanceof HTMLElement) {
+      enqueueCandidate(root);
+    }
+  }
+  scheduleBufferFlush();
+}
+
+function handleMutations(mutations: MutationRecord[], generation: number): void {
+  if (!attachmentController.isCurrentGeneration(generation)) return;
+
+  for (const mutation of mutations) {
+    runtimeMetrics.inc('mutations_seen');
+    for (const node of mutation.addedNodes) {
+      collectCandidatesFromNode(node);
+    }
+  }
+
+  scheduleBufferFlush();
+}
+
+const attachmentController = createAttachmentController({
+  isRouteEligible: shouldFilterRouteKey,
+  findFeedRoot: () => document.querySelector(SELECTORS.feed),
+  attachFeedObserver: ({ routeKey, generation, feedRoot }) => {
+    runtimeMetrics.set('observer_generation', generation);
+    runtimeMetrics.set('active_feed_selector', SELECTORS.feed);
+    runtimeMetrics.set('active_route', routeKey);
+
+    const observer = new MutationObserver((mutations) => handleMutations(mutations, generation));
+    observer.observe(feedRoot, { childList: true, subtree: true });
+    scanForPosts();
+
+    return {
+      disconnect: () => observer.disconnect(),
+    };
+  },
+  attachBodyObserver: ({ routeKey, onFeedAvailable }) => {
+    const observer = new MutationObserver(() => {
+      if (currentRouteKey !== routeKey || !shouldFilterRoute(window.location.href)) {
+        return;
+      }
+
+      if (!document.querySelector(SELECTORS.feed)) return;
+      onFeedAvailable();
     });
 
-    // Initial scan of what's already there
+    observer.observe(document.body, { childList: true, subtree: true });
+    return {
+      disconnect: () => observer.disconnect(),
+    };
+  },
+});
+
+const watchdog = createStarvationWatchdog(() => {
+  scheduleRuntimeReconcile('watchdog');
+});
+
+const runtimeController = createRuntimeController({
+  getRouteKey: () => routeKeyFromUrl(window.location.href),
+  isRouteEligible: shouldFilterRouteKey,
+  readEnabled: () => userData.isEnabled(),
+  enterDisabled: (routeKey) => {
+    currentRouteKey = routeKey;
+    attachmentController.detachAll();
+    stopProcessingLoop();
+    disableGate();
+    watchdog.reset();
+    clearUnslopStateInDocument();
+  },
+  enterEnabled: ({ routeKey, forceAttach }) => {
+    syncGateWithEnabledState(true);
+    if (forceAttach) {
+      runtimeMetrics.inc('observer_reattach');
+    }
+    attachmentController.ensureAttached({ routeKey, force: forceAttach });
+    currentRouteKey = routeKey;
     scanForPosts();
-  } else {
-    console.log('[Unslop] Feed container not found yet, waiting...');
-    waitForFeed();
-  }
+  },
+  isAttachmentLive: (routeKey) => attachmentController.isLive(routeKey),
+});
+
+function scheduleRuntimeReconcile(reason: 'init' | 'route' | 'toggle' | 'visibility' | 'watchdog'): void {
+  window.setTimeout(() => {
+    runtimeController.reconcile(reason).catch((err) => {
+      console.error('[Unslop] runtime reconcile failed', { reason, err });
+    });
+  }, 0);
 }
 
-/**
- * Watch document body until feed appears
- */
-function waitForFeed(): void {
-  const bodyObserver = new MutationObserver((mutations, obs) => {
-    const feed = document.querySelector(SELECTORS.feed);
-    if (feed) {
-      obs.disconnect(); // Stop watching body
-      attachToFeed();   // Switch to watching feed
-    }
-  });
-
-  bodyObserver.observe(document.body, {
-    childList: true,
-    subtree: true,
-  });
-}
-
-/**
- * Scan the document for new posts
- */
-function scanForPosts(): void {
-  const postElements = document.querySelectorAll(SELECTORS.post);
-
-  postElements.forEach((element) => {
-    if (element instanceof HTMLElement) {
-      processPost(element);
-    }
-  });
-}
-
-// ============================================================================
-// Initialization & SPA Navigation Handling
-// ============================================================================
-
-/**
- * Handle SPA navigation (when LinkedIn changes pages without full reload)
- */
-function handleNavigation(): void {
-  console.log('[Unslop] Navigation detected, re-attaching to feed.');
-  // Give the new page a moment to render
-  requestAnimationFrame(() => {
-    attachToFeed();
-  });
-}
-
-/**
- * Set up History API interception for SPA navigation detection
- * This is more efficient than polling
- */
 function setupNavigationDetection(): void {
-  // Listen for browser back/forward
-  window.addEventListener('popstate', handleNavigation);
-
-  // Intercept pushState and replaceState for programmatic navigation
   const originalPushState = history.pushState.bind(history);
   const originalReplaceState = history.replaceState.bind(history);
 
+  window.addEventListener('popstate', () => {
+    scheduleRuntimeReconcile('route');
+  });
+  window.addEventListener('visibilitychange', () => {
+    if (!document.hidden) scheduleRuntimeReconcile('visibility');
+  });
+
   history.pushState = function (...args) {
     originalPushState(...args);
-    handleNavigation();
+    scheduleRuntimeReconcile('route');
   };
 
   history.replaceState = function (...args) {
     originalReplaceState(...args);
-    handleNavigation();
+    scheduleRuntimeReconcile('route');
   };
+
+  window.setInterval(() => {
+    if (document.hidden) return;
+    const nextRoute = routeKeyFromUrl(window.location.href);
+    if (nextRoute !== currentRouteKey) {
+      scheduleRuntimeReconcile('route');
+    }
+  }, ROUTE_POLL_MS);
 }
 
-// Initial start
+function startWatchdog(): void {
+  let lastProcessed = runtimeMetrics.get('posts_processed');
+  let lastClassify = runtimeMetrics.get('classify_sent');
+
+  window.setInterval(() => {
+    if (!runtimeController.isEnabledForProcessing() || document.hidden) return;
+
+    const state = attachmentController.getState();
+    if (!state.feedObserverActive && !state.bodyObserverActive) return;
+
+    const processedNow = runtimeMetrics.get('posts_processed');
+    const classifyNow = runtimeMetrics.get('classify_sent');
+
+    const processedDelta = processedNow - lastProcessed;
+    const classifyDelta = classifyNow - lastClassify;
+    lastProcessed = processedNow;
+    lastClassify = classifyNow;
+
+    const candidatesVisible = document.querySelectorAll(
+      `${SELECTORS.candidatePostRoot}:not([${ATTRIBUTES.processed}])`
+    ).length;
+
+    watchdog.tick({
+      candidatesVisible,
+      processedDelta,
+      classifyDelta,
+      observerLive: attachmentController.isLive(),
+    });
+  }, WATCHDOG_POLL_MS);
+}
+
+async function hydrateHideRenderMode(): Promise<void> {
+  try {
+    const storage = await chrome.storage.sync.get(HIDE_RENDER_MODE_STORAGE_KEY);
+    hideRenderMode = resolveHideRenderMode(storage[HIDE_RENDER_MODE_STORAGE_KEY]);
+  } catch (err) {
+    console.error('[Unslop] failed to hydrate hide render mode', err);
+  }
+}
+
+async function initializeRuntime(): Promise<void> {
+  decisionCache.cleanupExpired().catch(console.error);
+  await hydrateHideRenderMode();
+
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message?.type === MESSAGE_TYPES.CLASSIFY_BATCH_RESULT) {
+      handleBatchResult(message.item);
+    }
+  });
+
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== 'sync') return;
+    if (changes.enabled) {
+      scheduleRuntimeReconcile('toggle');
+    }
+    if (changes[HIDE_RENDER_MODE_STORAGE_KEY]) {
+      hideRenderMode = resolveHideRenderMode(changes[HIDE_RENDER_MODE_STORAGE_KEY].newValue);
+      window.requestAnimationFrame(reconcileHiddenPostRenderMode);
+    }
+  });
+
+  setupNavigationDetection();
+  startWatchdog();
+  scheduleRuntimeReconcile('init');
+}
+
+if (shouldFilterRoute(window.location.href)) {
+  enableGateImmediately();
+}
+
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
-    attachToFeed();
-    setupNavigationDetection();
+    void initializeRuntime();
   });
 } else {
-  attachToFeed();
-  setupNavigationDetection();
+  void initializeRuntime();
 }

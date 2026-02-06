@@ -86,6 +86,22 @@ input[type="email"]::placeholder {
   color: var(--faint);
 }
 
+select {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+select:focus {
+  border-color: var(--accent);
+}
+
 /* Buttons */
 button {
   width: 100%;
@@ -216,14 +232,6 @@ input[type="checkbox"]:checked ~ .toggle-text {
   margin-bottom: 8px;
 }
 
-.mb-10 {
-  margin-bottom: 10px;
-}
-
-.mb-12 {
-  margin-bottom: 12px;
-}
-
 /* Form Layout */
 form {
   display: flex;
@@ -237,11 +245,14 @@ form {
   margin-top: 8px;
 }
 
-.divider {
-  height: 1px;
-  background: var(--border);
-  margin: 12px 0;
+.setting-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
 }
+
 
 /* Usage Bar */
 .usage-card {
@@ -441,28 +452,6 @@ form {
 .chart-container {
   position: relative;
   height: 250px;
-}
-
-/* Legend */
-.legend {
-  display: flex;
-  justify-content: center;
-  gap: 24px;
-  margin-top: 16px;
-}
-
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.legend-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
 }
 
 /* Back Button */

@@ -2,9 +2,6 @@
 import {
   BatchClassifyRequest,
   BatchClassifyResult,
-  ClassifyRequest,
-  ClassifyResponse,
-  FeedbackRequest,
   UserInfo,
   UsageInfo,
   StatsInfo,
@@ -13,37 +10,6 @@ import { API_BASE_URL } from '../lib/config';
 import { parseNdjson } from './ndjson';
 
 const API_BASE = `${API_BASE_URL}/v1`;
-
-export async function classifyPost(
-  request: ClassifyRequest,
-  jwt: string
-): Promise<ClassifyResponse> {
-  const response = await fetch(`${API_BASE}/classify`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${jwt}`,
-    },
-    body: JSON.stringify(request),
-  });
-
-  if (!response.ok) {
-    if (response.status === 401) {
-      // Clear invalid token
-      await chrome.storage.sync.remove('jwt');
-      // Notify popup
-      chrome.runtime.sendMessage({ type: 'AUTH_REQUIRED' });
-    }
-    // Fail open - return keep
-    return {
-      post_id: request.post.post_id,
-      decision: 'keep',
-      source: 'error',
-    };
-  }
-
-  return response.json();
-}
 
 export async function classifyPostsBatch(
   request: BatchClassifyRequest,
@@ -62,7 +28,6 @@ export async function classifyPostsBatch(
   if (!response.ok) {
     if (response.status === 401) {
       await chrome.storage.sync.remove('jwt');
-      chrome.runtime.sendMessage({ type: 'AUTH_REQUIRED' });
     }
     return;
   }
@@ -74,22 +39,6 @@ export async function classifyPostsBatch(
   for await (const item of parseNdjson<BatchClassifyResult>(response.body)) {
     onItem(item);
   }
-}
-
-export async function sendFeedback(
-  request: FeedbackRequest,
-  jwt: string
-): Promise<void> {
-  const response = await fetch(`${API_BASE}/feedback`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${jwt}`,
-    },
-    body: JSON.stringify(request),
-  });
-
-  // Ignore errors - feedback is optional
 }
 
 export async function getUserInfo(jwt: string): Promise<UserInfo | null> {
