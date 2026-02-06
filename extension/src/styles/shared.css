@@ -89,17 +89,25 @@ input[type="email"]::placeholder {
 select {
   width: 100%;
   padding: 10px 12px;
-  background: var(--card);
+  background: #111827;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--text);
   font-size: 13px;
   outline: none;
   transition: border-color 0.2s;
+  color-scheme: dark;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 select:focus {
   border-color: var(--accent);
+}
+
+select option {
+  background: #111827;
+  color: var(--text);
 }
 
 /* Buttons */

@@ -33,30 +33,56 @@ export interface StatsRepositoryDeps {
 export function createStatsRepository(deps: StatsRepositoryDeps): StatsRepository {
   const { db } = deps;
 
-  async function getSummaryForUser(userId: string, today: Date, lookbackStart: Date): Promise<StatsSummaryRow | null> {
+  async function countByDecisionForRange(
+    userId: string,
+    createdAtGte?: Date,
+  ): Promise<Record<'keep' | 'dim' | 'hide', number>> {
+    const whereClause = createdAtGte
+      ? and(eq(userActivity.userId, userId), gte(userActivity.createdAt, createdAtGte))
+      : eq(userActivity.userId, userId);
+
     const rows = await db
       .select({
-        allKeep: sql<number>`COALESCE(COUNT(*) FILTER (WHERE ${userActivity.decision} = 'keep')::int, 0)`,
-        allDim: sql<number>`COALESCE(COUNT(*) FILTER (WHERE ${userActivity.decision} = 'dim')::int, 0)`,
-        allHide: sql<number>`COALESCE(COUNT(*) FILTER (WHERE ${userActivity.decision} = 'hide')::int, 0)`,
-        last30Keep:
-          sql<number>`COALESCE(COUNT(*) FILTER (WHERE ${userActivity.decision} = 'keep' AND ${userActivity.createdAt} >= ${lookbackStart})::int, 0)`,
-        last30Dim:
-          sql<number>`COALESCE(COUNT(*) FILTER (WHERE ${userActivity.decision} = 'dim' AND ${userActivity.createdAt} >= ${lookbackStart})::int, 0)`,
-        last30Hide:
-          sql<number>`COALESCE(COUNT(*) FILTER (WHERE ${userActivity.decision} = 'hide' AND ${userActivity.createdAt} >= ${lookbackStart})::int, 0)`,
-        todayKeep:
-          sql<number>`COALESCE(COUNT(*) FILTER (WHERE ${userActivity.decision} = 'keep' AND ${userActivity.createdAt} >= ${today})::int, 0)`,
-        todayDim:
-          sql<number>`COALESCE(COUNT(*) FILTER (WHERE ${userActivity.decision} = 'dim' AND ${userActivity.createdAt} >= ${today})::int, 0)`,
-        todayHide:
-          sql<number>`COALESCE(COUNT(*) FILTER (WHERE ${userActivity.decision} = 'hide' AND ${userActivity.createdAt} >= ${today})::int, 0)`,
+        decision: userActivity.decision,
+        count: count(),
       })
       .from(userActivity)
-      .where(eq(userActivity.userId, userId))
-      .limit(1);
+      .where(whereClause)
+      .groupBy(userActivity.decision);
 
-    return rows[0] ?? null;
+    const result: Record<'keep' | 'dim' | 'hide', number> = {
+      keep: 0,
+      dim: 0,
+      hide: 0,
+    };
+
+    for (const row of rows) {
+      if (row.decision === 'keep' || row.decision === 'dim' || row.decision === 'hide') {
+        result[row.decision] = Number(row.count) || 0;
+      }
+    }
+
+    return result;
+  }
+
+  async function getSummaryForUser(userId: string, today: Date, lookbackStart: Date): Promise<StatsSummaryRow | null> {
+    const [allTime, last30, todayCounts] = await Promise.all([
+      countByDecisionForRange(userId),
+      countByDecisionForRange(userId, lookbackStart),
+      countByDecisionForRange(userId, today),
+    ]);
+
+    return {
+      allKeep: allTime.keep,
+      allDim: allTime.dim,
+      allHide: allTime.hide,
+      last30Keep: last30.keep,
+      last30Dim: last30.dim,
+      last30Hide: last30.hide,
+      todayKeep: todayCounts.keep,
+      todayDim: todayCounts.dim,
+      todayHide: todayCounts.hide,
+    };
   }
 
   async function getDailyBreakdownForUser(userId: string, lookbackStart: Date): Promise<DailyBreakdownRow[]> {
