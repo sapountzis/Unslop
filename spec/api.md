@@ -73,7 +73,25 @@ Request:
     "post_id": "linkedin-post-id-or-derived-hash",
     "author_id": "author-id-or-url",
     "author_name": "Some Person",
-    "content_text": "normalized text from the post (<= 4000 chars)"
+    "nodes": [
+      { "id": "root", "parent_id": null, "kind": "root", "text": "root post text" },
+      { "id": "repost-0", "parent_id": "root", "kind": "repost", "text": "nested repost text" }
+    ],
+    "attachments": [
+      {
+        "node_id": "root",
+        "kind": "image",
+        "sha256": "hex",
+        "mime_type": "image/jpeg",
+        "base64": "..."
+      },
+      {
+        "node_id": "root",
+        "kind": "pdf",
+        "source_url": "https://media.licdn.com/...",
+        "excerpt_text": "optional extracted text"
+      }
+    ]
   }
 }
 ```
@@ -93,20 +111,32 @@ Where:
 - `decision ∈ {'keep','dim','hide'}`
 - `source ∈ {'llm','cache','error'}`
 
+Classification cache + event policy (applies to `/v1/classify` and `/v1/classify/batch`):
+
+- cache key is deterministic `content_fingerprint` from canonical request payload content
+- cache is global (no `user_id` in cache key)
+- cache TTL is fixed at 30 days (non-sliding; cache hits do not extend expiry)
+- cache rows are written only for successful LLM outcomes
+- `classification_events` rows are written only for actual LLM attempts (cache misses), including LLM error attempts
+- every `classification_events` row must include `attempt_status ∈ {'success','error'}`
+- error event rows must include provider error metadata when available (`provider_http_status`, `provider_error_code`, `provider_error_message`)
+
 Behavior:
 
 1. validate request
-2. check fresh cache by `post_id` and TTL (`POST_CACHE_TTL_DAYS`)
-3. on cache hit: return cached decision, record `user_activity` source `cache`
-4. on cache miss: atomically consume quota (`tryConsumeQuota`)
-5. if quota unavailable: return `429 { "error": "quota_exceeded" }`
-6. call LLM + scoring
-7. upsert `posts`
-8. for non-error sources, insert `user_activity` row
+2. canonicalize request payload and compute `content_fingerprint`
+3. check fresh global cache by `content_fingerprint` with fixed 30-day TTL
+4. on cache hit: return cached decision, record `user_activity` source `cache`
+5. on cache miss: atomically consume quota (`tryConsumeQuota`)
+6. if quota unavailable: return `429 { "error": "quota_exceeded" }`
+7. call LLM + scoring (actual attempt => write `classification_events` row)
+8. on success, write/update cache row for `content_fingerprint`
+9. for non-error sources, insert `user_activity` row
 
 Failure handling:
 
-- model/parsing failures return `decision="keep"` with `source="error"`
+- model/parsing/provider failures return `decision="keep"` with `source="error"`
+- failure path still writes a `classification_events` row with `attempt_status="error"` and provider metadata
 
 ### POST /v1/classify/batch
 
@@ -121,7 +151,10 @@ Request:
       "post_id": "linkedin-post-id-or-derived-hash",
       "author_id": "author-id-or-url",
       "author_name": "Some Person",
-      "content_text": "normalized text from the post (<= 4000 chars)"
+      "nodes": [
+        { "id": "root", "parent_id": null, "kind": "root", "text": "root post text" }
+      ],
+      "attachments": []
     }
   ]
 }
@@ -151,11 +184,14 @@ Quota line:
 Behavior:
 
 1. validates payload
-2. bulk cache fetch for requested post IDs
-3. returns cache hits as `source=cache`
-4. processes cache misses with bounded concurrency (`BATCH_LLM_CONCURRENCY`)
-5. consumes quota atomically per miss; quota failures become per-item errors
-6. upserts `posts` and inserts `user_activity` for non-error outcomes
+2. canonicalizes each payload item and computes `content_fingerprint` per item
+3. performs per-item cache lookup by `content_fingerprint`
+4. returns cache hits as `source=cache`
+5. processes cache misses with bounded concurrency (`BATCH_LLM_CONCURRENCY`)
+6. consumes quota atomically per miss; quota failures become per-item errors
+7. writes cache rows only for successful LLM outcomes
+8. writes `classification_events` rows only for actual LLM attempts (both success and error)
+9. inserts `user_activity` for non-error outcomes
 
 ## Feedback
 
@@ -180,8 +216,8 @@ Constraints:
 
 Behavior:
 
-- directly inserts into `post_feedback`
-- maps FK violation to `404 { "error": "post_not_found" }`
+- inserts into `post_feedback` by authenticated `user_id` and provided `post_id`
+- endpoint is fail-open for persistence failures and still returns `{ "status": "ok" }`
 
 Response:
 

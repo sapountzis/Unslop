@@ -8,8 +8,9 @@ import { DECISION_VALUES, FEEDBACK_LABEL_VALUES } from '../lib/domain-constants'
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret-key';
 
 const submitFeedbackMock = mock(
-  async (): Promise<'ok' | 'post_not_found'> => 'ok',
+  async (): Promise<'ok'> => 'ok',
 );
+const loggerWarnMock = mock(() => undefined);
 
 const app = createTestApp((testApp) => {
   testApp.route(
@@ -18,6 +19,9 @@ const app = createTestApp((testApp) => {
       authMiddleware: createAuthMiddleware({ verifySessionToken }),
       feedbackService: {
         submitFeedback: submitFeedbackMock,
+      },
+      logger: {
+        warn: loggerWarnMock,
       },
     }),
   );
@@ -29,6 +33,7 @@ describe('Feedback Routes (unit)', () => {
   beforeEach(() => {
     submitFeedbackMock.mockClear();
     submitFeedbackMock.mockResolvedValue('ok');
+    loggerWarnMock.mockClear();
   });
 
   it('POST /v1/feedback rejects unauthenticated requests', async () => {
@@ -86,8 +91,7 @@ describe('Feedback Routes (unit)', () => {
     });
   });
 
-  it('POST /v1/feedback maps post_not_found', async () => {
-    submitFeedbackMock.mockResolvedValueOnce('post_not_found');
+  it('POST /v1/feedback accepts unknown post ids and returns ok', async () => {
     const token = await generateSessionToken(TEST_USER_ID, 'feedback@example.com');
 
     const res = await app.request('http://localhost/v1/feedback', {
@@ -103,8 +107,58 @@ describe('Feedback Routes (unit)', () => {
       }),
     });
 
-    expect(res.status).toBe(404);
-    expect(await res.json()).toEqual({ error: 'post_not_found' });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ status: 'ok' });
+  });
+
+  it('POST /v1/feedback stays fail-open for legacy post_not_found result', async () => {
+    submitFeedbackMock.mockResolvedValueOnce('post_not_found' as never);
+    const token = await generateSessionToken(TEST_USER_ID, 'feedback@example.com');
+
+    const res = await app.request('http://localhost/v1/feedback', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        post_id: 'missing-post',
+        rendered_decision: 'hide',
+        user_label: 'should_keep',
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ status: 'ok' });
+  });
+
+  it('POST /v1/feedback stays fail-open when feedback persistence throws', async () => {
+    submitFeedbackMock.mockRejectedValueOnce(new Error('db unavailable'));
+    const token = await generateSessionToken(TEST_USER_ID, 'feedback@example.com');
+
+    const res = await app.request('http://localhost/v1/feedback', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        post_id: 'post-1',
+        rendered_decision: 'keep',
+        user_label: 'should_hide',
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ status: 'ok' });
+    expect(loggerWarnMock).toHaveBeenCalledWith(
+      'feedback_persist_failed',
+      expect.objectContaining({
+        user_id: TEST_USER_ID,
+        post_id: 'post-1',
+        reason: 'db unavailable',
+      }),
+    );
   });
 
   it('validator enums are sourced from shared domain constants', () => {

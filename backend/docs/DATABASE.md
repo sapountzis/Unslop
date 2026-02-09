@@ -1,50 +1,32 @@
 # Database Guide (Plain English)
 
-This document explains the Unslop database as if you are new to PostgreSQL.
+This document describes the current Unslop backend Postgres schema and local migration workflow.
 
 Source of truth:
 
 - schema code: `backend/src/db/schema.ts`
-- generated SQL: `backend/drizzle/20260205215244_tired_millenium_guard/migration.sql`
+- initial baseline migration SQL: `backend/drizzle/20260209164213_moaning_nitro/migration.sql`
+- follow-up migration SQL: `backend/drizzle/20260209181215_graceful_molecule_man/migration.sql` (drops conflicting unique `post_id` cache index)
 
 ## Quick mental model
 
-- A **table** is like a spreadsheet.
-- A **row** is one record.
-- A **column** is one field.
-- A **primary key** is the row's unique ID.
-- A **foreign key** links rows between tables.
-- An **index** is a lookup helper for faster reads.
-- A **constraint** is a rule that blocks invalid data.
+- A **table** stores records.
+- A **primary key** uniquely identifies a row.
+- A **foreign key** links tables.
+- An **index** speeds up lookups.
+- A **constraint** blocks invalid states.
 
 ## Why this schema exists
 
-The backend only needs to do a few things:
+The backend needs to:
 
-1. Store users and their subscription state.
-2. Store classification decisions for posts.
-3. Store user feedback on decisions.
-4. Track usage and activity for quotas/stats.
-5. Track processed webhook events for idempotency.
+1. Store users and subscription state.
+2. Cache successful classification decisions by deterministic content fingerprint.
+3. Record all real LLM attempts (success and error) as append-only events.
+4. Store user feedback and per-user activity/usage.
+5. Store processed webhooks for idempotency.
 
-Everything in the schema maps directly to those jobs.
-
-## PostgreSQL features we use (and why)
-
-### `pgcrypto` extension
-
-We enable:
-
-- `CREATE EXTENSION IF NOT EXISTS "pgcrypto";`
-
-Why:
-
-- Gives us `gen_random_uuid()` for user IDs.
-- Avoids custom UUID generation code in app logic.
-
-### Enums (restricted text values)
-
-We define PostgreSQL enums for fields with fixed allowed values:
+## Enums in use
 
 - `plan`: `free | pro`
 - `plan_status`: `inactive | active | canceled | past_due`
@@ -52,232 +34,182 @@ We define PostgreSQL enums for fields with fixed allowed values:
 - `post_source`: `llm | cache | error`
 - `activity_source`: `llm | cache`
 - `feedback_label`: `should_keep | should_hide`
+- `classification_attempt_status`: `success | error`
 
-Why:
-
-- Prevents typo data (`activ`, `kep`, etc.) from ever entering DB.
-- Makes app logic safer because invalid states are impossible at storage level.
-
-## Table-by-table explanation
+## Table overview
 
 ### `users`
 
 Purpose:
 
-- One row per user account.
-- Stores auth identity (`id`, `email`) and billing status.
+- One row per user.
+- Stores auth + billing identifiers and billing period timestamps.
 
-Important columns:
+Key constraints/indexes:
 
-- `id` (UUID primary key, default `gen_random_uuid()`).
-- `email` (required, unique).
-- `plan` + `plan_status` (required enums with defaults).
-- `polar_customer_id`, `polar_subscription_id` (nullable, from Polar).
-- `subscription_period_start`, `subscription_period_end` (nullable timestamps).
+- primary key: `id` (UUID, `gen_random_uuid()`)
+- unique: `email`
+- unique indexes: `idx_users_polar_customer_id`, `idx_users_polar_subscription_id`
 
-Constraints/indexes and why:
-
-- `email` unique: no duplicate users for same email.
-- unique index on `polar_customer_id`: a Polar customer maps to at most one local user.
-- unique index on `polar_subscription_id`: a Polar subscription maps to at most one local user.
-
-### `posts`
+### `classification_cache`
 
 Purpose:
 
-- Cache one latest decision per post ID.
+- Global cache keyed by canonical `content_fingerprint`.
+- Stores only successful classification outcomes with full score payload.
 
-Important columns:
+Key columns:
 
-- `post_id` (primary key).
-- `author_id`, `author_name`.
-- `content_text`, `content_hash`.
-- `decision`, `source`, `model`.
-- `created_at`, `updated_at`.
+- `content_fingerprint` (primary key)
+- `post_id`, `author_id`, `author_name`
+- `canonical_content` (`jsonb`)
+- `decision`, `source`, `model`, `scores_json`
+- `created_at`, `updated_at`
 
-Constraints and why:
+Indexes:
 
-- `posts_content_text_len_check`: `char_length(content_text) <= 4000`.
-- This enforces the same max length as app normalization, so DB cannot drift from app contract.
+- non-unique: `idx_classification_cache_created_at`, `idx_classification_cache_updated_at`
 
-Why no extra indexes here:
+### `classification_events`
 
-- Most reads are by `post_id` (primary key already indexed).
-- We removed low-value indexes that were not on hot query paths.
+Purpose:
+
+- Append-only ledger for actual LLM attempts (cache misses only).
+- Includes both success and error attempts.
+
+Key columns:
+
+- `id` (`bigserial` primary key)
+- `content_fingerprint`, `post_id`, `model`
+- `attempt_status`
+- provider error/status metadata fields
+- `request_payload`, `response_payload` (`jsonb`)
+- `created_at`
+
+Key constraint:
+
+- `classification_events_error_metadata_check`: if `attempt_status='error'`, at least one provider error/status field must be present.
+
+Indexes:
+
+- `idx_classification_events_fingerprint`
+- `idx_classification_events_post_id`
+- `idx_classification_events_attempt_status`
+- `idx_classification_events_created_at`
 
 ### `post_feedback`
 
 Purpose:
 
-- Stores user feedback about a rendered decision.
+- User feedback on rendered decisions.
 
-Important columns:
+Key columns:
 
-- `id` (bigserial primary key).
-- `user_id` -> `users.id`.
-- `post_id` -> `posts.post_id`.
-- `rendered_decision`, `user_label`.
-- `created_at`.
+- `id` (`bigserial` primary key)
+- `user_id` -> `users.id` (FK, `ON DELETE CASCADE`)
+- `post_id` (text, no FK)
+- `rendered_decision`, `user_label`, `created_at`
 
-Foreign keys and why:
+Indexes:
 
-- `user_id` references `users` with `ON DELETE CASCADE`.
-- `post_id` references `posts` with `ON DELETE CASCADE`.
-
-`ON DELETE CASCADE` means:
-
-- If a user/post is deleted, dependent feedback rows are auto-deleted.
-- Prevents orphan rows and reduces manual cleanup code.
-
-Indexes and why:
-
-- `idx_feedback_user_id`: fast lookup of a user's feedback.
-- `idx_feedback_post_id`: fast lookup of feedback for a post.
+- `idx_feedback_post_id`
+- `idx_feedback_user_id`
 
 ### `user_usage`
 
 Purpose:
 
-- Tracks quota consumption per user per billing period.
+- Quota counter by user and billing period anchor.
 
-Important columns:
+Key constraints:
 
-- `user_id`.
-- `month_start` (period anchor date, e.g. `2026-02-01` for free tier, `2026-02-15` for a mid-month Pro activation).
-- `llm_calls` counter.
-
-Primary key design and why:
-
-- Composite PK: `(user_id, month_start)`.
-- Guarantees exactly one usage row per user per period anchor date.
-- Makes atomic upsert/update logic simple and safe.
-
-Checks and why:
-
-- `llm_calls >= 0` (no negative counters).
-- No month-boundary check: Pro subscriptions use real cycle anchors from Polar `current_period_start`.
-
-Foreign key and why:
-
-- `user_id` references `users` with `ON DELETE CASCADE`.
+- composite primary key: (`user_id`, `month_start`)
+- `llm_calls >= 0`
+- `user_id` FK -> `users.id` with `ON DELETE CASCADE`
 
 ### `user_activity`
 
 Purpose:
 
-- Stores per-classification events used by stats endpoints.
+- Per-user activity rows used by stats endpoints.
 
-Important columns:
+Key constraints/indexes:
 
-- `id` (bigserial primary key).
-- `user_id` (FK to users).
-- `post_id` (text, tracked for linkage/debug context).
-- `decision`, `source`, `created_at`.
-
-Index and why:
-
-- `idx_activity_user_id_created_at` on `(user_id, created_at)`.
-- Matches real query pattern: filter by user and time window.
-- Supports stats endpoints efficiently for daily/30-day views.
-
-Foreign key and why:
-
-- `user_id` references `users` with `ON DELETE CASCADE`.
+- `user_id` FK -> `users.id` with `ON DELETE CASCADE`
+- index: `idx_activity_user_id_created_at`
 
 ### `webhook_deliveries`
 
 Purpose:
 
-- Records processed webhook IDs for idempotency.
+- Idempotency ledger for webhook processing.
 
-Important columns:
+Key constraints:
 
-- `webhook_id` (primary key).
-- `event_type`.
-- `subscription_id`.
-- `processed_at`.
+- primary key: `webhook_id`
 
-Why this design:
-
-- Primary key on `webhook_id` means duplicate delivery can be detected by insert conflict.
-- Keeps webhook processing safe to retry and safe against duplicate sends.
-- Minimal metadata only (no oversized payload storage).
-
-## Relationships diagram (simple)
+## Relationships
 
 - `users` 1 -> many `post_feedback`
-- `users` 1 -> many `user_usage` (across months)
+- `users` 1 -> many `user_usage`
 - `users` 1 -> many `user_activity`
-- `posts` 1 -> many `post_feedback`
 
-## Why some constraints are in DB (not only app code)
-
-App validation is helpful, but DB constraints are the final guard.
-
-If any code path has a bug, constraints still prevent bad data. This is especially important for:
-
-- enum values
-- quota counters
-- monthly period boundaries
-- foreign key integrity
+`classification_cache` and `classification_events` are intentionally global and do not reference `users`.
 
 ## Migration model
 
-Current state is intentionally squashed to one initial migration:
+Current state is:
 
-- `backend/drizzle/20260205215244_tired_millenium_guard/migration.sql`
+- baseline schema migration: `backend/drizzle/20260209164213_moaning_nitro/migration.sql`
+- additive migration: `backend/drizzle/20260209181215_graceful_molecule_man/migration.sql`
+- additive migration: `backend/drizzle/20260209195359_bizarre_doctor_octopus/migration.sql` (enforces `classification_cache.source='llm'`)
 
-Why:
+Migration history is intentionally kept additive. The early unique `idx_classification_cache_post_id` churn is preserved in history and corrected by follow-up migration, rather than rewriting migration lineage.
 
-- Project is pre-release and local-only.
-- One clean baseline is easier to reason about than a long historical chain.
-- Future changes should be additive migrations from this baseline.
+Future schema changes should be additive migrations generated from `backend/src/db/schema.ts`.
 
-## Local development flow
+## Local development workflow
 
-From repo root:
+From repo root, ensure local Postgres is running:
 
 ```bash
-# reset local postgres completely
-docker compose down -v && docker compose up -d
+docker compose up -d
 ```
 
 From `backend/`:
 
 ```bash
-# apply schema to a fresh local database
-bun run migrate
-
-# generate migration after schema edits
+# generate migration SQL from schema
 bun run migrate:generate
 
 # apply migrations to DATABASE_URL
 bun run migrate
-
-# runtime migrator path (alternative)
-bun run migrate:push
 ```
 
-## Driver behavior
+### Clean reset workflow (full DB nuke + fresh baseline)
 
-`backend/src/db/index.ts` uses explicit runtime driver config:
+Use this when you intentionally want a fresh database and regenerated migration baseline.
 
-- `DB_DRIVER=neon` -> `drizzle-orm/neon-http`
-- `DB_DRIVER=postgres` -> `drizzle-orm/postgres-js`
+```bash
+# 1) recreate the database inside the postgres container
+docker exec unslop-postgres psql -U unslop -d template1 -v ON_ERROR_STOP=1 \
+  -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'unslop' AND pid <> pg_backend_pid();" \
+  -c "DROP DATABASE IF EXISTS unslop;" \
+  -c "CREATE DATABASE unslop OWNER unslop;"
 
-Fallback:
+# 2) delete prior migration artifacts
+rm -rf backend/drizzle/*
 
-- when `DB_DRIVER` is not set, runtime infers from URL (`*.neon.*` => `neon`, otherwise `postgres`).
+# 3) regenerate baseline migration
+cd backend && bun run migrate:generate
 
-Why:
+# 4) apply baseline migration
+cd backend && bun run migrate
+```
 
-- Explicit driver selection is clearer and safer than implicit URL heuristics alone.
-- Fallback inference preserves local convenience for existing environments.
+## Environment notes
 
-## Practical guardrails for future changes
-
-1. Add/modify columns in `backend/src/db/schema.ts` first.
-2. Generate SQL migration (never hand-wave DB changes).
-3. Keep constraints close to business rules.
-4. Add indexes only for real query paths (not speculative indexes).
-5. Run `bun run type-check && bun run test:unit` after schema changes.
+- `DATABASE_URL` must point at your target DB.
+- Model routing vars are both required in backend runtime config:
+  - `LLM_MODEL` (text path)
+  - `VLM_MODEL` (multimodal path)

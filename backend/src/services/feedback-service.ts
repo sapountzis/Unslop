@@ -9,7 +9,7 @@ export interface FeedbackService {
     postId: string;
     renderedDecision: Decision;
     userLabel: FeedbackLabelValue;
-  }) => Promise<'ok' | 'post_not_found'>;
+  }) => Promise<'ok'>;
 }
 
 export interface FeedbackServiceDeps {
@@ -22,22 +22,14 @@ export function createFeedbackService(deps: FeedbackServiceDeps): FeedbackServic
     postId: string;
     renderedDecision: Decision;
     userLabel: FeedbackLabelValue;
-  }): Promise<'ok' | 'post_not_found'> {
-    try {
-      await deps.db.insert(postFeedback).values({
-        userId: input.userId,
-        postId: input.postId,
-        renderedDecision: input.renderedDecision,
-        userLabel: input.userLabel,
-      });
-      return 'ok';
-    } catch (error) {
-      const dbError = error as { code?: string };
-      if (dbError.code === '23503') {
-        return 'post_not_found';
-      }
-      throw error;
-    }
+  }): Promise<'ok'> {
+    await deps.db.insert(postFeedback).values({
+      userId: input.userId,
+      postId: input.postId,
+      renderedDecision: input.renderedDecision,
+      userLabel: input.userLabel,
+    });
+    return 'ok';
   }
 
   return {

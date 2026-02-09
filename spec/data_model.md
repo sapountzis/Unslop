@@ -29,30 +29,73 @@ CREATE TABLE users (
 );
 ```
 
-## posts
+## classification_cache
 
-Classification cache keyed by `post_id`.
+Classification cache keyed by deterministic `content_fingerprint` (global, cross-user).
 
 ```sql
-CREATE TABLE posts (
-  post_id TEXT PRIMARY KEY,
+CREATE TABLE classification_cache (
+  content_fingerprint TEXT PRIMARY KEY,
+  post_id TEXT NOT NULL,
   author_id TEXT NOT NULL,
   author_name TEXT,
 
-  content_text TEXT NOT NULL,
-  content_hash TEXT NOT NULL,
+  canonical_content JSONB NOT NULL,
 
   decision TEXT NOT NULL,
   source TEXT NOT NULL,
   model TEXT,
+  scores_json JSONB NOT NULL,
 
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_posts_author_id ON posts(author_id);
-CREATE INDEX idx_posts_updated_at ON posts(updated_at);
+CREATE INDEX idx_classification_cache_created_at ON classification_cache(created_at);
+CREATE INDEX idx_classification_cache_updated_at ON classification_cache(updated_at);
 ```
+
+Cache policy:
+
+- key = `content_fingerprint` from canonical request payload
+- no `user_id` in cache key
+- fixed TTL is 30 days from `created_at` (non-sliding)
+- cache rows are written only after successful LLM outcomes
+
+## classification_events
+
+Append-only rows for actual LLM attempts (cache misses only).
+
+```sql
+CREATE TABLE classification_events (
+  id BIGSERIAL PRIMARY KEY,
+  content_fingerprint TEXT NOT NULL,
+  post_id TEXT NOT NULL,
+  model TEXT,
+
+  attempt_status TEXT NOT NULL, -- success | error
+  provider_http_status INT,
+  provider_error_code TEXT,
+  provider_error_type TEXT,
+  provider_error_message TEXT,
+
+  request_payload JSONB NOT NULL,
+  response_payload JSONB NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_classification_events_fingerprint ON classification_events(content_fingerprint);
+CREATE INDEX idx_classification_events_post_id ON classification_events(post_id);
+CREATE INDEX idx_classification_events_attempt_status ON classification_events(attempt_status);
+CREATE INDEX idx_classification_events_created_at ON classification_events(created_at);
+```
+
+Event policy:
+
+- rows exist only for attempted provider calls (no cache-hit rows)
+- both successful and failed LLM attempts are recorded
+- failed attempts must set `attempt_status='error'` and include provider metadata fields
+- table has no `user_id` column
 
 ## post_feedback
 
@@ -62,7 +105,7 @@ User feedback on rendered decisions.
 CREATE TABLE post_feedback (
   id BIGSERIAL PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES users(id),
-  post_id TEXT NOT NULL REFERENCES posts(post_id),
+  post_id TEXT NOT NULL,
   rendered_decision TEXT NOT NULL,
   user_label TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -101,8 +144,6 @@ CREATE TABLE user_activity (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_activity_user_id ON user_activity(user_id);
-CREATE INDEX idx_activity_created_at ON user_activity(created_at);
 CREATE INDEX idx_activity_user_id_created_at ON user_activity(user_id, created_at);
 ```
 
@@ -117,9 +158,4 @@ CREATE TABLE webhook_deliveries (
   subscription_id TEXT,
   processed_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
-CREATE INDEX idx_webhook_deliveries_event_type ON webhook_deliveries(event_type);
-CREATE INDEX idx_webhook_deliveries_webhook_id ON webhook_deliveries(webhook_id);
-CREATE INDEX idx_webhook_deliveries_subscription_id ON webhook_deliveries(subscription_id);
-CREATE INDEX idx_webhook_deliveries_processed_at ON webhook_deliveries(processed_at);
 ```

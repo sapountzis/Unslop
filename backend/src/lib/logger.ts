@@ -1,5 +1,5 @@
 import { runtime } from '../config/runtime';
-type Meta = Record<string, unknown>;
+import type { AppLogger, LogMeta } from './logger-types';
 
 const SENSITIVE_KEY_PATTERN = /(token|authorization|password|secret|api[_-]?key|cookie|jwt|session)/i;
 const MAX_DEPTH = 4;
@@ -46,8 +46,8 @@ function sanitizeValue(value: unknown, depth = 0): unknown {
   return value;
 }
 
-function writeLog(level: 'info' | 'warn' | 'error', message: string, payload: Meta = {}): void {
-  const sanitizedPayload = sanitizeValue(payload) as Meta;
+function writeLog(level: 'info' | 'warn' | 'error', message: string, payload: LogMeta = {}): void {
+  const sanitizedPayload = sanitizeValue(payload) as LogMeta;
   const event = {
     level,
     timestamp: new Date().toISOString(),
@@ -63,14 +63,14 @@ function writeLog(level: 'info' | 'warn' | 'error', message: string, payload: Me
   }
 }
 
-export const logger = {
-  info: (message: string, meta: Meta = {}) => {
+export const logger: AppLogger = {
+  info: (message: string, meta: LogMeta = {}) => {
     writeLog('info', message, meta);
   },
-  warn: (message: string, meta: Meta = {}) => {
+  warn: (message: string, meta: LogMeta = {}) => {
     writeLog('warn', message, meta);
   },
-  error: (message: string, error: unknown, meta: Meta = {}) => {
+  error: (message: string, error: unknown, meta: LogMeta = {}) => {
     writeLog('error', message, {
       ...meta,
       error,

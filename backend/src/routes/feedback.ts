@@ -4,10 +4,12 @@ import { z } from 'zod';
 import type { MiddlewareHandler } from 'hono';
 import { DECISION_VALUES, FEEDBACK_LABEL_VALUES } from '../lib/domain-constants';
 import type { FeedbackService } from '../services/feedback-service';
+import type { AppLogger } from '../lib/logger-types';
 
 export interface FeedbackRoutesDeps {
   authMiddleware: MiddlewareHandler;
   feedbackService: FeedbackService;
+  logger: Pick<AppLogger, 'warn'>;
 }
 
 export const feedbackSchema = z.object({
@@ -23,15 +25,20 @@ export function createFeedbackRoutes(deps: FeedbackRoutesDeps): Hono {
     const user = c.get('user');
     const { post_id, rendered_decision, user_label } = c.req.valid('json');
 
-    const result = await deps.feedbackService.submitFeedback({
-      userId: user.sub,
-      postId: post_id,
-      renderedDecision: rendered_decision,
-      userLabel: user_label,
-    });
-
-    if (result === 'post_not_found') {
-      return c.json({ error: 'post_not_found' }, 404);
+    try {
+      await deps.feedbackService.submitFeedback({
+        userId: user.sub,
+        postId: post_id,
+        renderedDecision: rendered_decision,
+        userLabel: user_label,
+      });
+    } catch (error) {
+      // Feedback is non-critical; keep endpoint fail-open for product continuity.
+      deps.logger.warn('feedback_persist_failed', {
+        user_id: user.sub,
+        post_id,
+        reason: error instanceof Error ? error.message : 'unknown_error',
+      });
     }
 
     return c.json({ status: 'ok' });

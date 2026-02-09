@@ -24,6 +24,16 @@ export const SELECTORS = {
 
     // Post content extraction
     postContent: '.feed-shared-text, .feed-shared-update-v2__description, [data-anonymize="text"]',
+    nestedRepostLinkContainer: '.update-components-mini-update-v2__link-to-details-page',
+    imageNodes: '.update-components-image__image',
+    documentContainer: '.update-components-document__container',
+    documentIframe: '.document-s-container__document-element',
+    documentSourceHints: [
+        '[class*="feedshare-document"]',
+        '[data-test-id*="feedshare-document"]',
+        '[href*="feedshare-document"]',
+        '[src*="feedshare-document"]',
+    ].join(', '),
 
     // Discovery/recommendation cards (for example "Recommended for you" people suggestions)
     recommendationEntity: '.update-components-feed-discovery-entity, .feed-shared-aggregated-content',

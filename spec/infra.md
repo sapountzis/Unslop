@@ -52,12 +52,20 @@ Billing (Polar):
 LLM provider (OpenRouter):
 - `LLM_API_KEY`
 - `LLM_BASE_URL` (default `https://openrouter.ai/api/v1`)
-- `LLM_MODEL` (single model name for v0.1)
+- `LLM_MODEL` (required text-only route model)
+- `VLM_MODEL` (required attachment-aware route model)
 
-Quotas / cache:
+Routing policy:
+- Use `LLM_MODEL` when a post is text-only.
+- Use `VLM_MODEL` when a post includes any supported attachment payload (including PDF-only payloads).
+- Runtime config must provide both model vars; no cross-fallback inference between them.
+
+Quotas:
 - `FREE_MONTHLY_LLM_CALLS` (default 300)
 - `PRO_MONTHLY_LLM_CALLS` (default 10000)
-- `POST_CACHE_TTL_DAYS` (default 7)
+
+Cache policy:
+- classification cache freshness is fixed at 30 days in service code (non-configurable env surface)
 
 Server:
 - `NODE_ENV=production`
@@ -104,4 +112,4 @@ No environment variables required for the frontend site in v0.1.
 - Log request method/path/status/duration.
 - Log LLM call at high level:
   - decision, model, latency
-- Do not log full `content_text` in production logs.
+- Do not log full post payload text/attachments in production logs.

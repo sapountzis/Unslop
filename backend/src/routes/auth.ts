@@ -3,15 +3,12 @@ import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import type { MiddlewareHandler } from 'hono';
 import type { AuthService } from '../services/auth-service';
-
-interface LoggerLike {
-  error: (message: string, error: unknown, meta?: Record<string, unknown>) => void;
-}
+import type { AppLogger } from '../lib/logger-types';
 
 export interface AuthRoutesDeps {
   authMiddleware: MiddlewareHandler;
   authService: AuthService;
-  logger: LoggerLike;
+  logger: Pick<AppLogger, 'error'>;
 }
 
 const startAuthSchema = z.object({

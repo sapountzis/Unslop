@@ -33,13 +33,13 @@ Low (0.0-0.2): platitudes, generic motivation, vague claims, mostly brag/bait wi
 Question: How much real knowledge/understanding does this convey?
 High: explains how/why, tradeoffs, reasoning, constraints, specifics, non-trivial detail.
 Mid: some explanation but shallow/general.
-Low: slogans, surface-level lists, no “how/why”.
+Low: "The Menu Problem" (lists WHAT exists without explaining HOW to do it), slogans, surface-level lists, teasers for external content.
 
 3) "c" authentic_connection_score
 Question: Does this feel genuinely human/prosocial (bonding) rather than performative?
 High: honest story with grounded detail, gratitude, respectful ask/offer, supportive tone, invites healthy discussion.
 Mid: personal tone but somewhat generic; celebrating a win without teaching.
-Low: "performative vulnerability" (using a struggle to sell wisdom), staged humblebrag, moralizing, superiority framing, guilt/shame pressure.
+Low: "performative vulnerability", "savior complex" (creating a villain to sell a solution), transactional "helping" (gated behind engagement).
 
 Taste descriptor (NOT a quality requirement):
 
@@ -65,7 +65,7 @@ Low: centered on shared learning, praising others, or pure value.
 
 7) "sp" sales_pitch_score (includes funnels)
 Question: How aggressive is the promo / lead-gen / conversion intent?
-High: strong CTA/funnel (“DM me”, “comment X”, “link in comments”), lead magnets ("grab my cheat sheet"), webinar pitches.
+High: "Comment bait" (“Comment X to receive Y”), lead magnets, hard funnels, value that is gated behind an action.
 Mid: soft self-promo mention (newsletter/product) without heavy CTA.
 Low: no meaningful promo.
 
@@ -90,24 +90,13 @@ Low: grounded claims, caveats, or clearly personal opinion.
 ========================
 OUTPUT FORMAT
 ========================
-Return ONLY one valid JSON object (no extra text, no backticks).
+Return ONLY one minified valid JSON object (no extra text, no backticks).
 Keys MUST be exactly:
 "u","d","c","h","rb","eb","sp","ts","sf","x"
 Values MUST be 0.0-1.0 with ONE decimal place.
 
 Example skeleton:
-{
-  "u": 0.0,
-  "d": 0.0,
-  "c": 0.0,
-  "h": 0.0,
-  "rb": 0.0,
-  "eb": 0.0,
-  "sp": 0.0,
-  "ts": 0.0,
-  "sf": 0.0,
-  "x": 0.0
-}
+{"u":0.0,"d":0.0,"c":0.0,"h":0.0,"rb":0.0,"eb":0.0,"sp":0.0,"ts":0.0,"sf":0.0,"x":0.0}
 
 ========================
 FEW-SHOT EXAMPLES
@@ -127,18 +116,7 @@ What changed:
 If you want, I can share the tracing setup and an index checklist.
 """
 OUTPUT:
-{
-  "u": 0.9,
-  "d": 0.9,
-  "c": 0.5,
-  "h": 0.0,
-  "rb": 0.0,
-  "eb": 0.2,
-  "sp": 0.0,
-  "ts": 0.1,
-  "sf": 0.1,
-  "x": 0.0
-}
+{"u":0.9,"d":0.9,"c":0.5,"h":0.0,"rb":0.0,"eb":0.2,"sp":0.0,"ts":0.1,"sf":0.1,"x":0.0}
 
 Example 2 — Excited tone, still genuinely useful (boundary: hype ≠ slop)
 POST:
@@ -154,18 +132,7 @@ Here's the exact change set:
 It's not perfect, but it's measurably calmer and more fair.
 """
 OUTPUT:
-{
-  "u": 0.8,
-  "d": 0.6,
-  "c": 0.7,
-  "h": 0.1,
-  "rb": 0.0,
-  "eb": 0.1,
-  "sp": 0.0,
-  "ts": 0.2,
-  "sf": 0.2,
-  "x": 0.0
-}
+{"u":0.8,"d":0.6,"c":0.7,"h":0.1,"rb":0.0,"eb":0.1,"sp":0.0,"ts":0.2,"sf":0.2,"x":0.0}
 
 Example 3 — Similar vibe, but vague motivational list (knife-edge vs Example 2)
 POST:
@@ -182,18 +149,7 @@ Here are 5 tips to level up:
 If you're not obsessed, don't complain.
 """
 OUTPUT:
-{
-  "u": 0.1,
-  "d": 0.0,
-  "c": 0.3,
-  "h": 0.0,
-  "rb": 0.3,
-  "eb": 0.6,
-  "sp": 0.0,
-  "ts": 0.9,
-  "sf": 0.3,
-  "x": 0.2
-}
+{"u":0.1,"d":0.0,"c":0.3,"h":0.0,"rb":0.3,"eb":0.6,"sp":0.0,"ts":0.9,"sf":0.3,"x":0.2}
 
 Example 4 — Genuine human story + concrete takeaway
 POST:
@@ -208,18 +164,7 @@ What helped:
 If you're in the same place: you're not broken. This process is brutal sometimes.
 """
 OUTPUT:
-{
-  "u": 0.6,
-  "d": 0.3,
-  "c": 0.9,
-  "h": 0.0,
-  "rb": 0.0,
-  "eb": 0.1,
-  "sp": 0.0,
-  "ts": 0.3,
-  "sf": 0.1,
-  "x": 0.0
-}
+{"u":0.6,"d":0.3,"c":0.9,"h":0.0,"rb":0.0,"eb":0.1,"sp":0.0,"ts":0.3,"sf":0.1,"x":0.0}
 
 Example 5 — Personal post drifting into performative ego/moralizing (boundary)
 POST:
@@ -233,18 +178,7 @@ If you accept less than you deserve, that's on you.
 Know your worth.
 """
 OUTPUT:
-{
-  "u": 0.2,
-  "d": 0.0,
-  "c": 0.2,
-  "h": 0.0,
-  "rb": 0.3,
-  "eb": 0.9,
-  "sp": 0.0,
-  "ts": 0.8,
-  "sf": 0.2,
-  "x": 0.1
-}
+{"u":0.2,"d":0.0,"c":0.2,"h":0.0,"rb":0.3,"eb":0.9,"sp":0.0,"ts":0.8,"sf":0.2,"x":0.1}
 
 Example 6 — Opinionated but constructive (disagreement without rage)
 POST:
@@ -259,18 +193,7 @@ On my team we tried:
 It reduced context switching. Might not fit every team, but it's worth testing instead of copying rituals blindly.
 """
 OUTPUT:
-{
-  "u": 0.8,
-  "d": 0.6,
-  "c": 0.6,
-  "h": 0.1,
-  "rb": 0.1,
-  "eb": 0.2,
-  "sp": 0.0,
-  "ts": 0.2,
-  "sf": 0.1,
-  "x": 0.0
-}
+{"u":0.8,"d":0.6,"c":0.6,"h":0.1,"rb":0.1,"eb":0.2,"sp":0.0,"ts":0.2,"sf":0.1,"x":0.0}
 
 Example 7 — Similar topic, framed as outrage/villains (knife-edge vs Example 6)
 POST:
@@ -283,18 +206,7 @@ If your company does standups, your leadership is incompetent.
 Stop tolerating this nonsense.
 """
 OUTPUT:
-{
-  "u": 0.3,
-  "d": 0.2,
-  "c": 0.1,
-  "h": 0.0,
-  "rb": 0.9,
-  "eb": 0.5,
-  "sp": 0.0,
-  "ts": 0.5,
-  "sf": 0.2,
-  "x": 0.1
-}
+{"u":0.3,"d":0.2,"c":0.1,"h":0.0,"rb":0.9,"eb":0.5,"sp":0.0,"ts":0.5,"sf":0.2,"x":0.1}
 
 Example 8 — Valuable content but strong funnel CTA (mixed case)
 POST:
@@ -309,18 +221,7 @@ I made a longer version with templates + rubrics.
 Comment “ONBOARD” and I'll DM it to you.
 """
 OUTPUT:
-{
-  "u": 0.7,
-  "d": 0.5,
-  "c": 0.4,
-  "h": 0.0,
-  "rb": 0.0,
-  "eb": 0.2,
-  "sp": 0.8,
-  "ts": 0.4,
-  "sf": 0.2,
-  "x": 0.0
-}
+{"u":0.7,"d":0.5,"c":0.4,"h":0.0,"rb":0.0,"eb":0.2,"sp":0.8,"ts":0.4,"sf":0.2,"x":0.0}
 
 Example 9 — Legit job post (useful, not slop)
 POST:
@@ -335,18 +236,7 @@ Salary range: €85k-€110k depending on level.
 Apply via the job page on our site (link in profile).
 """
 OUTPUT:
-{
-  "u": 0.8,
-  "d": 0.3,
-  "c": 0.4,
-  "h": 0.0,
-  "rb": 0.0,
-  "eb": 0.1,
-  "sp": 0.4,
-  "ts": 0.2,
-  "sf": 0.1,
-  "x": 0.0
-}
+{"u":0.8,"d":0.3,"c":0.4,"h":0.0,"rb":0.0,"eb":0.1,"sp":0.4,"ts":0.2,"sf":0.1,"x":0.0}
 
 Example 10 — Emoji/formatting is loud, but content is real (boundary: don't nuke utility)
 POST:
@@ -361,18 +251,7 @@ Fix: add a small “metric definition” panel + annotate events on the timeline
 It takes 10 minutes and saves hours of arguing.
 """
 OUTPUT:
-{
-  "u": 0.7,
-  "d": 0.5,
-  "c": 0.4,
-  "h": 0.2,
-  "rb": 0.0,
-  "eb": 0.1,
-  "sp": 0.0,
-  "ts": 0.4,
-  "sf": 0.5,
-  "x": 0.0
-}
+{"u":0.7,"d":0.5,"c":0.4,"h":0.2,"rb":0.0,"eb":0.1,"sp":0.0,"ts":0.4,"sf":0.5,"x":0.0}
 
 Example 11 — Classic AI slop + sensational claim + engagement bait
 POST:
@@ -392,18 +271,7 @@ Like + comment “AI” and I'll send my secret prompt pack.
 #ai #success #mindset #grindset
 """
 OUTPUT:
-{
-  "u": 0.1,
-  "d": 0.0,
-  "c": 0.1,
-  "h": 0.0,
-  "rb": 0.6,
-  "eb": 0.4,
-  "sp": 0.9,
-  "ts": 0.9,
-  "sf": 0.7,
-  "x": 0.9
-}
+{"u":0.1,"d":0.0,"c":0.1,"h":0.0,"rb":0.6,"eb":0.4,"sp":0.9,"ts":0.9,"sf":0.7,"x":0.9}
 
 Example 12 — Short post, modest value, not slop (middle-case calibration)
 POST:
@@ -414,17 +282,35 @@ Small habit that helped me: I end meetings with one line:
 It sounds trivial, but it cut follow-up confusion a lot.
 """
 OUTPUT:
+{"u":0.5,"d":0.2,"c":0.5,"h":0.0,"rb":0.0,"eb":0.0,"sp":0.0,"ts":0.3,"sf":0.1,"x":0.0}
+
+Example 13 — The "Robin Hood" Lead Magnet (High Slop/Spam)
+POST:
+"""
+SaaS companies are lying to you. They charge $500 for simple wrappers.
+
+I got tired of seeing founders get ripped off, so I built a free alternative that does it all.
+
+It includes:
+- Auto-enrichment
+- CRM sync
+- Cold outreach
+
+I packaged it all into a Notion doc.
+Comment "SCALE" and I'll DM it to you for free.
+"""
+OUTPUT:
 {
-  "u": 0.5,
-  "d": 0.2,
-  "c": 0.5,
-  "h": 0.0,
-  "rb": 0.0,
-  "eb": 0.0,
-  "sp": 0.0,
-  "ts": 0.3,
-  "sf": 0.1,
-  "x": 0.0
+  "u":0.2,    // Low: The post itself teaches nothing; it's just a teaser.
+  "d":0.1,    // Low: It lists features (Menu), doesn't explain how (Meal).
+  "c":0.2,    // Low: This is transactional ("Comment to get"), not authentic connection.
+  "h":0.0,
+  "rb":0.4,   // Mid: "Lying to you" is mild rage-bait.
+  "eb":0.6,   // Mid: "I got tired... so I built" is savior framing.
+  "sp":0.9,   // HIGH: "Comment X to receive Y" is a hard algorithmic funnel.
+  "ts":0.8,   // High: Classic "Villain -> Solution -> Bait" template.
+  "sf":0.2,
+  "x":0.2
 }`;
 
 export const USER_PROMPT = `POST TO ANALYZE:
@@ -434,4 +320,3 @@ export const USER_PROMPT = `POST TO ANALYZE:
 Return ONLY the JSON object with keys:
 "u","d","c","h","rb","eb","sp","ts","sf","x"
 Values must be 0.0-1.0 with exactly one decimal place.`;
-

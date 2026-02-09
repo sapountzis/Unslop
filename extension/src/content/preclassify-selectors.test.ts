@@ -25,4 +25,12 @@ describe('preclassify selector coverage', () => {
     expect(rule.includes('opacity: 0')).toBe(true);
     expect(rule.includes('pointer-events: none')).toBe(true);
   });
+
+  it('includes selector constants for repost/image/document parsing inputs', () => {
+    expect(SELECTORS.nestedRepostLinkContainer).toContain('update-components-mini-update-v2__link-to-details-page');
+    expect(SELECTORS.imageNodes).toContain('update-components-image__image');
+    expect(SELECTORS.documentContainer).toContain('update-components-document__container');
+    expect(SELECTORS.documentIframe).toContain('document-s-container__document-element');
+    expect(SELECTORS.documentSourceHints).toContain('feedshare-document');
+  });
 });

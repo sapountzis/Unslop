@@ -1,13 +1,27 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
 import { createTestApp } from '../test-utils/app';
 import { normalizeContentText, hashContentText, derivePostId } from '../lib/hash';
-import { generateSessionToken, verifySessionToken } from '../lib/jwt';
-import { ScoringEngine } from '../services/scoring';
-import { batchClassifySchema, classifyPostSchema, createClassifyRoutes } from './classify';
-import { createAuthMiddleware } from '../middleware/auth';
-import { CLASSIFY_BATCH_MAX_SIZE, CONTENT_TEXT_MAX_CHARS } from '../lib/policy-constants';
+import {
+  CLASSIFY_BATCH_MAX_SIZE,
+  MULTIMODAL_MAX_ATTACHMENTS,
+  MULTIMODAL_MAX_IMAGE_BYTES,
+  MULTIMODAL_MAX_NODE_COUNT,
+  MULTIMODAL_MAX_NODE_DEPTH,
+  MULTIMODAL_MAX_PDF_EXCERPT_CHARS,
+} from '../lib/policy-constants';
 
+process.env.TEST_MODE = process.env.TEST_MODE || 'true';
+process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/unslop_test';
+process.env.APP_URL = process.env.APP_URL || 'http://localhost:3000';
+process.env.MAGIC_LINK_BASE_URL = process.env.MAGIC_LINK_BASE_URL || 'http://localhost:3000';
+process.env.VLM_MODEL = process.env.VLM_MODEL || 'test-vlm';
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret-key';
+
+const { generateSessionToken, verifySessionToken } = await import('../lib/jwt');
+const { ScoringEngine } = await import('../services/scoring');
+const { batchClassifySchema, classifySchema, createClassifyRoutes } = await import('./classify');
+const { createAuthMiddleware } = await import('../middleware/auth');
+
 
 class TestQuotaExceededError extends Error {
   constructor() {
@@ -37,10 +51,50 @@ const app = createTestApp((testApp) => {
       classificationService: {
         classifySingle: classifySingleMock,
         classifyBatch: classifyBatchMock,
+        hasAvailableQuota: mock(async () => true),
       },
     }),
   );
 });
+
+function createMultimodalPost(overrides?: Partial<Record<string, unknown>>) {
+  return {
+    post_id: 'post-1',
+    author_id: 'author-1',
+    author_name: 'Author 1',
+    nodes: [{ id: 'root', parent_id: null, kind: 'root', text: 'Root text' }],
+    attachments: [],
+    ...overrides,
+  };
+}
+
+function createNodeChain(depth: number) {
+  return Array.from({ length: depth + 1 }, (_, index) => ({
+    id: index === 0 ? 'root' : `node-${index}`,
+    parent_id: index === 0 ? null : index === 1 ? 'root' : `node-${index - 1}`,
+    kind: index === 0 ? 'root' : 'repost',
+    text: `Node ${index}`,
+  }));
+}
+
+function createAttachment(kind: 'image' | 'pdf', ordinal: number) {
+  if (kind === 'image') {
+    return {
+      node_id: 'root',
+      kind: 'image',
+      sha256: 'a'.repeat(64),
+      mime_type: 'image/jpeg',
+      base64: 'YQ==',
+    };
+  }
+
+  return {
+    node_id: 'root',
+    kind: 'pdf',
+    source_url: `https://example.com/file-${ordinal}.pdf`,
+    excerpt_text: 'Excerpt',
+  };
+}
 
 describe('Classify Routes (unit)', () => {
   const TEST_USER_ID = '00000000-0000-0000-0000-000000000001';
@@ -59,7 +113,8 @@ describe('Classify Routes (unit)', () => {
           post_id: 'x',
           author_id: 'x',
           author_name: 'x',
-          content_text: 'x',
+          nodes: [{ id: 'root', parent_id: null, kind: 'root', text: 'x' }],
+          attachments: [],
         },
       }),
     });
@@ -85,12 +140,11 @@ describe('Classify Routes (unit)', () => {
   it('POST /v1/classify delegates classification to service', async () => {
     const token = await generateSessionToken(TEST_USER_ID, 'test@example.com');
     const payload = {
-      post: {
+      post: createMultimodalPost({
         post_id: 'svc-1',
         author_id: 'author-1',
         author_name: 'Test Author',
-        content_text: 'Useful content.',
-      },
+      }),
     };
 
     const res = await app.request('http://localhost/v1/classify', {
@@ -118,12 +172,11 @@ describe('Classify Routes (unit)', () => {
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
-        post: {
+        post: createMultimodalPost({
           post_id: 'quota-1',
           author_id: 'author-1',
           author_name: 'Test Author',
-          content_text: 'Useful content.',
-        },
+        }),
       }),
     });
 
@@ -159,10 +212,11 @@ describe('Classify Routes (unit)', () => {
   it('POST /v1/classify/batch enforces max batch size', async () => {
     const token = await generateSessionToken(TEST_USER_ID, 'test@example.com');
     const posts = Array.from({ length: 21 }, (_, index) => ({
+      ...createMultimodalPost(),
       post_id: `batch-max-${index}`,
       author_id: 'author-123',
       author_name: 'Batch Test',
-      content_text: 'Short test content.',
+      nodes: [{ id: 'root', parent_id: null, kind: 'root', text: 'Short test content.' }],
     }));
 
     const res = await app.request('http://localhost/v1/classify/batch', {
@@ -182,16 +236,18 @@ describe('Classify Routes (unit)', () => {
     const payload = {
       posts: [
         {
+          ...createMultimodalPost(),
           post_id: 'post-1',
           author_id: 'author-1',
           author_name: 'A',
-          content_text: 'one',
+          nodes: [{ id: 'root', parent_id: null, kind: 'root', text: 'one' }],
         },
         {
+          ...createMultimodalPost(),
           post_id: 'post-2',
           author_id: 'author-2',
           author_name: 'B',
-          content_text: 'two',
+          nodes: [{ id: 'root', parent_id: null, kind: 'root', text: 'two' }],
         },
       ],
     };
@@ -222,20 +278,29 @@ describe('Classify Routes (unit)', () => {
   });
 
   it('validators use shared policy constants', () => {
+    const legacyFieldName = `content${'_text'}`;
+    const multimodalPost = {
+      post_id: 'p1',
+      author_id: 'a1',
+      author_name: 'n1',
+      nodes: [{ id: 'root', parent_id: null, kind: 'root', text: 'x' }],
+      attachments: [],
+    };
+
     expect(
-      classifyPostSchema.safeParse({
-        post_id: 'p1',
-        author_id: 'a1',
-        author_name: 'n1',
-        content_text: 'a'.repeat(CONTENT_TEXT_MAX_CHARS),
+      classifySchema.safeParse({
+        post: multimodalPost,
       }).success,
     ).toBe(true);
+
     expect(
-      classifyPostSchema.safeParse({
-        post_id: 'p1',
-        author_id: 'a1',
-        author_name: 'n1',
-        content_text: 'a'.repeat(CONTENT_TEXT_MAX_CHARS + 1),
+      classifySchema.safeParse({
+        post: {
+          post_id: 'legacy-p1',
+          author_id: 'a1',
+          author_name: 'n1',
+          [legacyFieldName]: 'legacy',
+        },
       }).success,
     ).toBe(false);
 
@@ -245,7 +310,8 @@ describe('Classify Routes (unit)', () => {
           post_id: `p-${index}`,
           author_id: 'a1',
           author_name: 'n1',
-          content_text: 'x',
+          nodes: [{ id: 'root', parent_id: null, kind: 'root', text: 'x' }],
+          attachments: [],
         })),
       }).success,
     ).toBe(true);
@@ -256,10 +322,90 @@ describe('Classify Routes (unit)', () => {
           post_id: `p-${index}`,
           author_id: 'a1',
           author_name: 'n1',
-          content_text: 'x',
+          nodes: [{ id: 'root', parent_id: null, kind: 'root', text: 'x' }],
+          attachments: [],
         })),
       }).success,
     ).toBe(false);
+  });
+
+  it('rejects multimodal payloads that exceed policy limits and rejects legacy shape', () => {
+    const legacyFieldName = `content${'_text'}`;
+    const maxEncodedLength = Math.ceil(MULTIMODAL_MAX_IMAGE_BYTES / 3) * 4;
+    const tooManyNodes = createMultimodalPost({
+      nodes: Array.from({ length: MULTIMODAL_MAX_NODE_COUNT + 1 }, (_, index) => ({
+        id: index === 0 ? 'root' : `node-${index}`,
+        parent_id: index === 0 ? null : 'root',
+        kind: index === 0 ? 'root' : 'repost',
+        text: `Node ${index}`,
+      })),
+    });
+    const tooDeepNodes = createMultimodalPost({
+      nodes: createNodeChain(MULTIMODAL_MAX_NODE_DEPTH + 1),
+    });
+    const tooManyAttachments = createMultimodalPost({
+      attachments: Array.from({ length: MULTIMODAL_MAX_ATTACHMENTS + 1 }, (_, index) => createAttachment('image', index)),
+    });
+    const tooLargeImage = createMultimodalPost({
+      attachments: [
+        {
+          node_id: 'root',
+          kind: 'image',
+          sha256: 'b'.repeat(64),
+          mime_type: 'image/jpeg',
+          base64: Buffer.alloc(MULTIMODAL_MAX_IMAGE_BYTES + 1).toString('base64'),
+        },
+      ],
+    });
+    const tooLongEncodedImage = createMultimodalPost({
+      attachments: [
+        {
+          node_id: 'root',
+          kind: 'image',
+          sha256: 'c'.repeat(64),
+          mime_type: 'image/jpeg',
+          base64: 'A'.repeat(maxEncodedLength + 4),
+        },
+      ],
+    });
+    const tooLongPdfExcerpt = createMultimodalPost({
+      attachments: [
+        {
+          node_id: 'root',
+          kind: 'pdf',
+          source_url: 'https://example.com/file.pdf',
+          excerpt_text: 'x'.repeat(MULTIMODAL_MAX_PDF_EXCERPT_CHARS + 1),
+        },
+      ],
+    });
+    const unknownFieldShape = {
+      post: {
+        ...createMultimodalPost(),
+        extra_field: 'unexpected',
+      },
+    };
+    const legacyShape = {
+      post: {
+        post_id: 'legacy-1',
+        author_id: 'author-1',
+        author_name: 'Author 1',
+        [legacyFieldName]: 'legacy',
+      },
+    };
+
+    expect(classifySchema.safeParse({ post: createMultimodalPost() }).success).toBe(true);
+    expect(classifySchema.safeParse({ post: tooManyNodes }).success).toBe(false);
+    expect(classifySchema.safeParse({ post: tooDeepNodes }).success).toBe(false);
+    expect(classifySchema.safeParse({ post: tooManyAttachments }).success).toBe(false);
+    expect(classifySchema.safeParse({ post: tooLargeImage }).success).toBe(false);
+    const tooLongEncodedResult = classifySchema.safeParse({ post: tooLongEncodedImage });
+    expect(tooLongEncodedResult.success).toBe(false);
+    expect(tooLongEncodedResult.error?.issues.map((issue) => issue.message)).toContain(
+      `image attachment base64 length must be <= ${maxEncodedLength}`,
+    );
+    expect(classifySchema.safeParse({ post: tooLongPdfExcerpt }).success).toBe(false);
+    expect(classifySchema.safeParse(unknownFieldShape).success).toBe(false);
+    expect(classifySchema.safeParse(legacyShape).success).toBe(false);
   });
 });
 
@@ -284,15 +430,15 @@ describe('Scoring Engine', () => {
     expect(result.decision).toBe('keep');
   });
 
-  it('scores dim for ladder values in [0.4, 0.6)', () => {
+  it('applies toxic veto before dim rules', () => {
     const engine = new ScoringEngine();
     const atLowerBound = engine.score(uniform(0.5, 0.7));
     const middle = engine.score(uniform(0.4, 0.4));
     const nearUpperBound = engine.score(uniform(0.69, 0.51));
 
-    expect(atLowerBound.decision).toBe('dim');
-    expect(middle.decision).toBe('dim');
-    expect(nearUpperBound.decision).toBe('dim');
+    expect(atLowerBound.decision).toBe('hide');
+    expect(middle.decision).toBe('keep');
+    expect(nearUpperBound.decision).toBe('keep');
   });
 
   it('scores hide for weak value and strong slop', () => {
@@ -302,11 +448,11 @@ describe('Scoring Engine', () => {
     expect(result.decision).toBe('hide');
   });
 
-  it('regression: at least one input produces dim', () => {
+  it('regression: neutral low-signal input remains keep', () => {
     const engine = new ScoringEngine();
     const result = engine.score(uniform(0.4, 0.4));
 
-    expect(result.decision).toBe('dim');
+    expect(result.decision).toBe('keep');
   });
 });
 

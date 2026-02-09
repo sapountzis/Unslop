@@ -1,12 +1,9 @@
 import type { MiddlewareHandler } from 'hono';
 import { logger } from '../lib/logger';
-
-interface LoggerLike {
-  info: (message: string, meta?: Record<string, unknown>) => void;
-}
+import type { AppLogger } from '../lib/logger-types';
 
 interface RequestLoggerDeps {
-  logger: LoggerLike;
+  logger: Pick<AppLogger, 'info'>;
   nowMs?: () => number;
 }
 

@@ -2,7 +2,6 @@ import 'dotenv/config';
 import {
   DEFAULT_BATCH_LLM_CONCURRENCY,
   DEFAULT_FREE_MONTHLY_LLM_CALLS,
-  DEFAULT_POST_CACHE_TTL_DAYS,
   DEFAULT_PRO_MONTHLY_LLM_CALLS,
 } from '../lib/policy-constants';
 
@@ -23,10 +22,9 @@ export interface RuntimeConfig {
   };
   llm: {
     apiKey: string;
-    model: string;
+    textModel: string;
+    vlmModel: string;
     baseUrl: string;
-    batchConcurrency: number;
-    postCacheTtlDays: number;
   };
   billing: {
     polarEnv: 'sandbox' | 'production';
@@ -49,7 +47,6 @@ export interface RuntimeConfig {
   };
   classification: {
     batchConcurrency: number;
-    postCacheTtlDays: number;
   };
 }
 
@@ -147,10 +144,9 @@ export function loadRuntimeConfig(
     },
     llm: {
       apiKey: readSecret(env, 'LLM_API_KEY', allowMissingSecrets),
-      model: readSecret(env, 'LLM_MODEL', allowMissingSecrets),
+      textModel: readSecret(env, 'LLM_MODEL', allowMissingSecrets),
+      vlmModel: readSecret(env, 'VLM_MODEL', allowMissingSecrets),
       baseUrl: env.LLM_BASE_URL?.trim() || 'https://openrouter.ai/api/v1',
-      batchConcurrency: parseInteger(env, 'BATCH_LLM_CONCURRENCY', DEFAULT_BATCH_LLM_CONCURRENCY),
-      postCacheTtlDays: parseInteger(env, 'POST_CACHE_TTL_DAYS', DEFAULT_POST_CACHE_TTL_DAYS),
     },
     billing: {
       polarEnv,
@@ -173,7 +169,6 @@ export function loadRuntimeConfig(
     },
     classification: {
       batchConcurrency: parseInteger(env, 'BATCH_LLM_CONCURRENCY', DEFAULT_BATCH_LLM_CONCURRENCY),
-      postCacheTtlDays: parseInteger(env, 'POST_CACHE_TTL_DAYS', DEFAULT_POST_CACHE_TTL_DAYS),
     },
   };
 }

@@ -9,6 +9,7 @@ import {
   normalizeSubscriptionData,
 } from './polar-webhook-schema';
 import { POLAR_PRICE_CACHE_TTL_MS } from '../lib/policy-constants';
+import type { AppLogger } from '../lib/logger-types';
 
 export interface BillingWebhookPayload {
   type: string;
@@ -27,11 +28,6 @@ interface ClaimWebhookDeliveryByIdInput {
   subscriptionId?: string | null;
 }
 
-interface LoggerLike {
-  info: (message: string, meta?: Record<string, unknown>) => void;
-  warn: (message: string, meta?: Record<string, unknown>) => void;
-}
-
 export interface PolarConfig {
   apiKey: string;
   apiBase: string;
@@ -43,7 +39,7 @@ export interface PolarServiceDeps {
   db: Database;
   config: PolarConfig;
   fetchImpl?: typeof fetch;
-  logger?: LoggerLike;
+  logger?: Pick<AppLogger, 'info' | 'warn'>;
   now?: () => Date;
 }
 

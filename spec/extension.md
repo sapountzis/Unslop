@@ -16,7 +16,7 @@ The extension must be minimal and must **fail open**.
    - Runs on `https://www.linkedin.com/*`.
    - Starts at `document_start` to enable pre-classification hiding.
    - Detects posts using `MutationObserver`.
-   - Extracts `post_id`, `author_id`, `author_name`, `content_text`.
+   - Extracts `post_id`, `author_id`, `author_name`, `nodes`, and `attachments`.
    - Sends posts to background for batch classification.
    - Applies the returned decision to the DOM.
 
@@ -62,21 +62,27 @@ For each feed post element:
   - profile URL or stable author identifier if present
 - `author_name`:
   - visible author name text (best-effort)
-- `content_text`:
-  - visible post text only (no HTML), normalized + truncated
-
-### Normalization + truncation (must match `data_model.md`)
-
-1. Extract full visible post text.
-2. Normalize: lowercase, collapse whitespace, trim.
-3. Truncate to 4000 characters.
-4. Use this truncated normalized text as `content_text`.
+- `nodes`:
+  - ordered text nodes (`root` first, then nested repost nodes in DOM order)
+  - each node includes: `id`, `parent_id`, `kind`, `text`
+- `attachments`:
+  - zero or more items tied to `node_id`
+  - parser may emit attachment refs (image `src`; pdf `iframe_src` / `container_data_url` / `source_hint`)
+  - background resolver converts refs into canonical payloads:
+    - `image` attachments include `sha256`, `mime_type`, `base64`
+    - `pdf` attachments include `source_url` and optional `excerpt_text`
 
 ### Derived post_id
 
 If no native post id exists:
 
-- `post_id = hex(SHA-256(author_id + "\n" + content_text))`
+- `post_id = hex(SHA-256(author_id + "\n" + JSON.stringify(nodes)))`
+
+### Canonical payload requirements
+
+- preserve deterministic node and attachment ordering when building request payloads
+- the extension does not compute `content_fingerprint`
+- backend computes global `content_fingerprint` for cache lookups from canonical payload content
 
 ## Classification flow (required)
 
@@ -85,7 +91,7 @@ Content script → background:
 ```ts
 chrome.runtime.sendMessage({
   type: "CLASSIFY_BATCH",
-  posts: [{ post_id, author_id, author_name, content_text }]
+  posts: [{ post_id, author_id, author_name, nodes, attachments }]
 });
 ```
 

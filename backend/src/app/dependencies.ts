@@ -2,6 +2,7 @@ import { db as defaultDb } from '../db';
 import type { Database } from '../db';
 import { runtime, type RuntimeConfig } from '../config/runtime';
 import { logger } from '../lib/logger';
+import type { AppLogger } from '../lib/logger-types';
 import {
   generateMagicLinkToken,
   generateSessionToken,
@@ -11,7 +12,8 @@ import {
 import { sendMagicLinkEmail } from '../lib/email';
 import { createAuthMiddleware } from '../middleware/auth';
 import { createUserRepository } from '../repositories/user-repository';
-import { createPostRepository } from '../repositories/post-repository';
+import { createClassificationCacheRepository } from '../repositories/classification-cache-repository';
+import { createClassificationEventRepository } from '../repositories/classification-event-repository';
 import { createActivityRepository } from '../repositories/activity-repository';
 import { createStatsRepository } from '../repositories/stats-repository';
 import { createQuotaContextService } from '../services/quota-context';
@@ -26,7 +28,7 @@ import { createStatsService } from '../services/stats-service';
 export interface AppDependencies {
   config: RuntimeConfig;
   db: Database;
-  logger: typeof logger;
+  logger: AppLogger;
   authMiddleware: ReturnType<typeof createAuthMiddleware>;
   services: {
     classification: ReturnType<typeof createClassificationService>;
@@ -43,7 +45,7 @@ export interface AppDependencies {
 export interface CreateDependenciesOptions {
   config?: RuntimeConfig;
   db?: Database;
-  logger?: typeof logger;
+  logger?: AppLogger;
   fetchImpl?: typeof fetch;
   now?: () => Date;
   jwt?: {
@@ -76,7 +78,8 @@ export function createDependencies(options: CreateDependenciesOptions = {}): App
   };
 
   const userRepository = createUserRepository({ db });
-  const postRepository = createPostRepository({ db });
+  const classificationCacheRepository = createClassificationCacheRepository({ db });
+  const classificationEventRepository = createClassificationEventRepository({ db });
   const activityRepository = createActivityRepository({ db });
   const statsRepository = createStatsRepository({ db });
 
@@ -94,7 +97,8 @@ export function createDependencies(options: CreateDependenciesOptions = {}): App
   const llmService = createLlmService({
     config: {
       apiKey: config.llm.apiKey,
-      model: config.llm.model,
+      textModel: config.llm.textModel,
+      vlmModel: config.llm.vlmModel,
       baseUrl: config.llm.baseUrl,
     },
     logger: appLogger,
@@ -103,10 +107,10 @@ export function createDependencies(options: CreateDependenciesOptions = {}): App
   const classificationService = createClassificationService({
     llmService,
     quotaService,
-    postRepository,
+    classificationCacheRepository,
+    classificationEventRepository,
     activityRepository,
     logger: appLogger,
-    cacheTtlDays: config.classification.postCacheTtlDays,
     batchLlmConcurrency: config.classification.batchConcurrency,
   });
 

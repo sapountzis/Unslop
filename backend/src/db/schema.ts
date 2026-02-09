@@ -7,6 +7,7 @@ import {
   date,
   integer,
   bigserial,
+  jsonb,
   index,
   primaryKey,
   pgEnum,
@@ -27,6 +28,7 @@ export const decisionEnum = pgEnum('decision', DECISION_VALUES);
 export const postSourceEnum = pgEnum('post_source', ['llm', 'cache', 'error']);
 export const activitySourceEnum = pgEnum('activity_source', ['llm', 'cache']);
 export const feedbackLabelEnum = pgEnum('feedback_label', FEEDBACK_LABEL_VALUES);
+export const classificationAttemptStatusEnum = pgEnum('classification_attempt_status', ['success', 'error']);
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
@@ -45,28 +47,56 @@ export const users = pgTable('users', {
   uniqueIndex('idx_users_polar_subscription_id').on(table.polarSubscriptionId),
 ]);
 
-export const posts = pgTable('posts', {
-  postId: text('post_id').primaryKey(),
+export const classificationCache = pgTable('classification_cache', {
+  contentFingerprint: text('content_fingerprint').primaryKey(),
+  postId: text('post_id').notNull(),
   authorId: text('author_id').notNull(),
   authorName: text('author_name'),
-
-  contentText: text('content_text').notNull(),
-  contentHash: text('content_hash').notNull(), // SHA-256 of content_text (hex)
+  canonicalContent: jsonb('canonical_content').notNull(),
 
   decision: decisionEnum('decision').notNull(),
   source: postSourceEnum('source').notNull(),
-  model: text('model'), // e.g. 'openrouter:gpt-...'; nullable
+  model: text('model'),
+  scoresJson: jsonb('scores_json').notNull(),
 
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
-  check('posts_content_text_len_check', sql`char_length(${table.contentText}) <= 4000`),
+  index('idx_classification_cache_created_at').on(table.createdAt),
+  index('idx_classification_cache_updated_at').on(table.updatedAt),
+  check('classification_cache_source_llm_check', sql`${table.source} = 'llm'`),
+]);
+
+export const classificationEvents = pgTable('classification_events', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  contentFingerprint: text('content_fingerprint').notNull(),
+  postId: text('post_id').notNull(),
+  model: text('model'),
+
+  attemptStatus: classificationAttemptStatusEnum('attempt_status').notNull(),
+  providerHttpStatus: integer('provider_http_status'),
+  providerErrorCode: text('provider_error_code'),
+  providerErrorType: text('provider_error_type'),
+  providerErrorMessage: text('provider_error_message'),
+
+  requestPayload: jsonb('request_payload').notNull(),
+  responsePayload: jsonb('response_payload').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index('idx_classification_events_fingerprint').on(table.contentFingerprint),
+  index('idx_classification_events_post_id').on(table.postId),
+  index('idx_classification_events_attempt_status').on(table.attemptStatus),
+  index('idx_classification_events_created_at').on(table.createdAt),
+  check(
+    'classification_events_error_metadata_check',
+    sql`${table.attemptStatus} = 'success' OR ${table.providerHttpStatus} IS NOT NULL OR ${table.providerErrorCode} IS NOT NULL OR ${table.providerErrorType} IS NOT NULL OR ${table.providerErrorMessage} IS NOT NULL`,
+  ),
 ]);
 
 export const postFeedback = pgTable('post_feedback', {
   id: bigserial('id', { mode: 'number' }).primaryKey(),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  postId: text('post_id').notNull().references(() => posts.postId, { onDelete: 'cascade' }),
+  postId: text('post_id').notNull(),
 
   renderedDecision: decisionEnum('rendered_decision').notNull(),
   userLabel: feedbackLabelEnum('user_label').notNull(),

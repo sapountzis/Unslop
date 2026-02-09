@@ -41,10 +41,13 @@ bun run build
 flowchart LR
   LI[LinkedIn DOM] --> CS[Content Runtime<br/>src/content/linkedin.ts]
   CS --> ATTACH[Attachment Controller]
+  CS --> PARSER[LinkedIn Parser<br/>nodes + attachment refs]
   CS --> SURFACE[Post Surface Resolver]
   CS --> BUFFER[Mutation Buffer]
   CS --> BATCH[Batch Queue]
   BATCH --> BG[Background Worker]
+  BG --> RESOLVE[Attachment Resolver]
+  RESOLVE --> BG
   BG --> API[/v1/classify/batch]
   API --> BG
   BG --> BATCH
@@ -74,11 +77,12 @@ flowchart LR
    - `renderRoot` (for visual write operations)
    - `identity` (stable post instance key)
 7. Mutation buffer batches candidate processing.
-8. Each candidate is parsed and sent through `batch-queue` to background.
-9. Background streams NDJSON classify results from backend back to content runtime.
-10. Render commit pipeline coalesces decisions by `renderRoot`, sorts in DOM order, and flushes on RAF.
-11. Decision renderer applies one terminal visual state on `renderRoot` and marks it processed.
-12. Route/toggle off triggers one centralized runtime dispose path.
+8. Each candidate is parsed into a multimodal payload (`nodes[]` + attachment refs) and sent through `batch-queue` to background.
+9. Background resolves attachment refs best-effort (image bytes + PDF excerpt) before calling `/v1/classify/batch`.
+10. Background streams NDJSON classify results from backend back to content runtime.
+11. Render commit pipeline coalesces decisions by `renderRoot`, sorts in DOM order, and flushes on RAF.
+12. Decision renderer applies one terminal visual state on `renderRoot` and marks it processed.
+13. Route/toggle off triggers one centralized runtime dispose path.
 
 ## Core Concepts
 
@@ -94,6 +98,10 @@ flowchart LR
   - Decision already committed for a specific `renderRoot + identity`.
 - `Fail Open`
   - Timeout/error/invalid classify result resolves to `keep`.
+- `Multimodal Payload`
+  - Classification input is `{ post_id, author_*, nodes[], attachments[] }`, not text-only.
+- `Attachment Resolution`
+  - Content script extracts refs only; background fetches and normalizes attachment payloads.
 
 ## Selector And Marker Contract
 
@@ -107,6 +115,14 @@ Defined in `src/lib/selectors.ts`:
   - `[data-finite-scroll-hotkey-item]:has(.feed-shared-update-v2[role="article"])`
 - Recommendation/discovery selector:
   - `.update-components-feed-discovery-entity, .feed-shared-aggregated-content`
+- Nested repost container selector:
+  - `.update-components-mini-update-v2__link-to-details-page`
+- Image attachment selector:
+  - `.update-components-image__image`
+- PDF/document selectors:
+  - `.update-components-document__container`
+  - `.document-s-container__document-element`
+  - `[data-test-id^="feedshare-document"], [href*="media.licdn.com"], [src*="media.licdn.com"]`
 
 DOM attributes used by runtime:
 - `data-unslop-preclassify`
@@ -149,6 +165,10 @@ Rules:
 `src/content/post-surface.ts`
 - Converts arbitrary nodes into canonical `{ contentRoot, renderRoot, identity }`.
 
+`src/content/linkedin-parser.ts`
+- Extracts deterministic `nodes` in DOM order (`root` then `repost-*`).
+- Extracts attachment references (image/pdf metadata only, no binary fetch).
+
 `src/content/mutation-buffer.ts`
 - Deduplicated queue of candidate elements.
 - Drained per frame (`PROCESS_PER_FRAME`).
@@ -186,6 +206,11 @@ Rules:
 - Message hub and auth/enabled enforcement.
 - Handles classify batching, billing, usage, stats, JWT state.
 
+`src/background/attachment-resolver.ts`
+- Resolves image refs to `{ sha256, mime_type, base64 }` with byte budget enforcement.
+- Resolves PDF refs to `{ source_url, excerpt_text }` best-effort.
+- Fail-open behavior: broken attachments are dropped; post classification still proceeds.
+
 `src/popup/App.ts`
 - Sign-in flow, enable toggle, hide mode selector, plan/usage UI.
 - Hide-mode change triggers controlled LinkedIn feed tab reload via background.
@@ -207,6 +232,17 @@ Defined in `src/lib/messages.ts`:
 - Billing/analytics:
   - `CREATE_CHECKOUT`, `GET_USAGE`, `GET_STATS`
 
+`CLASSIFY_BATCH` request payload:
+- `posts[]` where each post is:
+  - `post_id`, `author_id`, `author_name`
+  - `nodes[]`: `{ id, parent_id, kind, text }`
+  - `attachments[]`: image refs/resolved image payloads and pdf refs/resolved pdf payloads
+
+`CLASSIFY_BATCH_RESULT` item payload:
+- success path: `{ post_id, decision, source }`
+- quota path: `{ post_id, error: "quota_exceeded" }`
+- fail-open path on transport/runtime issues: `{ post_id }` (treated as keep/error in content runtime)
+
 ## Configuration
 
 Defined in `src/lib/config.ts`:
@@ -226,6 +262,18 @@ Hide mode persistence key:
 Enabled-state default:
 - missing storage value resolves to enabled (`src/lib/enabled-state.ts`)
 
+## Host Permissions
+
+`extension/manifest.json` host permissions include:
+
+- `https://www.linkedin.com/*` for feed DOM parsing/rendering.
+- `https://media.licdn.com/*` for background attachment fetches (images/documents).
+- `https://api.getunslop.com/*` and `http://localhost:3000/*` for backend API and local development.
+
+Rationale:
+- attachment resolution happens in background, not content script; `media.licdn.com` permission is required for that fetch path.
+- if attachment fetch fails (permissions/network/content-type), classification continues with reduced payload (fail-open).
+
 ## Troubleshooting Playbook
 
 ### Symptom: no backend classify calls
@@ -235,6 +283,16 @@ Enabled-state default:
 3. Confirm page has feed root matching `SELECTORS.feed`.
 4. Confirm runtime markers appear on posts (`data-unslop-checking` / `data-unslop-processed`).
 5. Confirm no stale disabled state in `chrome.storage.sync`.
+
+### Symptom: attachment context is missing in backend decisions
+
+1. Confirm `https://media.licdn.com/*` exists in `host_permissions`.
+2. Confirm posts include `attachments[]` refs from `src/content/linkedin-parser.ts`.
+3. Confirm background resolver does not exceed budgets:
+   - image: `MAX_IMAGE_BYTES`
+   - PDF fetch: `MAX_PDF_FETCH_BYTES`
+   - PDF excerpt: `MAX_PDF_EXCERPT_CHARS`
+4. On fetch/parse errors, expect fail-open behavior: attachment dropped, post still classified.
 
 ### Symptom: posts hidden but large blank space
 
@@ -282,6 +340,13 @@ Run:
 ```bash
 bun test
 ```
+
+## Manual Verification Checklist
+
+- [ ] Classification payload is multimodal: request includes `nodes[]` and `attachments[]` (no `content_text` contract).
+- [ ] Background resolves attachments before classify and enforces byte/excerpt budgets.
+- [ ] Parser/attachment failures fail open: posts remain processable and extension does not crash.
+- [ ] `manifest.json` host permissions include `https://media.licdn.com/*` with attachment-fetch rationale reflected in docs.
 
 ## Maintenance Rule (Required)
 

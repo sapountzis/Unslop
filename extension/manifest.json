@@ -9,6 +9,7 @@
   ],
   "host_permissions": [
     "https://www.linkedin.com/*",
+    "https://media.licdn.com/*",
     "https://api.getunslop.com/*",
     "http://localhost:3000/*"
   ],

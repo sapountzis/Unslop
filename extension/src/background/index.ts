@@ -9,6 +9,7 @@ import {
 } from './api';
 import { MESSAGE_TYPES, RuntimeRequest } from '../lib/messages';
 import { resolveEnabled, toggleEnabled } from '../lib/enabled-state';
+import { resolveBatchAttachmentPayload } from './attachment-resolver';
 
 async function getJwtFromStorage(): Promise<string | null> {
   const storage = await chrome.storage.sync.get('jwt');
@@ -46,7 +47,20 @@ chrome.runtime.onMessage.addListener((message: RuntimeRequest, sender, sendRespo
             return;
           }
 
-          classifyPostsBatch(message, storage.jwt, (item) => {
+          let resolvedRequest;
+          try {
+            resolvedRequest = await resolveBatchAttachmentPayload(message);
+          } catch (err) {
+            console.error('Attachment resolution failed; continuing without attachments:', err);
+            resolvedRequest = {
+              posts: message.posts.map((post) => ({
+                ...post,
+                attachments: [],
+              })),
+            };
+          }
+
+          classifyPostsBatch(resolvedRequest, storage.jwt, (item) => {
             chrome.tabs.sendMessage(tabId, {
               type: MESSAGE_TYPES.CLASSIFY_BATCH_RESULT,
               item,

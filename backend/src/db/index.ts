@@ -3,15 +3,12 @@ import { drizzle as drizzlePostgres } from 'drizzle-orm/postgres-js';
 import * as schema from './schema';
 import { logger } from '../lib/logger';
 import { runtime, type DbDriver } from '../config/runtime';
-
-interface LoggerLike {
-  info: (message: string, meta?: Record<string, unknown>) => void;
-}
+import type { AppLogger } from '../lib/logger-types';
 
 interface DbFactoryOptions {
   url: string;
   driver: DbDriver;
-  logger?: LoggerLike;
+  logger?: Pick<AppLogger, 'info'>;
   factories?: {
     neon: (url: string) => unknown;
     postgres: (url: string) => unknown;

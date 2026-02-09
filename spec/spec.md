@@ -14,7 +14,8 @@ Ship the smallest product that:
 4) Supports email magic-link login (JWT).
 5) Supports a subscription (Polar) with Free vs Pro quotas.
 6) Stores minimal data for future improvements:
-   - `post_id`, `author_id`, `content_text` (normalized/truncated), `decision`, timestamps
+   - `content_fingerprint`, `post_id`, `author_id`, canonical content payload, `decision`, timestamps
+   - append-only `classification_events` rows for actual LLM attempts (`status=success|error`, provider error metadata on failures)
    - user feedback rows (in-scope)
 7) Hosts a minimal public site with install + privacy + support pages.
 
@@ -40,7 +41,7 @@ Ship the smallest product that:
 
 - **Database**
   - Neon Postgres.
-  - Tables: `users`, `posts`, `post_feedback`, `user_usage`, `user_activity`, `webhook_deliveries`.
+  - Tables: `users`, `classification_cache`, `classification_events`, `post_feedback`, `user_usage`, `user_activity`, `webhook_deliveries`.
 
 - **Billing**
   - Polar checkout + webhooks.
@@ -54,9 +55,17 @@ Ship the smallest product that:
 
 A **teacher call** is an external LLM request performed by classification endpoints (`/v1/classify` or `/v1/classify/batch`) for a post that is not served from cache.
 
-If the backend returns a cached decision (fresh row in `posts`), it does **not** count towards quota.
+Cache policy:
+
+- key is deterministic global `content_fingerprint` from canonical payload content
+- fresh cache window is fixed at 30 days (non-sliding)
+- cache rows are written only after successful LLM outcomes
+
+If the backend returns a cached decision (fresh `content_fingerprint` row in `classification_cache`), it does **not** count towards quota.
 
 Quota is consumed atomically before each non-cached LLM attempt.
+
+`classification_events` rows are written only for actual LLM attempts (cache misses), including error attempts.
 
 ## Document map
 
@@ -65,5 +74,5 @@ Quota is consumed atomically before each non-cached LLM attempt.
 - `data_model.md` – schema
 - `extension.md` – extension behavior
 - `billing.md` – plans + quotas + Polar
-- `ml.md` – LLM prompt contract (LLM-only)
+- `ml.md` – LLM/VLM routing + prompt contract
 - `frontend.md` – public site pages + required content

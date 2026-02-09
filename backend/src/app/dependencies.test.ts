@@ -31,7 +31,7 @@ function makeDeps(overrides: AppDependencyOverrides = {}): AppDependencies {
       testMode: true,
       server: { nodeEnv: 'test', port: 3000, appUrl: 'http://localhost:3000' },
       db: { url: 'postgresql://local', driver: 'postgres' },
-      llm: { apiKey: '', model: '', baseUrl: '', batchConcurrency: 4, postCacheTtlDays: 7 },
+      llm: { apiKey: '', textModel: '', vlmModel: '', baseUrl: '' },
       billing: {
         polarEnv: 'sandbox',
         polarApiKey: '',
@@ -42,7 +42,7 @@ function makeDeps(overrides: AppDependencyOverrides = {}): AppDependencies {
       quotas: { freeMonthlyLlmCalls: 300, proMonthlyLlmCalls: 10000 },
       auth: { jwtSecret: 'test-secret' },
       email: { resendApiKey: '', magicLinkBaseUrl: 'http://localhost/callback', logMagicLinkUrls: false },
-      classification: { batchConcurrency: 4, postCacheTtlDays: 7 },
+      classification: { batchConcurrency: 4 },
     },
     db: {} as never,
     logger: {
@@ -54,11 +54,12 @@ function makeDeps(overrides: AppDependencyOverrides = {}): AppDependencies {
       c.set('user', { sub: 'user-1', email: 'user@example.com', iat: 0, exp: 0 });
       await next();
     },
-    services: {
-      classification: {
-        classifySingle,
-        classifyBatch,
-      },
+      services: {
+        classification: {
+          classifySingle,
+          classifyBatch,
+          hasAvailableQuota: mock(async () => true),
+        },
       auth: {
         startAuth: mock(async () => undefined),
         completeMagicLink: mock(async () => ({ sessionToken: 'token' })),
@@ -147,6 +148,7 @@ describe('app dependency wiring', () => {
           classification: {
             classifySingle,
             classifyBatch: mock(async () => []),
+            hasAvailableQuota: mock(async () => true),
           },
         } as Partial<AppDependencies['services']>,
       }),
@@ -160,7 +162,8 @@ describe('app dependency wiring', () => {
           post_id: 'svc-1',
           author_id: 'a-1',
           author_name: 'Author',
-          content_text: 'text',
+          nodes: [{ id: 'root', parent_id: null, kind: 'root', text: 'text' }],
+          attachments: [],
         },
       }),
     });

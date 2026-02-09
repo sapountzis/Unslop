@@ -41,7 +41,15 @@ describe('Classify Endpoint E2E', () => {
           post_id: 'e2e-test-post-1',
           author_id: 'author-123',
           author_name: 'E2E Test',
-          content_text: 'This is a genuine helpful post about programming best practices.',
+          nodes: [
+            {
+              id: 'root',
+              parent_id: null,
+              kind: 'root',
+              text: 'This is a genuine helpful post about programming best practices.',
+            },
+          ],
+          attachments: [],
         },
       }),
     });
@@ -64,7 +72,13 @@ describe('Classify Endpoint E2E', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        post: { post_id: 'x', author_id: 'x', author_name: 'x', content_text: 'x' },
+        post: {
+          post_id: 'x',
+          author_id: 'x',
+          author_name: 'x',
+          nodes: [{ id: 'root', parent_id: null, kind: 'root', text: 'x' }],
+          attachments: [],
+        },
       }),
     });
 
@@ -112,7 +126,8 @@ describe('Batch Classify Endpoint E2E', () => {
       post_id: `batch-max-${index}`,
       author_id: 'author-123',
       author_name: 'Batch Test',
-      content_text: 'Short test content.',
+      nodes: [{ id: 'root', parent_id: null, kind: 'root', text: 'Short test content.' }],
+      attachments: [],
     }));
 
     const res = await fetch(`${API_URL}/v1/classify/batch`, {

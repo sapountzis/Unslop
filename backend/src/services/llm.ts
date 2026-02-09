@@ -2,40 +2,39 @@ import OpenAI from 'openai';
 import { z } from 'zod';
 import { zodResponseFormat } from 'openai/helpers/zod';
 import retry from 'async-retry';
-import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+import type { ChatCompletionContentPart, ChatCompletionMessageParam, ParsedChatCompletion } from 'openai/resources/chat/completions';
 import { SYSTEM_PROMPT, USER_PROMPT } from './prompts';
 import type { ScoreResult } from '../types/classification';
+import type { MultimodalAttachment, MultimodalClassifyPost, MultimodalImageAttachment } from '../types/multimodal';
+import type { AppLogger } from '../lib/logger-types';
 import {
   LLM_MAX_TOKENS,
   LLM_RETRY_ATTEMPTS,
   LLM_RETRY_MAX_TIMEOUT_MS,
   LLM_RETRY_MIN_TIMEOUT_MS,
   LLM_TEMPERATURE,
+  MULTIMODAL_MAX_ATTACHMENTS,
+  MULTIMODAL_MAX_PDF_EXCERPT_CHARS,
 } from '../lib/policy-constants';
 
-export interface PostInput {
-  post_id: string;
-  author_id: string;
-  author_name: string;
-  content_text: string;
-}
+export type PostInput = MultimodalClassifyPost;
 
 export interface LLMCallResult {
   scores: ScoreResult | null;
   source: 'llm' | 'error';
   model: string;
   latency: number;
+  provider_http_status?: number;
+  provider_error_code?: string;
+  provider_error_type?: string;
+  provider_error_message?: string;
 }
 
 export interface LlmRuntimeConfig {
   apiKey: string;
-  model: string;
+  textModel: string;
+  vlmModel: string;
   baseUrl: string;
-}
-
-export interface LoggerLike {
-  warn: (message: string, meta?: Record<string, unknown>) => void;
-  error: (message: string, error: unknown, meta?: Record<string, unknown>) => void;
 }
 
 export interface LlmService {
@@ -44,7 +43,7 @@ export interface LlmService {
 
 export interface LlmServiceDeps {
   config: LlmRuntimeConfig;
-  logger: LoggerLike;
+  logger: Pick<AppLogger, 'warn' | 'error'>;
 }
 
 const DecisionSchema = z.object({
@@ -60,34 +59,191 @@ const DecisionSchema = z.object({
   x: z.number(),
 });
 
-function constructUserPrompt(post: PostInput): string {
-  const contentWithContext = `Author: ${post.author_name}\n\n${post.content_text}`;
-  return USER_PROMPT.replace('{{POST_TEXT}}', contentWithContext);
+const PROMPT_MAX_ROOT_CHARS = 1600;
+const PROMPT_MAX_REPOST_CHARS = 800;
+const PROMPT_MAX_REPOST_COUNT = 5;
+const PROMPT_MAX_ATTACHMENTS = MULTIMODAL_MAX_ATTACHMENTS;
+const PROMPT_MAX_PDF_EXCERPT_CHARS = Math.min(800, MULTIMODAL_MAX_PDF_EXCERPT_CHARS);
+const RESPONSE_SCHEMA_NAME = 'classification';
+const IMAGE_ATTACHMENT_KIND = 'image';
+const PDF_ATTACHMENT_KIND = 'pdf';
+
+function compactWhitespace(value: string): string {
+  return value.replace(/\s+/g, ' ').trim();
+}
+
+function truncate(value: string, maxChars: number): string {
+  if (value.length <= maxChars) {
+    return value;
+  }
+  return `${value.slice(0, Math.max(0, maxChars - 3))}...`;
+}
+
+function resolveRootText(post: PostInput): string {
+  const rootNode = post.nodes.find((node) => node.kind === 'root');
+  const source = rootNode?.text ?? post.nodes[0]?.text ?? '';
+  const cleaned = compactWhitespace(source);
+  return cleaned.length > 0 ? truncate(cleaned, PROMPT_MAX_ROOT_CHARS) : '(empty)';
+}
+
+function resolveRepostLines(post: PostInput): string[] {
+  const repostNodes = post.nodes.filter((node) => node.kind === 'repost');
+  if (repostNodes.length === 0) {
+    return ['- (none)'];
+  }
+
+  return repostNodes
+    .slice(0, PROMPT_MAX_REPOST_COUNT)
+    .map((node, index) => `- [${index + 1}] ${truncate(compactWhitespace(node.text), PROMPT_MAX_REPOST_CHARS)}`);
+}
+
+function isImageAttachment(attachment: MultimodalAttachment): attachment is MultimodalImageAttachment {
+  return attachment.kind === IMAGE_ATTACHMENT_KIND;
+}
+
+function hasProviderAttachments(post: PostInput): boolean {
+  return post.attachments.length > 0;
+}
+
+function resolveAttachmentLines(attachments: PostInput['attachments']): string[] {
+  return attachments
+    .slice(0, PROMPT_MAX_ATTACHMENTS)
+    .map((attachment) => {
+      if (attachment.kind === IMAGE_ATTACHMENT_KIND) {
+        return `- [image] node=${attachment.node_id} mime=${attachment.mime_type} sha256=${attachment.sha256}`;
+      }
+
+      const excerpt = compactWhitespace(attachment.excerpt_text ?? '');
+      const excerptText = excerpt.length > 0
+        ? ` excerpt="${truncate(excerpt, PROMPT_MAX_PDF_EXCERPT_CHARS)}"`
+        : '';
+      return `- [${PDF_ATTACHMENT_KIND}] node=${attachment.node_id} source_url=${attachment.source_url}${excerptText}`;
+    });
+}
+
+function formatSection(title: string, body: string): string {
+  return `${title}:\n${body}`;
+}
+
+function buildPostContext(post: PostInput): string {
+  const sections: string[] = [
+    `Author: ${post.author_name}`,
+    formatSection('ROOT POST', resolveRootText(post)),
+    formatSection('REPOSTS', resolveRepostLines(post).join('\n')),
+  ];
+
+  const attachmentLines = resolveAttachmentLines(post.attachments);
+  if (attachmentLines.length > 0) {
+    sections.push(formatSection('ATTACHMENTS', attachmentLines.join('\n')));
+  }
+
+  return sections.join('\n\n');
+}
+
+function resolveRequiredModel(modelName: string, envName: 'LLM_MODEL' | 'VLM_MODEL'): string {
+  const model = modelName.trim();
+  if (!model) {
+    throw new Error(`${envName} environment variable is required`);
+  }
+  return model;
+}
+
+export function selectModelForPayload(post: PostInput, config: LlmRuntimeConfig): string {
+  return hasProviderAttachments(post)
+    ? resolveRequiredModel(config.vlmModel, 'VLM_MODEL')
+    : resolveRequiredModel(config.textModel, 'LLM_MODEL');
+}
+
+export function constructUserPrompt(post: PostInput): string {
+  return USER_PROMPT.replace('{{POST_TEXT}}', buildPostContext(post));
+}
+
+function toImageContentPart(attachment: MultimodalImageAttachment): ChatCompletionContentPart {
+  return {
+    type: 'image_url',
+    image_url: {
+      url: `data:${attachment.mime_type};base64,${attachment.base64}`,
+    },
+  };
+}
+
+export function buildMessages(post: PostInput): ChatCompletionMessageParam[] {
+  const imageParts = post.attachments
+    .filter(isImageAttachment)
+    .slice(0, PROMPT_MAX_ATTACHMENTS)
+    .map(toImageContentPart);
+
+  const userContent: ChatCompletionContentPart[] = [
+    { type: 'text', text: constructUserPrompt(post) },
+    ...imageParts,
+  ];
+
+  return [
+    { role: 'system', content: SYSTEM_PROMPT },
+    { role: 'user', content: userContent },
+  ];
 }
 
 function hasHttpStatus(error: unknown): error is { status: number } {
-  return typeof error === 'object' && error !== null && 'status' in error && typeof (error as { status: unknown }).status === 'number';
+  if (typeof error !== 'object' || error === null) {
+    return false;
+  }
+
+  return typeof Reflect.get(error, 'status') === 'number';
+}
+
+type ProviderErrorMetadata = {
+  provider_http_status?: number;
+  provider_error_code?: string;
+  provider_error_type?: string;
+  provider_error_message?: string;
+};
+
+function extractProviderErrorMetadata(error: unknown): ProviderErrorMetadata {
+  if (!(error instanceof Error)) {
+    return {};
+  }
+
+  const metadata: ProviderErrorMetadata = {
+    provider_error_message: error.message,
+  };
+  const status = Reflect.get(error, 'status');
+  const code = Reflect.get(error, 'code');
+  const type = Reflect.get(error, 'type');
+
+  if (typeof status === 'number') {
+    metadata.provider_http_status = status;
+  }
+  if (typeof code === 'string') {
+    metadata.provider_error_code = code;
+  }
+  if (typeof type === 'string') {
+    metadata.provider_error_type = type;
+  }
+
+  return metadata;
 }
 
 async function callLLMWithRetry(
   openai: OpenAI,
   model: string,
   messages: ChatCompletionMessageParam[],
-  logger: LoggerLike,
-) {
+  logger: Pick<AppLogger, 'warn'>,
+): Promise<ParsedChatCompletion<ScoreResult>> {
   return retry(
     async (bail) => {
       try {
-        const completion = await openai.chat.completions.create({
+        const completion = await openai.chat.completions.parse({
           model,
           messages,
           temperature: LLM_TEMPERATURE,
           max_tokens: LLM_MAX_TOKENS,
-          response_format: zodResponseFormat(DecisionSchema, 'classification'),
+          response_format: zodResponseFormat(DecisionSchema, RESPONSE_SCHEMA_NAME),
           reasoning_effort: 'none',
         });
 
         const message = completion.choices[0]?.message;
+        const parsed = message?.parsed;
         if (!message) {
           throw new Error('No completion choices returned');
         }
@@ -97,7 +253,7 @@ async function callLLMWithRetry(
           return completion;
         }
 
-        if (!message.content) {
+        if (!parsed) {
           throw new Error('Empty response from LLM (content is null)');
         }
 
@@ -125,7 +281,21 @@ async function callLLMWithRetry(
   );
 }
 
-function parseAndValidateResponse(content: string | null): ScoreResult {
+export async function callModel(
+  openai: OpenAI,
+  config: LlmRuntimeConfig,
+  post: PostInput,
+  logger: Pick<AppLogger, 'warn'>,
+): Promise<ParsedChatCompletion<ScoreResult>> {
+  return callLLMWithRetry(
+    openai,
+    selectModelForPayload(post, config),
+    buildMessages(post),
+    logger,
+  );
+}
+
+export function parseAndValidateResponse(content: string | null): ScoreResult {
   if (!content) {
     throw new Error('Empty content received from LLM');
   }
@@ -150,37 +320,33 @@ export function createLlmService(deps: LlmServiceDeps): LlmService {
       };
     }
 
-    if (!config.model) {
-      throw new Error('LLM_MODEL environment variable is required');
-    }
+    const selectedModel = selectModelForPayload(post, config);
 
     const openai = new OpenAI({
       apiKey: config.apiKey,
       baseURL: config.baseUrl,
     });
 
-    const messages: ChatCompletionMessageParam[] = [
-      { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: constructUserPrompt(post) },
-    ];
-
     try {
-      const completion = await callLLMWithRetry(openai, config.model, messages, logger);
-      const scores = parseAndValidateResponse(completion.choices[0]?.message.content ?? null);
+      const parsedCompletion = await callModel(openai, config, post, logger);
+      const scores = parsedCompletion.choices[0]?.message.parsed;
+      // const scores = parseAndValidateResponse(completion.choices[0]?.message.content ?? null);
 
       return {
         scores,
         source: 'llm',
-        model: config.model,
+        model: selectedModel,
         latency: Date.now() - startTime,
       };
     } catch (error) {
-      logger.error('llm_classification_failed', error, { model: config.model });
+      logger.error('llm_classification_failed', error, { model: selectedModel });
+      const providerMetadata = extractProviderErrorMetadata(error);
       return {
         scores: null,
         source: 'error',
-        model: config.model,
+        model: selectedModel,
         latency: Date.now() - startTime,
+        ...providerMetadata,
       };
     }
   }

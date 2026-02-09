@@ -76,6 +76,7 @@ export function createApp(deps: AppDependencies): Hono {
     createFeedbackRoutes({
       authMiddleware: deps.authMiddleware,
       feedbackService: deps.services.feedback,
+      logger: deps.logger,
     }),
   );
 

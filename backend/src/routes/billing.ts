@@ -7,16 +7,12 @@ import { BillingError } from '../lib/billing-constants';
 import { CHECKOUT_PLAN_VALUES, POLAR_SUBSCRIPTION_EVENT_TYPES } from '../lib/domain-constants';
 import type { PolarService } from '../services/polar';
 import { getSubscriptionIdFromWebhookData } from '../services/polar-webhook-schema';
-
-interface LoggerLike {
-  info: (message: string, meta?: Record<string, unknown>) => void;
-  error: (message: string, error: unknown, meta?: Record<string, unknown>) => void;
-}
+import type { AppLogger } from '../lib/logger-types';
 
 export interface BillingRoutesDeps {
   authMiddleware: MiddlewareHandler;
   polarService: PolarService;
-  logger: LoggerLike;
+  logger: Pick<AppLogger, 'info' | 'error'>;
   polarWebhookSecret: string;
 }
 

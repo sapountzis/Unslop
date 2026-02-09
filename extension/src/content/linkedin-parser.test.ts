@@ -30,6 +30,46 @@ describe('extractPostData', () => {
     const result = await extractPostData(element);
     expect(result).toBeNull();
   });
+
+  it('builds deterministic node IDs with root first and nested reposts in DOM order', async () => {
+    const repostNodes = [
+      { textContent: 'First repost text in DOM' },
+      { textContent: 'Second repost text in DOM' },
+    ];
+
+    const element = {
+      matches: (selector: string) => selector === SELECTORS.candidatePostRoot,
+      classList: { contains: (token: string) => token === 'feed-shared-update-v2' },
+      getAttribute: (_name: string) => null,
+      querySelector: (selector: string) => {
+        if (selector === SELECTORS.recommendationEntity) return null;
+        if (selector === SELECTORS.postUrn) return null;
+        if (selector === SELECTORS.authorLink) return { getAttribute: (name: string) => (name === 'href' ? '/in/example/' : null) };
+        if (selector === SELECTORS.authorName) return { textContent: 'Example User' };
+        if (selector === SELECTORS.postContent) return { textContent: 'Root post text' };
+        return null;
+      },
+      querySelectorAll: (selector: string) => {
+        if (selector.includes('update-components-mini-update-v2__link-to-details-page')) {
+          return repostNodes;
+        }
+        if (selector === SELECTORS.postContent) {
+          return [{ textContent: 'Root post text' }];
+        }
+        return [];
+      },
+    } as unknown as HTMLElement;
+
+    const result = await extractPostData(element);
+    expect(result).not.toBeNull();
+    expect(result?.nodes.map((node) => node.id)).toEqual(['root', 'repost-0', 'repost-1']);
+    expect(result?.nodes.map((node) => node.parent_id)).toEqual([null, 'root', 'root']);
+    expect(result?.nodes.map((node) => node.text)).toEqual([
+      'root post text',
+      'first repost text in dom',
+      'second repost text in dom',
+    ]);
+  });
 });
 
 describe('isLikelyFeedPostRoot', () => {
