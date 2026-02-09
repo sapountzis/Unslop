@@ -55,8 +55,8 @@ describe('batch queue resilience', () => {
     expect(__testing.pendingCount()).toBe(0);
   });
 
-  it('uses queue timeout as the single classification timeout authority (2s)', () => {
-    expect(BATCH_RESULT_TIMEOUT_MS).toBe(2000);
+  it('uses queue timeout as the single classification timeout authority (3s)', () => {
+    expect(BATCH_RESULT_TIMEOUT_MS).toBe(3000);
   });
 
   it('ignores late batch results after timeout resolution', async () => {

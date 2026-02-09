@@ -16,7 +16,7 @@ export const CACHE_MAX_ITEMS = 10_000;
 // Batch classify settings
 export const BATCH_WINDOW_MS = 75;
 export const BATCH_MAX_ITEMS = 20;
-export const BATCH_RESULT_TIMEOUT_MS = 2000; // Single fail-open timeout authority for classification
+export const BATCH_RESULT_TIMEOUT_MS = 3000; // Single fail-open timeout authority for classification
 
 // Runtime diagnostics
 export const DEBUG_CONTENT_RUNTIME = false;
