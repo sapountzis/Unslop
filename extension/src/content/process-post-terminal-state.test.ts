@@ -2,26 +2,42 @@ import { describe, expect, it } from 'bun:test';
 import { renderDecision } from './decision-renderer';
 import { ATTRIBUTES } from '../lib/selectors';
 
+class MockPostElement {
+  public style = { opacity: '' };
+  public classList = {
+    remove: (_name: string) => undefined,
+    add: (_name: string) => undefined,
+  };
+
+  private attributes = new Map<string, string>();
+
+  setAttribute(name: string, value: string): void {
+    this.attributes.set(name, value);
+  }
+
+  removeAttribute(name: string): void {
+    this.attributes.delete(name);
+  }
+
+  getAttribute(name: string): string | null {
+    return this.attributes.get(name) ?? null;
+  }
+
+  querySelector(_selector: string): null {
+    return null;
+  }
+}
+
+type MockHTMLElement = MockPostElement & HTMLElement;
+
 describe('processPost terminal state', () => {
   it('keep decision clears processing and marks processed', () => {
-    const post = {
-      style: { opacity: '' },
-      classList: {
-        remove: () => undefined,
-        add: () => undefined,
-      },
-      setAttribute: function (name: string, value: string) {
-        (this as any)[name] = value;
-      },
-      removeAttribute: function (name: string) {
-        delete (this as any)[name];
-      },
-    } as unknown as HTMLElement;
+    const post = new MockPostElement() as MockHTMLElement;
 
-    (post as any).setAttribute(ATTRIBUTES.processing, 'true');
+    post.setAttribute(ATTRIBUTES.processing, 'true');
     renderDecision(post, 'keep');
 
-    expect((post as any)[ATTRIBUTES.processing]).toBeUndefined();
-    expect((post as any)[ATTRIBUTES.processed]).toBe('true');
+    expect(post.getAttribute(ATTRIBUTES.processing)).toBeNull();
+    expect(post.getAttribute(ATTRIBUTES.processed)).toBe('true');
   });
 });

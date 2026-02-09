@@ -22,6 +22,22 @@ export function isLikelyFeedPostRoot(element: HTMLElement): boolean {
   );
 }
 
+export function readPostIdentity(element: HTMLElement): string | null {
+  const dataId = element.getAttribute('data-id');
+  if (dataId) return dataId;
+
+  const directUrn = element.getAttribute('data-urn');
+  if (directUrn) return directUrn;
+
+  const urnNode = element.querySelector(SELECTORS.postUrn);
+  if (urnNode instanceof HTMLElement) {
+    const nestedUrn = urnNode.getAttribute('data-urn');
+    if (nestedUrn) return nestedUrn;
+  }
+
+  return null;
+}
+
 function isFeedPost(element: HTMLElement): boolean {
   return (
     isLikelyFeedPostRoot(element) ||
@@ -44,7 +60,7 @@ function extractAuthorId(href: string): string {
   }
 
   // Fallback: use full href if it exists but doesn't match patterns
-  return href || 'unknown';
+  return href || 'unresolved';
 }
 
 /**

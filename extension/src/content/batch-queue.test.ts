@@ -10,13 +10,24 @@ const post: PostData = {
   content_text: 'hello',
 };
 
-const originalChrome = (globalThis as any).chrome;
-const originalSetTimeout = globalThis.setTimeout;
+type TestChrome = {
+  runtime: {
+    sendMessage: () => Promise<{ status: 'ok' }>;
+  };
+};
+type TestGlobal = typeof globalThis & {
+  chrome?: TestChrome;
+  setTimeout: typeof globalThis.setTimeout;
+};
+
+const testGlobal = globalThis as TestGlobal;
+const originalChrome = testGlobal.chrome;
+const originalSetTimeout = testGlobal.setTimeout;
 const originalWindowSetTimeout = globalThis.window?.setTimeout;
 
 describe('batch queue resilience', () => {
   beforeEach(() => {
-    (globalThis as any).chrome = {
+    testGlobal.chrome = {
       runtime: {
         sendMessage: async () => ({ status: 'ok' }),
       },
@@ -24,15 +35,15 @@ describe('batch queue resilience', () => {
 
     const fastTimeout = ((handler: TimerHandler, _timeout?: number) =>
       originalSetTimeout(handler, 1)) as typeof setTimeout;
-    (globalThis as any).setTimeout = fastTimeout;
+    testGlobal.setTimeout = fastTimeout;
     if (globalThis.window) {
       globalThis.window.setTimeout = fastTimeout;
     }
   });
 
   afterEach(() => {
-    (globalThis as any).chrome = originalChrome;
-    (globalThis as any).setTimeout = originalSetTimeout;
+    testGlobal.chrome = originalChrome;
+    testGlobal.setTimeout = originalSetTimeout;
     if (globalThis.window && originalWindowSetTimeout) {
       globalThis.window.setTimeout = originalWindowSetTimeout;
     }

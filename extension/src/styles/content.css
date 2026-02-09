@@ -1,10 +1,10 @@
 /* extension/src/styles/content.css */
 /* Styles injected into LinkedIn for Unslop UI elements */
 
-/* Pre-classification mode: collapse only semantic outer feed card roots until Unslop has a decision. */
-html[data-unslop-preclassify="true"] .feed-shared-update-v2[role="article"][data-urn^="urn:li:activity:"]:not([data-unslop-processed]),
-html[data-unslop-preclassify="true"] .feed-shared-update-v2[role="article"][data-urn^="urn:li:share:"]:not([data-unslop-processed]) {
-  display: none !important;
+/* Pre-classification mode: keep layout intact so LinkedIn can initialize post internals (for example "...more"). */
+html[data-unslop-preclassify="true"] [data-finite-scroll-hotkey-item]:has(.feed-shared-update-v2[role="article"]):not([data-unslop-processed]) {
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
 
 /* Dimmed post header */

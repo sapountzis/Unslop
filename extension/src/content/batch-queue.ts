@@ -6,19 +6,19 @@ import { BatchClassifyResult, Decision, PostData, Source } from '../types';
 type PendingEntry = {
   promise: Promise<{ decision: Decision; source: Source }>;
   resolve: (value: { decision: Decision; source: Source }) => void;
-  timer: number;
+  timer: ReturnType<typeof globalThis.setTimeout>;
 };
 
 const pending = new Map<string, PendingEntry>();
 const queue: PostData[] = [];
-let flushTimer: number | null = null;
+let flushTimer: ReturnType<typeof globalThis.setTimeout> | null = null;
 let flushing = false;
 
-function setTimer(handler: () => void, timeoutMs: number): number {
-  return globalThis.setTimeout(handler, timeoutMs) as unknown as number;
+function setTimer(handler: () => void, timeoutMs: number): ReturnType<typeof globalThis.setTimeout> {
+  return globalThis.setTimeout(handler, timeoutMs);
 }
 
-function clearTimer(timer: number): void {
+function clearTimer(timer: ReturnType<typeof globalThis.setTimeout>): void {
   globalThis.clearTimeout(timer);
 }
 
@@ -108,8 +108,12 @@ export function handleBatchResult(item: BatchClassifyResult): void {
   pending.delete(item.post_id);
 }
 
+export function getPendingBatchCount(): number {
+  return pending.size;
+}
+
 export const __testing = {
   pendingCount(): number {
-    return pending.size;
+    return getPendingBatchCount();
   },
 };

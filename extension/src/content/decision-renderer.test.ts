@@ -81,11 +81,18 @@ class MockElement {
   }
 }
 
-const originalDocument = globalThis.document;
+type MockHTMLElement = MockElement & HTMLElement;
+type DocumentLike = {
+  createElement: (tagName?: string) => MockElement;
+};
+type TestGlobal = typeof globalThis & { document?: Document | DocumentLike };
+
+const testGlobal = globalThis as TestGlobal;
+const originalDocument = testGlobal.document;
 
 describe('renderDecision', () => {
   beforeEach(() => {
-    (globalThis as any).document = {
+    testGlobal.document = {
       createElement: (tagName?: string) => {
         const element = new MockElement();
         if (tagName === 'button') {
@@ -98,15 +105,15 @@ describe('renderDecision', () => {
 
   afterEach(() => {
     if (typeof originalDocument === 'undefined') {
-      delete (globalThis as any).document;
+      Reflect.deleteProperty(testGlobal, 'document');
       return;
     }
-    (globalThis as any).document = originalDocument;
+    testGlobal.document = originalDocument;
   });
 
   it('marks keep decisions as processed only', () => {
     const post = new MockElement();
-    renderDecision(post as unknown as HTMLElement, 'keep');
+    renderDecision(post as MockHTMLElement, 'keep');
 
     expect(post.hasAttribute(ATTRIBUTES.processed)).toBe(true);
     expect(post.getAttribute(ATTRIBUTES.decision)).toBeNull();
@@ -115,8 +122,8 @@ describe('renderDecision', () => {
 
   it('applies dim style and prepends header once', () => {
     const post = new MockElement();
-    renderDecision(post as unknown as HTMLElement, 'dim', 'post-1');
-    renderDecision(post as unknown as HTMLElement, 'dim', 'post-1');
+    renderDecision(post as MockHTMLElement, 'dim', 'post-1');
+    renderDecision(post as MockHTMLElement, 'dim', 'post-1');
 
     expect(post.hasAttribute(ATTRIBUTES.processed)).toBe(true);
     expect(post.getAttribute(ATTRIBUTES.decision)).toBe('dim');
@@ -130,7 +137,7 @@ describe('renderDecision', () => {
     const post = new MockElement();
     feed.prepend(post);
 
-    renderDecision(post as unknown as HTMLElement, 'hide');
+    renderDecision(post as MockHTMLElement, 'hide');
 
     expect(feed.children.includes(post)).toBe(true);
     expect(post.hasAttribute(ATTRIBUTES.processed)).toBe(true);
@@ -142,7 +149,7 @@ describe('renderDecision', () => {
   it('supports stub mode for hide decision in local testing', () => {
     const post = new MockElement();
 
-    renderDecision(post as unknown as HTMLElement, 'hide', 'post-2', { hideMode: 'stub' });
+    renderDecision(post as MockHTMLElement, 'hide', 'post-2', { hideMode: 'stub' });
 
     expect(post.classList.contains('unslop-hidden-post')).toBe(false);
     expect(post.classList.contains('unslop-hidden-post-stub')).toBe(true);

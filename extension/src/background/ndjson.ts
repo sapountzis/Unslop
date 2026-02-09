@@ -1,6 +1,6 @@
 // extension/src/background/ndjson.ts
 
-export async function* parseNdjson<T = unknown>(
+export async function* parseNdjson<T>(
   stream: ReadableStream<Uint8Array>
 ): AsyncGenerator<T> {
   const reader = stream.getReader();

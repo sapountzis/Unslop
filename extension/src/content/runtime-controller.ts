@@ -55,6 +55,13 @@ export function createRuntimeController(options: RuntimeControllerOptions) {
       forceAttach;
 
     if (mustReenter) {
+      // Transition to an enabled mode before callbacks run so downstream
+      // runtime hooks can process the current route immediately.
+      state = {
+        mode: 'enabled_attaching',
+        routeKey,
+        enabled,
+      };
       options.enterEnabled({ routeKey, forceAttach });
     }
 

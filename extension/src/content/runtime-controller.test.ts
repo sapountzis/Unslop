@@ -2,6 +2,29 @@ import { describe, expect, it } from 'bun:test';
 import { createRuntimeController } from './runtime-controller';
 
 describe('runtime controller', () => {
+  it('is enabled for processing before enterEnabled callbacks run', async () => {
+    let enabled = true;
+    let enabledDuringEnter = false;
+    let controllerRef: ReturnType<typeof createRuntimeController> | null = null;
+
+    const controller = createRuntimeController({
+      getRouteKey: () => '/feed/',
+      isRouteEligible: (route) => route.startsWith('/feed/'),
+      readEnabled: async () => enabled,
+      enterDisabled: () => undefined,
+      enterEnabled: () => {
+        enabledDuringEnter = controllerRef?.isEnabledForProcessing() ?? false;
+      },
+      isAttachmentLive: () => true,
+    });
+
+    controllerRef = controller;
+    await controller.reconcile('init');
+
+    expect(enabledDuringEnter).toBe(true);
+    expect(controller.getState().mode).toBe('enabled_active');
+  });
+
   it('transitions disabled -> enabled and re-enters on watchdog', async () => {
     let enabled = false;
     let routeKey = '/feed/';

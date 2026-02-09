@@ -8,6 +8,7 @@ describe('marker manager', () => {
       ATTRIBUTES.processing,
       ATTRIBUTES.processed,
       ATTRIBUTES.decision,
+      ATTRIBUTES.identity,
     ]);
     const classes = new Set<string>(['unslop-hidden-post', 'unslop-hidden-post-stub']);
     const style: { opacity?: string } = { opacity: '0.35' };
@@ -30,13 +31,19 @@ describe('marker manager', () => {
         return null;
       },
       style,
-    } as unknown as HTMLElement;
+    } as {
+      removeAttribute: (name: string) => void;
+      classList: { remove: (name: string) => void };
+      querySelector: (selector: string) => { remove: () => void } | null;
+      style: { opacity?: string };
+    } & HTMLElement;
 
     resetPostElementState(element);
 
     expect(attrs.has(ATTRIBUTES.processing)).toBe(false);
     expect(attrs.has(ATTRIBUTES.processed)).toBe(false);
     expect(attrs.has(ATTRIBUTES.decision)).toBe(false);
+    expect(attrs.has(ATTRIBUTES.identity)).toBe(false);
     expect(classes.has('unslop-hidden-post')).toBe(false);
     expect(classes.has('unslop-hidden-post-stub')).toBe(false);
     expect(hiddenStub.removed).toBe(true);

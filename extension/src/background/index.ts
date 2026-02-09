@@ -15,6 +15,16 @@ async function getJwtFromStorage(): Promise<string | null> {
   return typeof storage.jwt === 'string' && storage.jwt.length > 0 ? storage.jwt : null;
 }
 
+function isLinkedInFeedUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname !== 'www.linkedin.com') return false;
+    return parsed.pathname === '/feed' || parsed.pathname.startsWith('/feed/');
+  } catch {
+    return false;
+  }
+}
+
 // Handle messages from content scripts and popup
 chrome.runtime.onMessage.addListener((message: RuntimeRequest, sender, sendResponse) => {
   (async () => {
@@ -102,6 +112,18 @@ chrome.runtime.onMessage.addListener((message: RuntimeRequest, sender, sendRespo
           const newValue = toggleEnabled(current.enabled);
           await chrome.storage.sync.set({ enabled: newValue });
           sendResponse({ enabled: newValue });
+          return;
+        }
+
+        case MESSAGE_TYPES.RELOAD_ACTIVE_LINKEDIN_TAB: {
+          const tab = await chrome.tabs.get(message.tabId).catch(() => null);
+          if (!tab?.id || !tab.url || !isLinkedInFeedUrl(tab.url)) {
+            sendResponse({ status: 'ignored' });
+            return;
+          }
+
+          await chrome.tabs.reload(tab.id);
+          sendResponse({ status: 'reloaded' });
           return;
         }
 

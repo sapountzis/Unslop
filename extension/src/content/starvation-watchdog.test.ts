@@ -8,8 +8,8 @@ describe('starvation watchdog', () => {
       recovered += 1;
     });
 
-    watchdog.tick({ candidatesVisible: 5, processedDelta: 0, classifyDelta: 0, observerLive: true });
-    watchdog.tick({ candidatesVisible: 6, processedDelta: 0, classifyDelta: 0, observerLive: true });
+    watchdog.tick({ backlogSize: 5, processedDelta: 0, classifyDelta: 0, observerLive: true });
+    watchdog.tick({ backlogSize: 6, processedDelta: 0, classifyDelta: 0, observerLive: true });
 
     expect(recovered).toBe(1);
   });
@@ -20,8 +20,8 @@ describe('starvation watchdog', () => {
       recovered += 1;
     });
 
-    watchdog.tick({ candidatesVisible: 0, processedDelta: 0, classifyDelta: 0, observerLive: false });
-    watchdog.tick({ candidatesVisible: 0, processedDelta: 0, classifyDelta: 0, observerLive: false });
+    watchdog.tick({ backlogSize: 0, processedDelta: 0, classifyDelta: 0, observerLive: false });
+    watchdog.tick({ backlogSize: 0, processedDelta: 0, classifyDelta: 0, observerLive: false });
 
     expect(recovered).toBe(1);
   });

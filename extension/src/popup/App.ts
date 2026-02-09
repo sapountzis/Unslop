@@ -181,6 +181,14 @@ export class App {
       const nextMode = resolveHideRenderMode(hideRenderModeSelect.value);
       await chrome.storage.sync.set({ [HIDE_RENDER_MODE_STORAGE_KEY]: nextMode });
       hideRenderModeSelect.value = nextMode;
+
+      const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (typeof activeTab?.id === 'number') {
+        await chrome.runtime.sendMessage({
+          type: MESSAGE_TYPES.RELOAD_ACTIVE_LINKEDIN_TAB,
+          tabId: activeTab.id,
+        });
+      }
     });
 
     const upgradeBtn = this.container.querySelector('#upgrade-btn');

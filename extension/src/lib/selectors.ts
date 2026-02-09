@@ -6,10 +6,10 @@ export const SELECTORS = {
     // Feed container selectors (try in order)
     feed: '.scaffold-finite-scroll__content, main .scaffold-finite-scroll, main',
 
-    // Post identification (strict outer feed card roots only; avoid matching nested content blocks)
-    candidatePostRoot:
-        '.feed-shared-update-v2[role="article"][data-urn^="urn:li:activity:"], ' +
-        '.feed-shared-update-v2[role="article"][data-urn^="urn:li:share:"]',
+    // Semantic content card used for extraction/classification.
+    candidatePostRoot: '.feed-shared-update-v2[role="article"]',
+    // Outer layout owner used for hide/stub/dim rendering.
+    renderPostRoot: '[data-finite-scroll-hotkey-item]:has(.feed-shared-update-v2[role="article"])',
     postUrn: '[data-urn^="urn:li:activity:"], [data-urn^="urn:li:share:"]',
 
     // Author extraction
@@ -41,4 +41,5 @@ export const ATTRIBUTES = {
     processing: 'data-unslop-checking',
     decision: 'data-unslop-decision',
     preclassify: 'data-unslop-preclassify',
+    identity: 'data-unslop-identity',
 } as const;

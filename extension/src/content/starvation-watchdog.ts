@@ -1,5 +1,5 @@
 export type WatchdogInput = {
-  candidatesVisible: number;
+  backlogSize: number;
   processedDelta: number;
   classifyDelta: number;
   observerLive: boolean;
@@ -19,10 +19,10 @@ export function createStarvationWatchdog(onRecover: () => void, threshold = 2) {
         return;
       }
 
-      const hasCandidates = input.candidatesVisible > 0;
+      const hasBacklog = input.backlogSize > 0;
       const hasProgress = input.processedDelta > 0 || input.classifyDelta > 0;
 
-      if (!hasCandidates || hasProgress) {
+      if (!hasBacklog || hasProgress) {
         stalledTicks = 0;
         return;
       }

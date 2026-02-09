@@ -1,12 +1,22 @@
 // extension/src/lib/decision-cache.ts
 import { CachedDecision, Decision, Source } from '../types';
-import { CACHE_TTL_MS, CACHE_MAX_ITEMS } from './config';
+import { CACHE_TTL_MS, CACHE_MAX_ITEMS, DEBUG_CONTENT_RUNTIME } from './config';
 
 const DEFAULT_CACHE = {
   decisionCache: {},
 };
 
 type DecisionCacheStore = Record<string, CachedDecision>;
+type DebugContext = Record<string, string | number | boolean | null | undefined>;
+
+function debugLog(message: string, context?: DebugContext): void {
+  if (!DEBUG_CONTENT_RUNTIME) return;
+  if (typeof context === 'undefined') {
+    console.debug(message);
+    return;
+  }
+  console.debug(message, context);
+}
 
 export class DecisionCacheService {
   async get(postId: string): Promise<CachedDecision | null> {
@@ -14,18 +24,18 @@ export class DecisionCacheService {
     const cached = decisionCache[postId];
 
     if (!cached) {
-      console.debug('[Unslop][cache] miss', { postId, cacheSize: this.size(decisionCache) });
+      debugLog('[Unslop][cache] miss', { postId, cacheSize: this.size(decisionCache) });
       return null;
     }
 
     if (this.isExpired(cached)) {
       delete decisionCache[postId];
       await this.write(decisionCache);
-      console.debug('[Unslop][cache] expired', { postId });
+      debugLog('[Unslop][cache] expired', { postId });
       return null;
     }
 
-    console.debug('[Unslop][cache] hit', { postId, source: cached.source });
+    debugLog('[Unslop][cache] hit', { postId, source: cached.source });
     return cached;
   }
 
@@ -41,7 +51,7 @@ export class DecisionCacheService {
     this.enforceLimit(decisionCache);
     await this.write(decisionCache);
 
-    console.debug('[Unslop][cache] set', {
+    debugLog('[Unslop][cache] set', {
       postId,
       decision,
       source,
