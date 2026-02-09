@@ -3,7 +3,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Privacy — Unslop</title>
+  <title>Privacy Policy | Unslop</title>
+  <meta name="description" content="Read how Unslop handles data for LinkedIn feed classification, including what is collected, retention windows, processors, and deletion requests." />
+  <meta name="robots" content="index,follow" />
+  <link rel="canonical" href="https://getunslop.com/privacy.html" />
+  <meta property="og:type" content="article" />
+  <meta property="og:url" content="https://getunslop.com/privacy.html" />
+  <meta property="og:title" content="Privacy Policy | Unslop" />
+  <meta property="og:description" content="Plain-language privacy details for Unslop, including data collection, retention, and deletion." />
+  <meta property="og:site_name" content="Unslop" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="Privacy Policy | Unslop" />
+  <meta name="twitter:description" content="Understand what data Unslop collects and how it is handled." />
+  <meta name="theme-color" content="#070A12" />
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
   <link rel="stylesheet" href="css/styles.css" />
 
@@ -137,12 +149,14 @@
         <a href="terms.html">Terms</a>
       </div>
       <div class="footer__meta">
-        <p>&copy; 2025 Unslop</p>
+        <p>&copy; <span id="year"></span> Unslop</p>
         <p class="footer__fine">Built for focus.</p>
       </div>
     </div>
   </footer>
   <script>
+    document.getElementById('year').textContent = new Date().getFullYear();
+
     const hamburger = document.querySelector('.nav__hamburger');
     const mobileNav = document.querySelector('.mobile-nav');
 
@@ -151,7 +165,7 @@
         const isActive = mobileNav.classList.contains('active');
         mobileNav.classList.toggle('active');
         hamburger.classList.toggle('active');
-        hamburger.setAttribute('aria-expanded', !isActive);
+        hamburger.setAttribute('aria-expanded', String(!isActive));
         document.body.style.overflow = !isActive ? 'hidden' : '';
       });
 

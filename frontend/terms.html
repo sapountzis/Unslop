@@ -3,7 +3,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Terms — Unslop</title>
+  <title>Terms of Service | Unslop</title>
+  <meta name="description" content="Read Unslop's terms of service, including service scope, billing terms, liability limits, and contact details." />
+  <meta name="robots" content="index,follow" />
+  <link rel="canonical" href="https://getunslop.com/terms.html" />
+  <meta property="og:type" content="article" />
+  <meta property="og:url" content="https://getunslop.com/terms.html" />
+  <meta property="og:title" content="Terms of Service | Unslop" />
+  <meta property="og:description" content="Understand the terms governing use of Unslop." />
+  <meta property="og:site_name" content="Unslop" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="Terms of Service | Unslop" />
+  <meta name="twitter:description" content="Legal terms for using Unslop." />
+  <meta name="theme-color" content="#070A12" />
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
   <link rel="stylesheet" href="css/styles.css" />
 
@@ -119,12 +131,14 @@
         <a href="support.html">Support</a>
       </div>
       <div class="footer__meta">
-        <p>&copy; 2025 Unslop</p>
+        <p>&copy; <span id="year"></span> Unslop</p>
         <p class="footer__fine">Built for focus.</p>
       </div>
     </div>
   </footer>
   <script>
+    document.getElementById('year').textContent = new Date().getFullYear();
+
     const hamburger = document.querySelector('.nav__hamburger');
     const mobileNav = document.querySelector('.mobile-nav');
 
@@ -133,7 +147,7 @@
         const isActive = mobileNav.classList.contains('active');
         mobileNav.classList.toggle('active');
         hamburger.classList.toggle('active');
-        hamburger.setAttribute('aria-expanded', !isActive);
+        hamburger.setAttribute('aria-expanded', String(!isActive));
         document.body.style.overflow = !isActive ? 'hidden' : '';
       });
 
