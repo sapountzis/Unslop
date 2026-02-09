@@ -105,6 +105,7 @@ export function createDependencies(options: CreateDependenciesOptions = {}): App
     quotaService,
     postRepository,
     activityRepository,
+    logger: appLogger,
     cacheTtlDays: config.classification.postCacheTtlDays,
     batchLlmConcurrency: config.classification.batchConcurrency,
   });

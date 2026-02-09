@@ -36,6 +36,9 @@ export interface ClassificationServiceDeps {
   quotaService: QuotaService;
   postRepository: PostRepository;
   activityRepository: ActivityRepository;
+  logger: {
+    info: (message: string, meta?: Record<string, unknown>) => void;
+  };
   cacheTtlDays: number;
   batchLlmConcurrency: number;
 }
@@ -60,6 +63,17 @@ function normalizePost(post: ClassifyInputPost) {
 export function createClassificationService(deps: ClassificationServiceDeps): ClassificationService {
   const scoringEngine = new ScoringEngine();
 
+  function logCacheDecision(postId: string, decision: Decision): void {
+    deps.logger.info('slop_audit', {
+      event: 'audit_decision',
+      source: 'cache',
+      post_id: postId,
+      decision,
+      rule: 'CACHE_HIT',
+      reason: 'cache_hit',
+    });
+  }
+
   function getCacheExpiry(): Date {
     const cacheExpiry = new Date();
     cacheExpiry.setDate(cacheExpiry.getDate() - deps.cacheTtlDays);
@@ -71,6 +85,7 @@ export function createClassificationService(deps: ClassificationServiceDeps): Cl
     const cached = await deps.postRepository.findFreshPostDecision(normalized.post_id, getCacheExpiry());
 
     if (cached) {
+      logCacheDecision(normalized.post_id, cached.decision);
       await deps.activityRepository.insertActivities([
         {
           userId,
@@ -145,6 +160,7 @@ export function createClassificationService(deps: ClassificationServiceDeps): Cl
     for (const post of normalizedPosts) {
       const cached = cachedByPostId.get(post.post_id);
       if (cached) {
+        logCacheDecision(post.post_id, cached.decision);
         outcomes.push({
           post_id: post.post_id,
           decision: cached.decision,
