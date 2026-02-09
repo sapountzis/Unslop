@@ -106,7 +106,7 @@ Background → content script stream messages:
 }
 ```
 
-The content script uses a fail-open timeout (`2000ms` baseline). If no decision arrives in time, it renders `keep`.
+The content script uses a fail-open timeout (`3000ms` baseline). If no decision arrives in time, it renders `keep`.
 
 ## Applying decisions (required)
 

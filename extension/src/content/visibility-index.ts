@@ -3,7 +3,6 @@ export type VisibilityIndex = {
   unobserve: (element: HTMLElement) => void;
   hasSnapshot: (element: HTMLElement) => boolean;
   isCurrentlyVisible: (element: HTMLElement) => boolean;
-  wasEverVisible: (element: HTMLElement) => boolean;
   clear: () => void;
   size: () => number;
 };
@@ -21,7 +20,6 @@ export type VisibilityIndexOptions = {
 type VisibilityState = {
   seen: boolean;
   current: boolean;
-  ever: boolean;
 };
 
 const DEFAULT_ROOT_MARGIN = '24px 0px 24px 0px';
@@ -41,9 +39,6 @@ function createFallbackVisibilityIndex(): VisibilityIndex {
       return observed.has(element);
     },
     isCurrentlyVisible(element) {
-      return observed.has(element);
-    },
-    wasEverVisible(element) {
       return observed.has(element);
     },
     clear() {
@@ -87,10 +82,9 @@ export function createVisibilityIndex(options?: VisibilityIndexOptions): Visibil
 
         const seen = true;
         const current = entry.isIntersecting;
-        const ever = previous.ever || current;
-        if (previous.seen === seen && previous.current === current && previous.ever === ever) continue;
+        if (previous.seen === seen && previous.current === current) continue;
 
-        states.set(entry.target, { seen, current, ever });
+        states.set(entry.target, { seen, current });
         changed = true;
       }
 
@@ -108,7 +102,7 @@ export function createVisibilityIndex(options?: VisibilityIndexOptions): Visibil
   return {
     observe(element) {
       if (states.has(element)) return;
-      states.set(element, { seen: false, current: false, ever: false });
+      states.set(element, { seen: false, current: false });
       observer.observe(element);
     },
     unobserve(element) {
@@ -121,9 +115,6 @@ export function createVisibilityIndex(options?: VisibilityIndexOptions): Visibil
     },
     isCurrentlyVisible(element) {
       return states.get(element)?.current ?? false;
-    },
-    wasEverVisible(element) {
-      return states.get(element)?.ever ?? false;
     },
     clear() {
       states.clear();

@@ -2,6 +2,7 @@ export type WatchdogInput = {
   backlogSize: number;
   processedDelta: number;
   classifyDelta: number;
+  pendingBatchCount: number;
   observerLive: boolean;
 };
 
@@ -16,6 +17,13 @@ export function createStarvationWatchdog(onRecover: () => void, threshold = 2) {
           stalledTicks = 0;
           onRecover();
         }
+        return;
+      }
+
+      // Pending batch classification is expected to sit briefly (windowing + API/NDJSON latency).
+      // Treat it as active work, not starvation, to avoid recovery loops that reset the feed.
+      if (input.pendingBatchCount > 0) {
+        stalledTicks = 0;
         return;
       }
 

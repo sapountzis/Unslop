@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { extractPostData, isLikelyFeedPostRoot } from './linkedin-parser';
+import { SELECTORS } from '../lib/selectors';
 
 class MockElement {
   matches(_selector: string): boolean {
@@ -49,6 +50,7 @@ describe('isLikelyFeedPostRoot', () => {
     const element = {
       matches: (selector: string) => selector === '.feed-shared-update-v2[role="article"]',
       classList: { contains: (token: string) => token === 'feed-shared-update-v2' },
+      getAttribute: (_name: string) => null,
       querySelector: (selector: string) => {
         if (selector.includes('[data-urn^="urn:li:activity:"]')) {
           return {
@@ -60,9 +62,31 @@ describe('isLikelyFeedPostRoot', () => {
     } as {
       matches: (selector: string) => boolean;
       classList: { contains: (token: string) => boolean };
+      getAttribute: (name: string) => string | null;
       querySelector: (selector: string) => { getAttribute: (name: string) => string | null } | null;
     } & HTMLElement;
 
     expect(isLikelyFeedPostRoot(element)).toBe(true);
+  });
+
+  it('rejects recommended discovery entity cards', () => {
+    const element = {
+      matches: (selector: string) => selector === SELECTORS.candidatePostRoot,
+      classList: { contains: (token: string) => token === 'feed-shared-update-v2' },
+      querySelector: (selector: string) => {
+        if (selector === SELECTORS.postUrn) return null;
+        if (selector === SELECTORS.postContent) return { textContent: 'People to follow based on your activity' };
+        if (selector === SELECTORS.recommendationEntity) return {};
+        return null;
+      },
+      getAttribute: (_name: string) => null,
+    } as {
+      matches: (selector: string) => boolean;
+      classList: { contains: (token: string) => boolean };
+      querySelector: (selector: string) => { textContent?: string } | null;
+      getAttribute: (name: string) => string | null;
+    } & HTMLElement;
+
+    expect(isLikelyFeedPostRoot(element)).toBe(false);
   });
 });

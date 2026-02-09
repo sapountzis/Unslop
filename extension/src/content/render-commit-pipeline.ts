@@ -28,9 +28,12 @@ type RenderCommitPipelineOptions = {
     options?: { hideMode?: HideRenderMode }
   ) => void;
   visibility: VisibilityIndex;
+  isWithinCommitBand?: (element: HTMLElement) => boolean;
   requestAnimationFrame?: (cb: FrameRequestCallback) => number;
   cancelAnimationFrame?: (id: number) => void;
 };
+
+const DEFAULT_COMMIT_BAND_PX = 240;
 
 let fallbackFrameId = 0;
 const fallbackFrameTimers = new Map<number, ReturnType<typeof globalThis.setTimeout>>();
@@ -69,6 +72,22 @@ function shouldDeferDestructiveHide(entry: InternalEntry, visibility: Visibility
   return visibility.isCurrentlyVisible(entry.renderRoot);
 }
 
+function defaultIsWithinCommitBand(element: HTMLElement): boolean {
+  if (typeof window === 'undefined') return true;
+  if (typeof element.getBoundingClientRect !== 'function') return true;
+
+  const rect = element.getBoundingClientRect();
+  const viewportHeight =
+    window.innerHeight ||
+    (typeof document !== 'undefined' ? document.documentElement?.clientHeight ?? 0 : 0);
+
+  if (!Number.isFinite(viewportHeight) || viewportHeight <= 0) return true;
+
+  const bandTop = 0 - DEFAULT_COMMIT_BAND_PX;
+  const bandBottom = viewportHeight + DEFAULT_COMMIT_BAND_PX;
+  return rect.bottom >= bandTop && rect.top <= bandBottom;
+}
+
 export function createRenderCommitPipeline(options: RenderCommitPipelineOptions) {
   const requestAnimationFrame =
     options.requestAnimationFrame ??
@@ -80,6 +99,7 @@ export function createRenderCommitPipeline(options: RenderCommitPipelineOptions)
     (typeof window.cancelAnimationFrame === 'function'
       ? window.cancelAnimationFrame.bind(window)
       : fallbackCancelAnimationFrame);
+  const isWithinCommitBand = options.isWithinCommitBand ?? defaultIsWithinCommitBand;
 
   const pending = new Map<HTMLElement, InternalEntry>();
   let frameHandle = 0;
@@ -120,6 +140,11 @@ export function createRenderCommitPipeline(options: RenderCommitPipelineOptions)
       }
 
       if (shouldDeferDestructiveHide(entry, options.visibility)) {
+        pending.set(entry.renderRoot, entry);
+        continue;
+      }
+
+      if (entry.decision === 'hide' && entry.hideMode === 'collapse' && !isWithinCommitBand(entry.renderRoot)) {
         pending.set(entry.renderRoot, entry);
         continue;
       }

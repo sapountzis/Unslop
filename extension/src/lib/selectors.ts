@@ -25,6 +25,9 @@ export const SELECTORS = {
     // Post content extraction
     postContent: '.feed-shared-text, .feed-shared-update-v2__description, [data-anonymize="text"]',
 
+    // Discovery/recommendation cards (for example "Recommended for you" people suggestions)
+    recommendationEntity: '.update-components-feed-discovery-entity, .feed-shared-aggregated-content',
+
     // Auth page JWT meta tag
     jwtMeta: 'meta[name="unslop-jwt"]',
 } as const;

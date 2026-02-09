@@ -25,7 +25,6 @@ function stableVisibility(): VisibilityIndex {
     unobserve: () => undefined,
     hasSnapshot: () => true,
     isCurrentlyVisible: () => false,
-    wasEverVisible: () => false,
     clear: () => undefined,
     size: () => 0,
   };

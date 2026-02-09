@@ -63,7 +63,8 @@ flowchart LR
 2. If URL route matches `/feed/`, it immediately sets:
    - `html[data-unslop-preclassify="true"]`
 3. CSS preclassify rule cloaks unprocessed feed containers before classification while preserving layout:
-   - `html[data-unslop-preclassify="true"] [data-finite-scroll-hotkey-item]:has(.feed-shared-update-v2[role="article"]):not([data-unslop-processed]) { opacity: 0 !important; pointer-events: none !important; }`
+   - `html[data-unslop-preclassify="true"] [data-finite-scroll-hotkey-item]:has(.feed-shared-update-v2[role="article"]):not([data-unslop-processed]):not([data-id^="urn:li:aggregate:"]):not(:has(.feed-shared-aggregated-content)):not(:has(.update-components-feed-discovery-entity)) { opacity: 0 !important; pointer-events: none !important; }`
+   - Aggregate/discovery modules (for example "Recommended for you") are excluded and left untouched.
 4. Runtime controller reconciles route + enabled state and starts attachment.
 5. Attachment controller either:
    - attaches a feed `MutationObserver`, or
@@ -104,6 +105,8 @@ Defined in `src/lib/selectors.ts`:
   - `.feed-shared-update-v2[role="article"]`
 - Render root selector:
   - `[data-finite-scroll-hotkey-item]:has(.feed-shared-update-v2[role="article"])`
+- Recommendation/discovery selector:
+  - `.update-components-feed-discovery-entity, .feed-shared-aggregated-content`
 
 DOM attributes used by runtime:
 - `data-unslop-preclassify`
@@ -152,7 +155,7 @@ Rules:
 
 `src/content/batch-queue.ts`
 - Batches classify requests and tracks pending entries.
-- Single timeout authority: `BATCH_RESULT_TIMEOUT_MS` (2s).
+- Single timeout authority: `BATCH_RESULT_TIMEOUT_MS` (3s).
 
 `src/content/visibility-index.ts`
 - Tracks element visibility snapshots via `IntersectionObserver`.
@@ -163,6 +166,7 @@ Rules:
 - Coalesces by render root.
 - Flushes by RAF.
 - Defers destructive `hide + collapse` while currently visible.
+- Also defers far-offscreen collapse until the post enters a viewport-adjacent commit band.
 
 `src/content/decision-renderer.ts`
 - Applies `keep | dim | hide`.
@@ -176,6 +180,7 @@ Rules:
 
 `src/content/starvation-watchdog.ts`
 - Detects stalled processing and triggers reconcile.
+- Pending batch classify work is treated as active progress to avoid false watchdog recover loops during normal API latency.
 
 `src/background/index.ts`
 - Message hub and auth/enabled enforcement.
@@ -236,6 +241,15 @@ Enabled-state default:
 1. Confirm preclassify selector is active on `<html data-unslop-preclassify="true">`.
 2. Confirm markers are on `renderRoot` containers, not inner post nodes.
 3. Confirm render pipeline is draining (pending size should not grow unbounded).
+
+### Symptom: white screen/rerender loop while scrolling
+
+1. Confirm watchdog does not force reconcile while `getPendingBatchCount()` is non-zero.
+2. Confirm preclassify selector excludes aggregate/discovery modules:
+   - `:not([data-id^="urn:li:aggregate:"])`
+   - `:not(:has(.feed-shared-aggregated-content))`
+   - `:not(:has(.update-components-feed-discovery-entity))`
+3. Confirm runtime is not repeatedly cycling through `dispose()` + reinitialize on the same feed route.
 
 ### Symptom: mode switch (`collapse` <-> `stub`) looks disruptive
 

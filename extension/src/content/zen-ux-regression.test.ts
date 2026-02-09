@@ -24,7 +24,6 @@ type MockHTMLElement = MockElement & HTMLElement;
 type MutableVisibilityState = {
   snapshot: boolean;
   visible: boolean;
-  everVisible: boolean;
 };
 
 function createVisibilityStub(state: MutableVisibilityState): VisibilityIndex {
@@ -33,7 +32,6 @@ function createVisibilityStub(state: MutableVisibilityState): VisibilityIndex {
     unobserve: () => undefined,
     hasSnapshot: () => state.snapshot,
     isCurrentlyVisible: () => state.visible,
-    wasEverVisible: () => state.everVisible,
     clear: () => undefined,
     size: () => 0,
   };
@@ -42,7 +40,7 @@ function createVisibilityStub(state: MutableVisibilityState): VisibilityIndex {
 describe('zen UX regressions', () => {
   it('ignores stale classification results when a node identity changes before commit', () => {
     const applied: string[] = [];
-    const visibilityState: MutableVisibilityState = { snapshot: true, visible: false, everVisible: false };
+    const visibilityState: MutableVisibilityState = { snapshot: true, visible: false };
     const post = new MockElement(1, 'urn:li:activity:A') as MockHTMLElement;
 
     const pipeline = createRenderCommitPipeline({
@@ -73,7 +71,7 @@ describe('zen UX regressions', () => {
 
   it('defers collapse for in-viewport hide decisions until offscreen', () => {
     const applied: string[] = [];
-    const visibilityState: MutableVisibilityState = { snapshot: true, visible: true, everVisible: true };
+    const visibilityState: MutableVisibilityState = { snapshot: true, visible: true };
     const post = new MockElement(1, 'urn:li:activity:1') as MockHTMLElement;
 
     const pipeline = createRenderCommitPipeline({
@@ -101,6 +99,41 @@ describe('zen UX regressions', () => {
     pipeline.flushNow();
 
     expect(applied).toEqual(['urn:li:activity:1']);
+    expect(pipeline.size()).toBe(0);
+  });
+
+  it('defers collapse for hide decisions outside the commit band until near viewport', () => {
+    const applied: string[] = [];
+    const visibilityState: MutableVisibilityState = { snapshot: true, visible: false };
+    const post = new MockElement(1, 'urn:li:activity:2') as MockHTMLElement;
+    let withinCommitBand = false;
+
+    const pipeline = createRenderCommitPipeline({
+      render: (_element, _decision, postId) => {
+        applied.push(postId ?? 'missing');
+      },
+      visibility: createVisibilityStub(visibilityState),
+      isWithinCommitBand: () => withinCommitBand,
+      requestAnimationFrame: () => 1,
+      cancelAnimationFrame: () => undefined,
+    });
+
+    pipeline.enqueue({
+      renderRoot: post,
+      decision: 'hide',
+      postId: 'urn:li:activity:2',
+      hideMode: 'collapse',
+    });
+    pipeline.flushNow();
+
+    expect(applied).toEqual([]);
+    expect(pipeline.size()).toBe(1);
+
+    withinCommitBand = true;
+    pipeline.requestFlush();
+    pipeline.flushNow();
+
+    expect(applied).toEqual(['urn:li:activity:2']);
     expect(pipeline.size()).toBe(0);
   });
 });

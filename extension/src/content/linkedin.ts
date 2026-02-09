@@ -380,6 +380,7 @@ function startRuntimeWatchdog(): void {
       backlogSize,
       processedDelta,
       classifyDelta,
+      pendingBatchCount: getPendingBatchCount(),
       observerLive: attachmentController.isLive(),
     });
   }, WATCHDOG_POLL_MS);

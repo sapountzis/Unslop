@@ -15,6 +15,15 @@ export function isLikelyFeedPostRoot(element: HTMLElement): boolean {
     return false;
   }
 
+  const directUrn = element.getAttribute('data-urn');
+  if (directUrn?.startsWith('urn:li:aggregate:') || directUrn?.startsWith('urn:li:member:')) {
+    return false;
+  }
+
+  if (element.querySelector(SELECTORS.recommendationEntity) !== null) {
+    return false;
+  }
+
   return (
     element.matches(SELECTORS.postUrn) ||
     element.querySelector(SELECTORS.postUrn) !== null ||
