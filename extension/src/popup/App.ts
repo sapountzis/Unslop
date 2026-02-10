@@ -113,7 +113,7 @@ export class App {
     if (usageInfo) {
       const usagePercent = Math.round((usageInfo.current_usage / usageInfo.limit) * 100);
       const isLow = usageInfo.remaining < usageInfo.limit * 0.1;
-      const barColor = isLow ? 'var(--warning)' : 'var(--accent)';
+      const barColor = isLow ? 'var(--warning)' : 'var(--good)';
       const resetDate = new Date(usageInfo.reset_date);
       const resetStr = resetDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 

@@ -1,8 +1,0 @@
-.git
-**/.DS_Store
-**/node_modules
-**/.env
-**/.env.*
-README.md
-AGENTS.md
-CLAUDE.md

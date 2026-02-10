@@ -134,13 +134,13 @@ function createChart(dailyData: DailyData[]): void {
         {
           label: 'Hidden',
           data: dailyData.map(d => d.hide),
-          backgroundColor: '#FF6B6B',
+          backgroundColor: '#C15C5C',
           borderRadius: 4,
         },
         {
           label: 'Kept',
           data: dailyData.map(d => d.keep),
-          backgroundColor: '#46E3A6',
+          backgroundColor: '#4A6C48',
           borderRadius: 4,
         },
       ],
@@ -152,7 +152,7 @@ function createChart(dailyData: DailyData[]): void {
         x: {
           stacked: true,
           ticks: {
-            color: 'rgba(255,255,255,0.52)',
+            color: 'rgba(26,26,26,0.56)',
             maxRotation: 45,
             minRotation: 45,
             autoSkip: true,
@@ -165,11 +165,11 @@ function createChart(dailyData: DailyData[]): void {
         y: {
           stacked: true,
           ticks: {
-            color: 'rgba(255,255,255,0.52)',
+            color: 'rgba(26,26,26,0.56)',
             precision: 0,
           },
           grid: {
-            color: 'rgba(255,255,255,0.08)',
+            color: 'rgba(26,26,26,0.08)',
           },
         },
       },
@@ -178,7 +178,7 @@ function createChart(dailyData: DailyData[]): void {
           display: true,
           position: 'bottom',
           labels: {
-            color: 'rgba(255,255,255,0.68)',
+            color: 'rgba(26,26,26,0.68)',
             padding: 15,
             usePointStyle: true,
             pointStyle: 'circle',
@@ -187,10 +187,10 @@ function createChart(dailyData: DailyData[]): void {
         tooltip: {
           mode: 'index',
           intersect: false,
-          backgroundColor: 'rgba(11,16,32,0.95)',
-          titleColor: 'rgba(255,255,255,0.92)',
-          bodyColor: 'rgba(255,255,255,0.68)',
-          borderColor: 'rgba(255,255,255,0.14)',
+          backgroundColor: 'rgba(249,248,244,0.98)',
+          titleColor: 'rgba(26,26,26,0.92)',
+          bodyColor: 'rgba(26,26,26,0.72)',
+          borderColor: 'rgba(26,26,26,0.16)',
           borderWidth: 1,
           padding: 12,
           displayColors: true,

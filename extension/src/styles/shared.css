@@ -2,24 +2,25 @@
 /* Shared design tokens and base styles for the extension */
 
 :root {
-  --bg: #070A12;
-  --bg2: #0B1020;
-  --card: rgba(255,255,255,0.06);
-  --card2: rgba(255,255,255,0.09);
-  --text: rgba(255,255,255,0.92);
-  --muted: rgba(255,255,255,0.68);
-  --faint: rgba(255,255,255,0.52);
-  --border: rgba(255,255,255,0.14);
-  --border2: rgba(255,255,255,0.22);
-  --accent: #5AA2FF;
-  --accent2: #B45CFF;
-  --keep: #46E3A6;
-  --hide: #FF6B6B;
+  --bg: #F9F8F4;
+  --bg2: #F1EFE8;
+  --card: #FFFFFF;
+  --card2: #F3F1EA;
+  --text: #1A1A1A;
+  --muted: #5A5A5A;
+  --faint: #7A7A7A;
+  --border: rgba(26,26,26,0.14);
+  --border2: rgba(26,26,26,0.24);
+  --accent: #1A1A1A;
+  --accent2: #5A5A5A;
+  --keep: #4A6C48;
+  --hide: #C15C5C;
   --good: var(--keep);
   --warning: var(--hide);
   --radius: 12px;
   --radius2: 16px;
-  --font: 'Inter', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial;
+  --font: 'JetBrains Mono', 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-headline: 'Newsreader', Georgia, 'Times New Roman', serif;
 }
 
 * {
@@ -30,8 +31,8 @@
 
 body {
   font-family: var(--font);
-  background: radial-gradient(400px 300px at 20% -10%, rgba(90,162,255,0.2), transparent 55%),
-              radial-gradient(300px 200px at 110% 20%, rgba(180,92,255,0.18), transparent 50%),
+  background: radial-gradient(360px 260px at 20% -10%, rgba(74,108,72,0.08), transparent 55%),
+              radial-gradient(280px 180px at 110% 20%, rgba(193,92,92,0.08), transparent 50%),
               linear-gradient(180deg, var(--bg), var(--bg2));
   color: var(--text);
   line-height: 1.5;
@@ -39,23 +40,19 @@ body {
 
 /* Typography */
 h1 {
+  font-family: var(--font-headline);
   font-size: 32px;
   font-weight: 700;
   margin-bottom: 8px;
-  background: linear-gradient(135deg, var(--accent), var(--accent2));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--text);
 }
 
 h2 {
+  font-family: var(--font-headline);
   font-size: 18px;
   font-weight: 600;
   margin-bottom: 12px;
-  background: linear-gradient(135deg, var(--accent), var(--accent2));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--text);
 }
 
 p {
@@ -83,6 +80,7 @@ p {
 }
 
 .brand__name {
+  font-family: var(--font-headline);
   font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.02em;
@@ -113,14 +111,14 @@ input[type="email"]::placeholder {
 select {
   width: 100%;
   padding: 10px 12px;
-  background: #111827;
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--text);
   font-size: 13px;
   outline: none;
   transition: border-color 0.2s;
-  color-scheme: dark;
+  color-scheme: light;
   -webkit-appearance: none;
   appearance: none;
 }
@@ -130,7 +128,7 @@ select:focus {
 }
 
 select option {
-  background: #111827;
+  background: var(--card);
   color: var(--text);
 }
 
@@ -147,12 +145,14 @@ button {
 }
 
 button.primary {
-  background: linear-gradient(135deg, var(--accent), var(--accent2));
-  color: white;
+  background: var(--accent);
+  color: var(--bg);
+  border: 1px solid var(--accent);
 }
 
 button.primary:hover {
-  opacity: 0.9;
+  background: var(--bg);
+  color: var(--accent);
   transform: translateY(-1px);
 }
 
@@ -200,19 +200,19 @@ input[type="checkbox"] {
   left: 2px;
   width: 18px;
   height: 18px;
-  background: var(--faint);
+  background: var(--muted);
   border-radius: 50%;
   transition: all 0.2s ease;
 }
 
 input[type="checkbox"]:checked + .toggle {
-  background: linear-gradient(135deg, var(--accent), var(--accent2));
-  border-color: transparent;
+  background: var(--keep);
+  border-color: var(--keep);
 }
 
 input[type="checkbox"]:checked + .toggle::after {
   left: calc(100% - 20px);
-  background: white;
+  background: #fff;
   box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
@@ -440,7 +440,7 @@ form {
 .breakdown-bar-container {
   flex: 2;
   height: 8px;
-  background: var(--bg2);
+  background: var(--card2);
   border-radius: 4px;
   overflow: hidden;
   margin: 0 16px;

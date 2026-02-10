@@ -1,0 +1,24 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import LegalShell from '../components/LegalShell.astro';
+---
+
+<BaseLayout title="Support | Unslop" description="Support and troubleshooting for Unslop.">
+  <LegalShell title="Support">
+    <section class="space-y-3">
+      <h2 class="font-serif text-2xl text-ink">Contact</h2>
+      <p>
+        Email <a class="underline" href="mailto:support@getunslop.com">support@getunslop.com</a> with a brief
+        description and screenshot if relevant.
+      </p>
+    </section>
+
+    <section class="space-y-3">
+      <h2 class="font-serif text-2xl text-ink">Quick answers</h2>
+      <p>Sign in via extension popup with magic link email.</p>
+      <p>Free plan: 100 scans/month (trial). Pro plan: 2,500 scans/month.</p>
+      <p>Upgrade/cancel through billing link or support email.</p>
+      <p>If extension fails: confirm desktop site, extension enabled, and filtering set to ON.</p>
+    </section>
+  </LegalShell>
+</BaseLayout>

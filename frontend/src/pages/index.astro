@@ -1,0 +1,188 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import ToggleDemo from '../components/ToggleDemo.jsx';
+import FadeIn from '../components/FadeIn.jsx';
+---
+
+<BaseLayout
+  title="Unslop | The Human Web"
+  description="A quiet filter for X, LinkedIn, and Reddit. Keep human signal. Hide algorithmic slop."
+>
+  <main class="scroll-deck">
+    <section class="slide text-center">
+      <div class="mx-auto max-w-4xl">
+        <FadeIn client:visible>
+          <h1 class="text-5xl font-semibold leading-tight text-ink sm:text-7xl">
+            The internet was built for connection.
+          </h1>
+        </FadeIn>
+        <FadeIn client:visible delay={0.08}>
+          <p class="mt-6 text-2xl italic text-ink/80 sm:text-3xl">
+            Somewhere along the way, we became the product.
+          </p>
+        </FadeIn>
+        <FadeIn client:visible delay={0.14}>
+          <p class="mx-auto mt-8 max-w-2xl font-mono text-sm tracking-[0.02em] text-graphite sm:text-base">
+            Unslop is a quiet filter for the noise. Available now for LinkedIn. Support for X and Reddit is coming
+            soon.
+          </p>
+        </FadeIn>
+        <FadeIn client:visible delay={0.22}>
+          <div class="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
+            <a
+              href="https://chromewebstore.google.com"
+              target="_blank"
+              rel="noreferrer"
+              class="inline-flex items-center justify-center border border-ink bg-ink px-6 py-3 font-mono text-sm uppercase tracking-[0.1em] text-paper transition hover:bg-paper hover:text-ink"
+            >
+              Add to Chrome - It's Free
+            </a>
+            <a
+              href="https://buymeacoffee.com"
+              target="_blank"
+              rel="noreferrer"
+              class="inline-flex items-center justify-center border border-ink px-6 py-3 font-mono text-xs uppercase tracking-[0.1em] text-ink transition hover:bg-ink hover:text-paper"
+            >
+              Fuel the mission ☕
+            </a>
+          </div>
+        </FadeIn>
+      </div>
+    </section>
+
+    <section class="slide">
+      <div class="relative mx-auto w-full max-w-5xl">
+        <div aria-hidden="true" class="pointer-events-none absolute -top-8 left-0 right-0 hidden select-none font-mono text-xs leading-6 text-ink/[0.06] sm:block">
+          <p>zx01 // ctr ↑ // bait // 0034 // mine attention // loop // loop // loop //</p>
+          <p>engagement++ // outrage // novelty // ad_slot // optimize_time_on_platform //</p>
+          <p>predictive_feed // harvest_focus // rage_cycle // monetization // retention //</p>
+        </div>
+        <div class="max-w-2xl">
+          <FadeIn client:visible>
+            <h2 class="text-4xl font-semibold leading-tight sm:text-6xl">Your attention is being mined.</h2>
+          </FadeIn>
+          <FadeIn client:visible delay={0.1}>
+            <p class="mt-8 font-mono text-base leading-relaxed text-graphite sm:text-lg">
+              Big Tech is engineered to spike your cortisol. They sell your focus to advertisers and bury real human
+              connection under a mountain of algorithmic slop. They want you addicted. They want you doom-scrolling.
+              I built Unslop to give you the web back.
+            </p>
+          </FadeIn>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide">
+      <div class="w-full max-w-4xl text-center">
+        <FadeIn client:visible>
+          <h2 class="mb-8 text-4xl font-semibold sm:text-5xl">Proof, not promises.</h2>
+        </FadeIn>
+        <ToggleDemo client:visible />
+      </div>
+    </section>
+
+    <section class="slide">
+      <div class="mx-auto grid w-full max-w-6xl grid-cols-1 gap-14 md:grid-cols-2 md:gap-20">
+        <FadeIn client:visible>
+          <div>
+            <h2 class="text-4xl font-semibold sm:text-5xl">The Unit Economics.</h2>
+            <p class="mt-8 font-mono text-base leading-relaxed text-graphite">
+              Most apps hide their costs to sell you &quot;unlimited&quot; plans. I can&apos;t do that because I
+              don&apos;t sell your data.
+            </p>
+            <p class="mt-5 font-mono text-base leading-relaxed text-ink">
+              It costs me exactly $0.001 in computing power to filter one single post.
+            </p>
+            <p class="mt-5 font-mono text-base leading-relaxed text-graphite">
+              But sustainability isn&apos;t just about the server bill. It&apos;s about development time. Your
+              subscription funds the hours needed to maintain detection accuracy as spam evolves, adapt the extension
+              when sites change their code, and build support for X (Twitter) and Reddit.
+            </p>
+          </div>
+        </FadeIn>
+        <FadeIn client:visible delay={0.1}>
+          <div class="border border-ink/25 bg-[#efede6] p-6 sm:p-8">
+            <p class="font-mono text-sm leading-8 text-ink">
+              &gt; Item_Cost: $0.001<br />
+              &gt; Items_Scanned: 2,500<br />
+              &gt; Raw_API_Cost: $2.50<br />
+              &gt; Stripe_Fees: $0.45<br />
+              &gt; Future_Dev: FUNDED<br />
+              &gt; Net_Income: SUSTAINABLE<br />
+              &gt; Status: INDEPENDENT
+            </p>
+          </div>
+        </FadeIn>
+      </div>
+    </section>
+
+    <section class="slide">
+      <div class="mx-auto flex w-full max-w-6xl flex-col justify-between gap-14">
+        <div>
+          <FadeIn client:visible>
+            <h2 class="text-center text-4xl font-semibold sm:text-5xl">Fair pricing. No math anxiety.</h2>
+          </FadeIn>
+          <div class="mt-10 grid grid-cols-1 gap-6 md:grid-cols-2">
+            <FadeIn client:visible>
+              <article class="border border-ink/25 bg-paper p-7">
+                <p class="font-serif text-2xl">The Tourist (Free)</p>
+                <p class="mt-3 font-mono text-sm text-graphite">See how it feels to browse in peace.</p>
+                <ul class="mt-8 space-y-2 font-mono text-sm text-ink">
+                  <li>100 Scans / Month (Trial)</li>
+                  <li>Works on LinkedIn</li>
+                  <li>(X &amp; Reddit coming soon)</li>
+                  <li>Runs out quickly (Good for testing)</li>
+                </ul>
+                <p class="mt-5 font-mono text-3xl text-ink">$0 / forever</p>
+                <a
+                  href="https://chromewebstore.google.com"
+                  target="_blank"
+                  rel="noreferrer"
+                  class="mt-8 inline-block border border-ink bg-ink px-5 py-3 font-mono text-xs uppercase tracking-[0.12em] text-paper transition hover:bg-paper hover:text-ink"
+                >
+                  Add to Chrome
+                </a>
+              </article>
+            </FadeIn>
+            <FadeIn client:visible delay={0.08}>
+              <article class="border border-ink/25 bg-paper p-7">
+                <p class="font-serif text-2xl">The Local (Paid)</p>
+                <p class="mt-3 font-mono text-sm text-graphite">Reclaim your feed. Support the build.</p>
+                <ul class="mt-8 space-y-2 font-mono text-sm text-ink">
+                  <li>2,500 Scans / Month</li>
+                  <li>Directly funds X &amp; Reddit support</li>
+                  <li>Priority Processing &amp; Accuracy Updates</li>
+                </ul>
+                <p class="mt-5 font-mono text-3xl text-ink">$5 / month</p>
+                <a
+                  href="mailto:support@getunslop.com?subject=Unslop%20Pro%20Subscription"
+                  class="mt-8 inline-block border border-ink px-5 py-3 font-mono text-xs uppercase tracking-[0.12em] text-ink transition hover:bg-ink hover:text-paper"
+                >
+                  Subscribe
+                </a>
+              </article>
+            </FadeIn>
+          </div>
+        </div>
+
+        <footer class="pb-4 text-center">
+          <p class="font-mono text-xs uppercase tracking-[0.14em] text-graphite">Built by a human..</p>
+          <p class="mt-3 font-mono text-xs uppercase tracking-[0.14em] text-graphite">
+            <a href="https://x.com" target="_blank" rel="noreferrer" class="underline underline-offset-4">Twitter</a>
+            •
+            <a href="mailto:support@getunslop.com" class="underline underline-offset-4">Email</a>
+            •
+            <a href="https://buymeacoffee.com" target="_blank" rel="noreferrer" class="underline underline-offset-4">Buy me a coffee</a>
+          </p>
+          <p class="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-graphite">
+            <a href="/privacy.html" class="underline underline-offset-4">Privacy</a>
+            •
+            <a href="/support.html" class="underline underline-offset-4">Support</a>
+            •
+            <a href="/terms.html" class="underline underline-offset-4">Terms</a>
+          </p>
+        </footer>
+      </div>
+    </section>
+  </main>
+</BaseLayout>

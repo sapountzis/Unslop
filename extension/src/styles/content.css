@@ -3,12 +3,12 @@
 
 :root {
   --unslop-label-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --unslop-label-keep-border: #b7e2c2;
-  --unslop-label-keep-bg: #effaf2;
-  --unslop-label-keep-fg: #1f7a33;
-  --unslop-label-hide-border: #f0b7bf;
-  --unslop-label-hide-bg: #fff1f3;
-  --unslop-label-hide-fg: #a61a2f;
+  --unslop-label-keep-border: #9DB39A;
+  --unslop-label-keep-bg: #EDF2EC;
+  --unslop-label-keep-fg: #4A6C48;
+  --unslop-label-hide-border: #D2A3A3;
+  --unslop-label-hide-bg: #F7ECEC;
+  --unslop-label-hide-fg: #C15C5C;
 }
 
 /* Pre-classification mode: keep layout intact so LinkedIn can initialize post internals (for example "...more"). */
@@ -66,24 +66,25 @@ html[data-unslop-preclassify="true"] [data-finite-scroll-hotkey-item]:has(.feed-
   justify-content: center;
   height: 100vh;
   font-family: system-ui, -apple-system, sans-serif;
-  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  background: #f9f8f4;
 }
 
 .unslop-auth-success-content {
   text-align: center;
   padding: 48px;
-  background: white;
+  background: #fff;
   border-radius: 16px;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.1);
+  border: 1px solid rgba(26, 26, 26, 0.12);
+  box-shadow: 0 8px 24px rgba(26, 26, 26, 0.08);
 }
 
 .unslop-auth-success h1 {
   font-size: 24px;
-  color: #333;
+  color: #1a1a1a;
   margin-bottom: 8px;
 }
 
 .unslop-auth-success p {
-  color: #666;
+  color: #5a5a5a;
   font-size: 14px;
 }

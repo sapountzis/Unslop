@@ -1,0 +1,62 @@
+@import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-paper: #f9f8f4;
+  --color-ink: #1a1a1a;
+  --color-graphite: #5a5a5a;
+  --color-signal: #4a6c48;
+  --color-noise: #c15c5c;
+  --font-serif: 'Newsreader', 'Lora', serif;
+  --font-mono: 'Geist Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+}
+
+:root {
+  --paper: #f9f8f4;
+  --ink: #1a1a1a;
+  --graphite: #5a5a5a;
+  --signal: #4a6c48;
+  --noise: #c15c5c;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+body {
+  font-family: 'Geist Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  min-height: 100vh;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: 'Newsreader', 'Lora', serif;
+  letter-spacing: -0.01em;
+}
+
+.scroll-deck {
+  height: 100vh;
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+}
+
+.slide {
+  min-height: 100vh;
+  scroll-snap-align: start;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1.5rem;
+}
+
+@media (max-width: 640px) {
+  .slide {
+    padding: 1.25rem;
+  }
+}
