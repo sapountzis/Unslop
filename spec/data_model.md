@@ -42,7 +42,7 @@ CREATE TABLE classification_cache (
 
   canonical_content JSONB NOT NULL,
 
-  decision TEXT NOT NULL,
+  decision TEXT NOT NULL, -- keep | hide
   source TEXT NOT NULL,
   model TEXT,
   scores_json JSONB NOT NULL,
@@ -106,7 +106,7 @@ CREATE TABLE post_feedback (
   id BIGSERIAL PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES users(id),
   post_id TEXT NOT NULL,
-  rendered_decision TEXT NOT NULL,
+  rendered_decision TEXT NOT NULL, -- keep | hide
   user_label TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -139,7 +139,7 @@ CREATE TABLE user_activity (
   id BIGSERIAL PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES users(id),
   post_id TEXT NOT NULL,
-  decision TEXT NOT NULL,
+  decision TEXT NOT NULL, -- keep | hide
   source TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

@@ -318,9 +318,7 @@ summary:focus-visible {
 }
 .post--keep { border-color: rgba(70,227,166,0.20); }
 .chip--keep { background: rgba(70,227,166,0.14); border-color: rgba(70,227,166,0.22); }
-.chip--dim { background: rgba(246,195,86,0.14); border-color: rgba(246,195,86,0.22); }
 .chip--hide { background: rgba(255,90,122,0.12); border-color: rgba(255,90,122,0.22); }
-.post--dim { opacity: 0.72; }
 .post--hide { opacity: 0.88; }
 .post__veil {
   margin-top: 10px; padding: 10px 10px; border-radius: 12px;

@@ -5,7 +5,7 @@ You are working in the **backend** service.
 Minimal responsibilities:
 
 - Auth: email magic-link + JWT sessions.
-- Classification: return **keep/dim/hide** for a LinkedIn post.
+- Classification: return **keep/hide** for a LinkedIn post.
 - LLM calls: call a single configured model via an inference provider (e.g. OpenRouter).
 - Persistence: store post decision + minimal metadata in Postgres.
 - Feedback: store user feedback on rendered decisions.

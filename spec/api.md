@@ -108,7 +108,7 @@ Success response:
 
 Where:
 
-- `decision ∈ {'keep','dim','hide'}`
+- `decision ∈ {'keep','hide'}`
 - `source ∈ {'llm','cache','error'}`
 
 Classification cache + event policy (applies to `/v1/classify` and `/v1/classify/batch`):
@@ -204,14 +204,14 @@ Request:
 ```json
 {
   "post_id": "linkedin-post-id-or-hash",
-  "rendered_decision": "dim",
+  "rendered_decision": "hide",
   "user_label": "should_keep"
 }
 ```
 
 Constraints:
 
-- `rendered_decision ∈ {'keep','dim','hide'}`
+- `rendered_decision ∈ {'keep','hide'}`
 - `user_label ∈ {'should_keep','should_hide'}`
 
 Behavior:
@@ -235,9 +235,9 @@ Response:
 
 ```json
 {
-  "all_time": { "keep": 0, "dim": 0, "hide": 0, "total": 0 },
-  "last_30_days": { "keep": 0, "dim": 0, "hide": 0, "total": 0 },
-  "today": { "keep": 0, "dim": 0, "hide": 0, "total": 0 },
+  "all_time": { "keep": 0, "hide": 0, "total": 0 },
+  "last_30_days": { "keep": 0, "hide": 0, "total": 0 },
+  "today": { "keep": 0, "hide": 0, "total": 0 },
   "daily_breakdown": [
     { "date": "2026-02-05", "decision": "keep", "count": 2 }
   ]

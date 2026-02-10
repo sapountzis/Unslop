@@ -28,7 +28,7 @@ Start here: `spec/spec.md`.
   1) Extension extracts a post and asks the API for a decision.
   2) API calls an LLM (via an inference provider) when needed.
   3) API stores the decision + minimal metadata in Postgres.
-  4) Extension applies the decision (dim/hide/keep) and can send feedback.
+  4) Extension applies the decision (hide/keep) and can send feedback.
   5) Auth + subscription billing + usage quotas.
   6) A minimal public site that hosts install links + privacy + support.
 

@@ -18,7 +18,7 @@ It is **not** an application UI.
 Must include:
 
 - Product name + one-sentence description:
-  - “Chrome extension that dims or hides low-value LinkedIn posts.”
+  - “Chrome extension that hides low-value LinkedIn posts.”
 - Primary CTA:
   - “Install on Chrome” linking to `<CHROME_WEB_STORE_URL>`
 - Secondary links:

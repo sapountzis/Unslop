@@ -6,7 +6,7 @@ Minimal behavior:
 
 - Content script observes LinkedIn feed, extracts post text + ids.
 - Background service worker calls backend `/v1/classify`.
-- Content script applies `decision ∈ {keep, dim, hide}`.
+- Content script applies `decision ∈ {keep, hide}`.
 - Popup offers:
   - enabled toggle
   - sign-in status / sign-in action

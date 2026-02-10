@@ -1,11 +1,11 @@
 // extension/src/types.ts
-export type Decision = 'keep' | 'dim' | 'hide';
+export type Decision = 'keep' | 'hide';
 export type Source = 'llm' | 'cache' | 'error';
 
 export interface Storage {
   jwt?: string;
   enabled?: boolean;
-  hideRenderMode?: 'collapse' | 'stub';
+  hideRenderMode?: 'collapse' | 'label';
   decisionCache?: Record<string, CachedDecision>;
 }
 
@@ -98,8 +98,8 @@ export interface UsageInfo {
 }
 
 export interface StatsInfo {
-  all_time: { keep: number; dim: number; hide: number; total: number };
-  last_30_days: { keep: number; dim: number; hide: number; total: number };
-  today: { keep: number; dim: number; hide: number; total: number };
+  all_time: { keep: number; hide: number; total: number };
+  last_30_days: { keep: number; hide: number; total: number };
+  today: { keep: number; hide: number; total: number };
   daily_breakdown: { date: string; decision: string; count: number }[];
 }

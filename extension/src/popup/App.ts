@@ -148,7 +148,7 @@ export class App {
           <label for="hide-render-mode" class="setting-label">Hide render mode</label>
           <select id="hide-render-mode" class="setting-select">
             <option value="collapse" ${hideRenderMode === 'collapse' ? 'selected' : ''}>Collapse (no placeholder)</option>
-            <option value="stub" ${hideRenderMode === 'stub' ? 'selected' : ''}>Stub (debug + unhide)</option>
+            <option value="label" ${hideRenderMode === 'label' ? 'selected' : ''}>Label (keep post visible)</option>
           </select>
         </div>
 

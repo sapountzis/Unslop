@@ -9,7 +9,7 @@ The backend uses external LLM calls (text or multimodal) and a deterministic sco
   - `VLM_MODEL` when image/PDF attachment payload is present
 - Strict JSON output from model.
 - No training, no student model, no heuristic classifier.
-- Final API decision remains: `keep` | `dim` | `hide`.
+- Final API decision remains: `keep` | `hide`.
 
 ## Routing policy
 
@@ -57,8 +57,7 @@ Backend scoring engine:
 3. Computes ladder score: `0.5 + (value - slop) / 2`.
 4. Applies thresholds:
    - `ladder >= 0.6` => `keep`
-   - `0.4 <= ladder < 0.6` => `dim`
-   - `ladder < 0.4` => `hide`
+   - `ladder < 0.6` => `hide`
 
 ## Failure Handling
 

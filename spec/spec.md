@@ -1,6 +1,6 @@
 # Unslop – Minimal Project Spec (v0.1)
 
-Unslop is a Chrome extension + backend API that filters the LinkedIn feed by **dimming or hiding posts** according to a backend decision.
+Unslop is a Chrome extension + backend API that filters the LinkedIn feed by **hiding posts** according to a backend decision.
 
 v0.1 also includes a minimal public website (`getunslop.com`) for trust + policy/support pages.
 
@@ -10,7 +10,7 @@ Ship the smallest product that:
 
 1) Works on `https://www.linkedin.com/*` and does not break browsing.
 2) Calls a backend API for each new post (or uses cached decisions).
-3) Applies one of three actions: `keep`, `dim`, `hide`.
+3) Applies one of two actions: `keep`, `hide`.
 4) Supports email magic-link login (JWT).
 5) Supports a subscription (Polar) with Free vs Pro quotas.
 6) Stores minimal data for future improvements:
@@ -24,7 +24,7 @@ Ship the smallest product that:
 - Training or fine-tuning any model.
 - Any “student model” or heuristic classifier.
 - Per-author auto rules (blocklists/allowlists; “author slop rate”).
-- Category sliders, multi-dimensional scoring, or thresholds beyond keep/dim/hide.
+- Category sliders, multi-dimensional scoring, or thresholds beyond keep/hide.
 - Web dashboard, mobile app, analytics UI.
 
 ## System components

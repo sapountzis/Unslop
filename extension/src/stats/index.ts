@@ -9,7 +9,6 @@ Chart.register(...registerables);
 interface DailyData {
   date: string;
   keep: number;
-  dim: number;
   hide: number;
   total: number;
 }
@@ -50,10 +49,10 @@ async function loadStats(): Promise<void> {
 function renderStats(stats: StatsInfo): void {
   const contentEl = document.getElementById('content')!;
 
-  // Calculate blocked counts (dim + hide)
-  const todayBlocked = stats.today.dim + stats.today.hide;
-  const last30Blocked = stats.last_30_days.dim + stats.last_30_days.hide;
-  const allTimeBlocked = stats.all_time.dim + stats.all_time.hide;
+  // Calculate filtered counts (hide only in keep/hide model)
+  const todayBlocked = stats.today.hide;
+  const last30Blocked = stats.last_30_days.hide;
+  const allTimeBlocked = stats.all_time.hide;
 
   // Process daily breakdown for chart
   const dailyMap = new Map<string, DailyData>();
@@ -64,14 +63,14 @@ function renderStats(stats: StatsInfo): void {
     const date = new Date(today);
     date.setDate(date.getDate() - i);
     const dateStr = date.toISOString().split('T')[0];
-    dailyMap.set(dateStr, { date: dateStr, keep: 0, dim: 0, hide: 0, total: 0 });
+    dailyMap.set(dateStr, { date: dateStr, keep: 0, hide: 0, total: 0 });
   }
 
   // Fill in actual data
   for (const item of stats.daily_breakdown) {
     const existing = dailyMap.get(item.date);
     if (existing) {
-      const decision = item.decision as 'keep' | 'dim' | 'hide';
+      const decision = item.decision as 'keep' | 'hide';
       existing[decision] = item.count;
       existing.total += item.count;
     }
@@ -103,7 +102,6 @@ function renderStats(stats: StatsInfo): void {
     <div class="breakdown-section">
       <h2>Last 30 Days Breakdown</h2>
       ${renderBreakdownRow('Kept', 'keep', stats.last_30_days.keep, stats.last_30_days.total)}
-      ${renderBreakdownRow('Dimmed', 'dim', stats.last_30_days.dim, stats.last_30_days.total)}
       ${renderBreakdownRow('Hidden', 'hide', stats.last_30_days.hide, stats.last_30_days.total)}
     </div>
 
@@ -137,12 +135,6 @@ function createChart(dailyData: DailyData[]): void {
           label: 'Hidden',
           data: dailyData.map(d => d.hide),
           backgroundColor: '#FF6B6B',
-          borderRadius: 4,
-        },
-        {
-          label: 'Dimmed',
-          data: dailyData.map(d => d.dim),
-          backgroundColor: '#FFB54C',
           borderRadius: 4,
         },
         {

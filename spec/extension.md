@@ -5,7 +5,6 @@
 The extension filters the LinkedIn feed by requesting a backend decision for each post and applying one of:
 
 - `keep`
-- `dim`
 - `hide`
 
 The extension must be minimal and must **fail open**.
@@ -105,7 +104,7 @@ Background → content script stream messages:
   type: "CLASSIFY_BATCH_RESULT",
   item: {
     post_id: string,
-    decision?: "keep" | "dim" | "hide",
+    decision?: "keep" | "hide",
     source?: "llm" | "cache" | "error",
     error?: "quota_exceeded"
   }
@@ -117,18 +116,17 @@ The content script uses a fail-open timeout (`3000ms` baseline). If no decision 
 ## Applying decisions (required)
 
 - **keep**: no changes
-- **dim**:
-  - apply CSS: `opacity: 0.35`
 - **hide**:
   - keep the LinkedIn post node mounted
-  - collapse it with CSS (`display: none`, no visible replacement text/stub)
+  - in `collapse` mode: collapse it with CSS (`display: none`, no visible replacement text)
+  - in `label` mode: keep post visible and prepend a compact decision pill
   - do not remove/unmount the node to reduce rerender churn
 
 ## Pre-classification behavior
 
 - While filtering is enabled, unprocessed post nodes are hidden until a decision is applied.
 - The preclassify gate is enabled synchronously at content-script bootstrap on feed routes.
-- Processed `keep` and `dim` posts become visible once marked processed.
+- Processed `keep` posts become visible once marked processed.
 - This prevents "appear then disappear" flicker for posts that end up hidden.
 
 ## Failure modes (required)

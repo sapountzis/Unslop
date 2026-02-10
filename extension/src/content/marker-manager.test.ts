@@ -10,11 +10,10 @@ describe('marker manager', () => {
       ATTRIBUTES.decision,
       ATTRIBUTES.identity,
     ]);
-    const classes = new Set<string>(['unslop-hidden-post', 'unslop-hidden-post-stub']);
+    const classes = new Set<string>(['unslop-hidden-post']);
     const style: { opacity?: string } = { opacity: '0.35' };
 
-    const hiddenStub = { removed: false, remove() { this.removed = true; } };
-    const dimHeader = { removed: false, remove() { this.removed = true; } };
+    const hiddenLabel = { removed: false, remove() { this.removed = true; } };
 
     const element = {
       removeAttribute: (name: string) => {
@@ -26,8 +25,7 @@ describe('marker manager', () => {
         },
       },
       querySelector: (selector: string) => {
-        if (selector === ':scope > .unslop-hidden-stub') return hiddenStub;
-        if (selector === ':scope > .unslop-dim-header') return dimHeader;
+        if (selector === ':scope > .unslop-hidden-label') return hiddenLabel;
         return null;
       },
       style,
@@ -45,9 +43,7 @@ describe('marker manager', () => {
     expect(attrs.has(ATTRIBUTES.decision)).toBe(false);
     expect(attrs.has(ATTRIBUTES.identity)).toBe(false);
     expect(classes.has('unslop-hidden-post')).toBe(false);
-    expect(classes.has('unslop-hidden-post-stub')).toBe(false);
-    expect(hiddenStub.removed).toBe(true);
-    expect(dimHeader.removed).toBe(true);
+    expect(hiddenLabel.removed).toBe(true);
     expect(style.opacity).toBe('1');
   });
 });

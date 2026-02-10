@@ -57,15 +57,8 @@ class MockElement {
   }
 
   querySelector(selector: string): MockElement | null {
-    if (selector === ':scope > .unslop-dim-header') {
-      return this.children.find((child) => child.className === 'unslop-dim-header') ?? null;
-    }
-    if (selector === ':scope > .unslop-hidden-stub' || selector === '.unslop-hidden-stub') {
-      return this.children.find((child) => child.className === 'unslop-hidden-stub') ?? null;
-    }
-    if (selector === '.unslop-hidden-stub-action') {
-      const stub = this.children.find((child) => child.className === 'unslop-hidden-stub');
-      return stub?.children.find((child) => child.className === 'unslop-hidden-stub-action') ?? null;
+    if (selector === ':scope > .unslop-hidden-label' || selector === '.unslop-hidden-label') {
+      return this.children.find((child) => child.className === 'unslop-hidden-label') ?? null;
     }
     return null;
   }
@@ -93,13 +86,7 @@ const originalDocument = testGlobal.document;
 describe('renderDecision', () => {
   beforeEach(() => {
     testGlobal.document = {
-      createElement: (tagName?: string) => {
-        const element = new MockElement();
-        if (tagName === 'button') {
-          element.className = 'unslop-hidden-stub-action';
-        }
-        return element;
-      },
+      createElement: () => new MockElement(),
     };
   });
 
@@ -120,19 +107,18 @@ describe('renderDecision', () => {
     expect(post.children.length).toBe(0);
   });
 
-  it('applies dim style and prepends header once', () => {
+  it('applies collapse hide style', () => {
     const post = new MockElement();
-    renderDecision(post as MockHTMLElement, 'dim', 'post-1');
-    renderDecision(post as MockHTMLElement, 'dim', 'post-1');
+    renderDecision(post as MockHTMLElement, 'hide', 'post-1');
+    renderDecision(post as MockHTMLElement, 'hide', 'post-1');
 
     expect(post.hasAttribute(ATTRIBUTES.processed)).toBe(true);
-    expect(post.getAttribute(ATTRIBUTES.decision)).toBe('dim');
-    expect(post.style.opacity).toBe('0.35');
-    expect(post.children.length).toBe(1);
-    expect(post.children[0].className).toBe('unslop-dim-header');
+    expect(post.getAttribute(ATTRIBUTES.decision)).toBe('hide');
+    expect(post.classList.contains('unslop-hidden-post')).toBe(true);
+    expect(post.querySelector(':scope > .unslop-hidden-label')).toBeNull();
   });
 
-  it('keeps post node mounted and does not inject a visible replacement stub', () => {
+  it('keeps post node mounted and does not inject a visible replacement label', () => {
     const feed = new MockElement();
     const post = new MockElement();
     feed.prepend(post);
@@ -143,16 +129,17 @@ describe('renderDecision', () => {
     expect(post.hasAttribute(ATTRIBUTES.processed)).toBe(true);
     expect(post.getAttribute(ATTRIBUTES.decision)).toBe('hide');
     expect(post.classList.contains('unslop-hidden-post')).toBe(true);
-    expect(post.querySelector(':scope > .unslop-hidden-stub')).toBeNull();
+    expect(post.querySelector(':scope > .unslop-hidden-label')).toBeNull();
   });
 
-  it('supports stub mode for hide decision in local testing', () => {
+  it('supports label mode for hide decision in local testing', () => {
     const post = new MockElement();
 
-    renderDecision(post as MockHTMLElement, 'hide', 'post-2', { hideMode: 'stub' });
+    renderDecision(post as MockHTMLElement, 'hide', 'post-2', { hideMode: 'label' });
 
     expect(post.classList.contains('unslop-hidden-post')).toBe(false);
-    expect(post.classList.contains('unslop-hidden-post-stub')).toBe(true);
-    expect(post.querySelector(':scope > .unslop-hidden-stub')).not.toBeNull();
+    expect(post.hasAttribute(ATTRIBUTES.processed)).toBe(true);
+    expect(post.getAttribute(ATTRIBUTES.decision)).toBe('hide');
+    expect(post.querySelector(':scope > .unslop-hidden-label')).not.toBeNull();
   });
 });

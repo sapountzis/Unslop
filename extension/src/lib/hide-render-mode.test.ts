@@ -7,8 +7,8 @@ describe('hide-render-mode', () => {
     expect(resolveHideRenderMode('collapse')).toBe('collapse');
   });
 
-  it('accepts stub', () => {
-    expect(resolveHideRenderMode('stub')).toBe('stub');
+  it('accepts label', () => {
+    expect(resolveHideRenderMode('label')).toBe('label');
   });
 
   it('falls back to default for invalid values', () => {

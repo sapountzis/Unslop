@@ -62,7 +62,7 @@ describe('Classify Endpoint E2E', () => {
     expect(res.status).toBe(200);
     const data = (await res.json()) as { post_id: string; decision: string; source: string };
     expect(data.post_id).toBe('e2e-test-post-1');
-    expect(['keep', 'dim', 'hide']).toContain(data.decision);
+    expect(['keep', 'hide']).toContain(data.decision);
   }, 30000);
 
   it('rejects unauthenticated requests', async () => {

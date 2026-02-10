@@ -30,7 +30,7 @@ The backend needs to:
 
 - `plan`: `free | pro`
 - `plan_status`: `inactive | active | canceled | past_due`
-- `decision`: `keep | dim | hide`
+- `decision`: `keep | hide`
 - `post_source`: `llm | cache | error`
 - `activity_source`: `llm | cache`
 - `feedback_label`: `should_keep | should_hide`
@@ -163,6 +163,7 @@ Current state is:
 - baseline schema migration: `backend/drizzle/20260209164213_moaning_nitro/migration.sql`
 - additive migration: `backend/drizzle/20260209181215_graceful_molecule_man/migration.sql`
 - additive migration: `backend/drizzle/20260209195359_bizarre_doctor_octopus/migration.sql` (enforces `classification_cache.source='llm'`)
+- additive migration: `backend/drizzle/20260210103000_remove_dim_decision/migration.sql` (maps historical `dim` decisions to `hide` and shrinks enum to `keep|hide`)
 
 Migration history is intentionally kept additive. The early unique `idx_classification_cache_post_id` churn is preserved in history and corrected by follow-up migration, rather than rewriting migration lineage.
 

@@ -10,9 +10,9 @@ function toNumber(value: number | string | null | undefined): number {
 
 export interface StatsService {
   getStats: (userId: string) => Promise<{
-    all_time: { keep: number; dim: number; hide: number; total: number };
-    last_30_days: { keep: number; dim: number; hide: number; total: number };
-    today: { keep: number; dim: number; hide: number; total: number };
+    all_time: { keep: number; hide: number; total: number };
+    last_30_days: { keep: number; hide: number; total: number };
+    today: { keep: number; hide: number; total: number };
     daily_breakdown: Array<{ date: string; decision: string; count: number }>;
   }>;
   getUsage: (userId: string) => Promise<
@@ -48,46 +48,37 @@ export function createStatsService(deps: StatsServiceDeps): StatsService {
     const summary =
       (await deps.statsRepository.getSummaryForUser(userId, today, lookbackStart)) || {
         allKeep: 0,
-        allDim: 0,
         allHide: 0,
         last30Keep: 0,
-        last30Dim: 0,
         last30Hide: 0,
         todayKeep: 0,
-        todayDim: 0,
         todayHide: 0,
       };
 
     const dailyBreakdown = await deps.statsRepository.getDailyBreakdownForUser(userId, lookbackStart);
 
     const allKeep = toNumber(summary.allKeep);
-    const allDim = toNumber(summary.allDim);
     const allHide = toNumber(summary.allHide);
     const last30Keep = toNumber(summary.last30Keep);
-    const last30Dim = toNumber(summary.last30Dim);
     const last30Hide = toNumber(summary.last30Hide);
     const todayKeep = toNumber(summary.todayKeep);
-    const todayDim = toNumber(summary.todayDim);
     const todayHide = toNumber(summary.todayHide);
 
     return {
       all_time: {
         keep: allKeep,
-        dim: allDim,
         hide: allHide,
-        total: allKeep + allDim + allHide,
+        total: allKeep + allHide,
       },
       last_30_days: {
         keep: last30Keep,
-        dim: last30Dim,
         hide: last30Hide,
-        total: last30Keep + last30Dim + last30Hide,
+        total: last30Keep + last30Hide,
       },
       today: {
         keep: todayKeep,
-        dim: todayDim,
         hide: todayHide,
-        total: todayKeep + todayDim + todayHide,
+        total: todayKeep + todayHide,
       },
       daily_breakdown: dailyBreakdown,
     };

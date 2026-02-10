@@ -5,7 +5,7 @@ This document is binding for changes under `extension/`.
 ## Scope and Product Boundaries
 
 The extension remains minimal and spec-driven:
-- detect LinkedIn posts, request decision, apply `keep|dim|hide`
+- detect LinkedIn posts, request decision, apply `keep|hide`
 - support auth, subscription, usage, and stats display
 - fail open on every runtime or network error
 

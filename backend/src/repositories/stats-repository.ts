@@ -4,13 +4,10 @@ import type { Database } from '../db';
 
 export interface StatsSummaryRow {
   allKeep: number | string | null;
-  allDim: number | string | null;
   allHide: number | string | null;
   last30Keep: number | string | null;
-  last30Dim: number | string | null;
   last30Hide: number | string | null;
   todayKeep: number | string | null;
-  todayDim: number | string | null;
   todayHide: number | string | null;
 }
 
@@ -36,7 +33,7 @@ export function createStatsRepository(deps: StatsRepositoryDeps): StatsRepositor
   async function countByDecisionForRange(
     userId: string,
     createdAtGte?: Date,
-  ): Promise<Record<'keep' | 'dim' | 'hide', number>> {
+  ): Promise<Record<'keep' | 'hide', number>> {
     const whereClause = createdAtGte
       ? and(eq(userActivity.userId, userId), gte(userActivity.createdAt, createdAtGte))
       : eq(userActivity.userId, userId);
@@ -50,14 +47,13 @@ export function createStatsRepository(deps: StatsRepositoryDeps): StatsRepositor
       .where(whereClause)
       .groupBy(userActivity.decision);
 
-    const result: Record<'keep' | 'dim' | 'hide', number> = {
+    const result: Record<'keep' | 'hide', number> = {
       keep: 0,
-      dim: 0,
       hide: 0,
     };
 
     for (const row of rows) {
-      if (row.decision === 'keep' || row.decision === 'dim' || row.decision === 'hide') {
+      if (row.decision === 'keep' || row.decision === 'hide') {
         result[row.decision] = Number(row.count) || 0;
       }
     }
@@ -74,13 +70,10 @@ export function createStatsRepository(deps: StatsRepositoryDeps): StatsRepositor
 
     return {
       allKeep: allTime.keep,
-      allDim: allTime.dim,
       allHide: allTime.hide,
       last30Keep: last30.keep,
-      last30Dim: last30.dim,
       last30Hide: last30.hide,
       todayKeep: todayCounts.keep,
-      todayDim: todayCounts.dim,
       todayHide: todayCounts.hide,
     };
   }

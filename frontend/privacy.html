@@ -71,7 +71,7 @@
             <li><code>author_id</code> — Author's profile identifier</li>
             <li><code>author_name</code> — Author's display name (best-effort)</li>
             <li><code>content_text</code> — Post content, normalized and truncated to 4,000 characters</li>
-            <li><code>decision</code> — The classification result (keep/dim/hide)</li>
+            <li><code>decision</code> — The classification result (keep/hide)</li>
             <li><code>timestamps</code> — When the post was processed</li>
           </ul>
 
@@ -87,7 +87,7 @@
         <section>
           <h2>Why we collect this data</h2>
           <ul>
-            <li><strong>Provide filtering decisions</strong> — To determine which posts to dim or hide</li>
+            <li><strong>Provide filtering decisions</strong> — To determine which posts to hide</li>
             <li><strong>Prevent duplicate LLM calls</strong> — Cached decisions reduce costs and improve speed</li>
             <li><strong>Enforce quotas</strong> — Track usage to provide free and paid tiers</li>
             <li><strong>Improve future versions</strong> — Feedback helps refine the classifier (no model training in v0.1)</li>

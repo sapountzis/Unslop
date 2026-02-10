@@ -136,7 +136,7 @@ describe('classification service policy', () => {
         authorId: post.author_id,
         authorName: post.author_name,
         canonicalContent: { post_id: post.post_id },
-        decision: 'dim' as const,
+        decision: 'hide' as const,
         source: 'llm' as const,
         model: 'openrouter/mock',
         scoresJson: { u: 0.1 },
@@ -172,7 +172,7 @@ describe('classification service policy', () => {
 
     expect(outcome).toEqual({
       post_id: post.post_id,
-      decision: 'dim',
+      decision: 'hide',
       source: 'cache',
     });
 
@@ -182,7 +182,7 @@ describe('classification service policy', () => {
     expect(insertActivity).toHaveBeenCalledWith({
       userId: 'user-1',
       postId: post.post_id,
-      decision: 'dim',
+      decision: 'hide',
       source: 'cache',
     });
   });
@@ -337,7 +337,7 @@ describe('classification service policy', () => {
           authorId: post.author_id,
           authorName: post.author_name,
           canonicalContent: { post_id: post.post_id },
-          decision: 'dim' as const,
+          decision: 'hide' as const,
           source: 'llm' as const,
           model: 'openrouter/mock',
           scoresJson: { eb: 0.8 },
@@ -426,7 +426,7 @@ describe('classification service policy', () => {
 
     expect(outcomeByPostId.get(post.post_id)).toEqual({
       post_id: post.post_id,
-      decision: 'dim',
+      decision: 'hide',
       source: 'cache',
     });
     expect(outcomeByPostId.get(postTwo.post_id)).toEqual({

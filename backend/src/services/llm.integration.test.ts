@@ -302,6 +302,6 @@ describe('LLM Service (integration)', () => {
     const { ScoringEngine } = await import('./scoring');
     const engine = new ScoringEngine();
     const scored = engine.score(result.scores);
-    expect(['keep', 'dim', 'hide']).toContain(scored.decision);
+    expect(['keep', 'hide']).toContain(scored.decision);
   }, 30000);
 });

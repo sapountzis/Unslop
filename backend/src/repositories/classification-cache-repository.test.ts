@@ -67,7 +67,7 @@ describe('classification cache repository', () => {
         authorId: 'author-1',
         authorName: 'Author One',
         canonicalContent: { text: 'hello' },
-        decision: 'dim',
+        decision: 'hide',
         source: 'llm',
         model: 'openrouter/mock',
         scoresJson: { u: 0.1 },
@@ -84,7 +84,7 @@ describe('classification cache repository', () => {
       expect.objectContaining({
         contentFingerprint: 'fp-1',
         postId: 'post-1',
-        decision: 'dim',
+        decision: 'hide',
         source: 'llm',
       }),
     );
@@ -145,7 +145,7 @@ describe('classification cache repository', () => {
         authorId: 'author-2',
         authorName: 'Author Two',
         canonicalContent: { text: 'stale' },
-        decision: 'dim',
+        decision: 'hide',
         source: 'llm',
         model: 'openrouter/mock',
         scoresJson: { u: 0.2 },

@@ -11,9 +11,9 @@ function makeDeps(overrides: AppDependencyOverrides = {}): AppDependencies {
   const classifySingle = mock(async () => ({ post_id: 'p1', decision: 'keep' as const, source: 'llm' as const }));
   const classifyBatch = mock(async () => []);
   const getStats = mock(async () => ({
-    all_time: { keep: 0, dim: 0, hide: 0, total: 0 },
-    last_30_days: { keep: 0, dim: 0, hide: 0, total: 0 },
-    today: { keep: 0, dim: 0, hide: 0, total: 0 },
+    all_time: { keep: 0, hide: 0, total: 0 },
+    last_30_days: { keep: 0, hide: 0, total: 0 },
+    today: { keep: 0, hide: 0, total: 0 },
     daily_breakdown: [],
   }));
   const getUsage = mock(async () => ({

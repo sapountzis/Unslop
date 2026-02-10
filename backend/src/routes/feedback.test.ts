@@ -42,7 +42,7 @@ describe('Feedback Routes (unit)', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         post_id: 'post-1',
-        rendered_decision: 'dim',
+        rendered_decision: 'hide',
         user_label: 'should_keep',
       }),
     });
@@ -68,7 +68,7 @@ describe('Feedback Routes (unit)', () => {
     const token = await generateSessionToken(TEST_USER_ID, 'feedback@example.com');
     const payload = {
       post_id: 'post-1',
-      rendered_decision: 'dim',
+      rendered_decision: 'hide',
       user_label: 'should_keep',
     } as const;
 

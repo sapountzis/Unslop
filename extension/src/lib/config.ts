@@ -23,6 +23,6 @@ export const DEBUG_CONTENT_RUNTIME = false;
 
 // Hide rendering mode:
 // - 'collapse': fully remove hidden posts from layout (default production behavior)
-// - 'stub': show a minimal Unslop stub with an Unhide button (useful for local testing)
-export type HideRenderMode = 'collapse' | 'stub';
+// - 'label': keep post visible and show a compact decision pill
+export type HideRenderMode = 'collapse' | 'label';
 export const HIDE_RENDER_MODE: HideRenderMode = 'collapse';

@@ -8,7 +8,7 @@ export const SELECTORS = {
 
     // Semantic content card used for extraction/classification.
     candidatePostRoot: '.feed-shared-update-v2[role="article"]',
-    // Outer layout owner used for hide/stub/dim rendering.
+    // Outer layout owner used for keep/hide rendering.
     renderPostRoot: '[data-finite-scroll-hotkey-item]:has(.feed-shared-update-v2[role="article"])',
     postUrn: '[data-urn^="urn:li:activity:"], [data-urn^="urn:li:share:"]',
 

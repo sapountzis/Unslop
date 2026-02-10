@@ -118,14 +118,14 @@ export class ScoringEngine {
             return this.buildOutput("hide", "template_slop", "H3_SLOP", s, maxNoise, maxSignal);
         }
 
-        // 5b. Ego Bait (Dim)
+        // 5b. Ego Bait (Hide)
         if (s.eb >= THRESHOLD_SLOP_EB) {
-            return this.buildOutput("dim", "ego_noise", "D1_EGO", s, maxNoise, maxSignal);
+            return this.buildOutput("hide", "ego_noise", "D1_EGO", s, maxNoise, maxSignal);
         }
 
-        // 5c. Spammy Formatting (Dim)
+        // 5c. Spammy Formatting (Hide)
         if (s.sf >= THRESHOLD_SLOP_SF) {
-            return this.buildOutput("dim", "formatting_noise", "D2_FORMAT", s, maxNoise, maxSignal);
+            return this.buildOutput("hide", "formatting_noise", "D2_FORMAT", s, maxNoise, maxSignal);
         }
 
         // --- Filter 6: DEFAULT (Neutral) ---

@@ -1,4 +1,4 @@
-export const DECISION_VALUES = ['keep', 'dim', 'hide'] as const;
+export const DECISION_VALUES = ['keep', 'hide'] as const;
 export type DecisionValue = (typeof DECISION_VALUES)[number];
 
 export const FEEDBACK_LABEL_VALUES = ['should_keep', 'should_hide'] as const;

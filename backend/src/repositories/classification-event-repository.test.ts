@@ -28,7 +28,7 @@ describe('classification event repository', () => {
       },
       responsePayload: {
         source: 'llm',
-        decision: 'dim',
+        decision: 'hide',
       },
     };
 

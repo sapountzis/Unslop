@@ -7,12 +7,12 @@ import { createStatsRoutes } from './stats';
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret-key';
 
 const getStatsMock = mock(async () => ({
-  all_time: { keep: 10, dim: 4, hide: 1, total: 15 },
-  last_30_days: { keep: 3, dim: 2, hide: 1, total: 6 },
-  today: { keep: 1, dim: 1, hide: 0, total: 2 },
+  all_time: { keep: 10, hide: 5, total: 15 },
+  last_30_days: { keep: 3, hide: 3, total: 6 },
+  today: { keep: 1, hide: 1, total: 2 },
   daily_breakdown: [
     { date: '2026-02-01', decision: 'keep', count: 2 },
-    { date: '2026-02-01', decision: 'dim', count: 1 },
+    { date: '2026-02-01', decision: 'hide', count: 1 },
   ],
 }));
 
@@ -77,12 +77,12 @@ describe('Stats Routes (unit)', () => {
     expect(res.status).toBe(200);
     expect(getStatsMock).toHaveBeenCalledWith(TEST_USER_ID);
     expect(await res.json()).toEqual({
-      all_time: { keep: 10, dim: 4, hide: 1, total: 15 },
-      last_30_days: { keep: 3, dim: 2, hide: 1, total: 6 },
-      today: { keep: 1, dim: 1, hide: 0, total: 2 },
+      all_time: { keep: 10, hide: 5, total: 15 },
+      last_30_days: { keep: 3, hide: 3, total: 6 },
+      today: { keep: 1, hide: 1, total: 2 },
       daily_breakdown: [
         { date: '2026-02-01', decision: 'keep', count: 2 },
-        { date: '2026-02-01', decision: 'dim', count: 1 },
+        { date: '2026-02-01', decision: 'hide', count: 1 },
       ],
     });
   });

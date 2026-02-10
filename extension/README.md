@@ -3,7 +3,7 @@
 This extension filters the LinkedIn home feed with one strict loop:
 
 1. Detect feed post surfaces.
-2. Classify each post as `keep | dim | hide`.
+2. Classify each post as `keep | hide`.
 3. Commit the decision with one controlled DOM write pipeline.
 4. Fail open to `keep` on runtime/network errors.
 
@@ -91,7 +91,7 @@ flowchart LR
 - `contentRoot`
   - Semantic post node used by parser (`src/content/linkedin-parser.ts`).
 - `renderRoot`
-  - Outer post container where hide/dim/stub classes and markers are applied.
+  - Outer post container where keep/hide classes and markers are applied.
 - `Identity`
   - Post instance key from `data-id` / `data-urn` / nested URN fallback.
 - `Terminal State`
@@ -189,10 +189,10 @@ Rules:
 - Also defers far-offscreen collapse until the post enters a viewport-adjacent commit band.
 
 `src/content/decision-renderer.ts`
-- Applies `keep | dim | hide`.
+- Applies `keep | hide`.
 - Hide render mode:
   - `collapse` (default): `display: none`.
-  - `stub`: shows lightweight Unslop stub + unhide button.
+  - `label`: keeps post visible and prepends a compact Unslop decision pill.
 
 `src/content/runtime-lifecycle.ts`
 - Central cleanup registry.
@@ -309,7 +309,7 @@ Rationale:
    - `:not(:has(.update-components-feed-discovery-entity))`
 3. Confirm runtime is not repeatedly cycling through `dispose()` + reinitialize on the same feed route.
 
-### Symptom: mode switch (`collapse` <-> `stub`) looks disruptive
+### Symptom: mode switch (`collapse` <-> `label`) looks disruptive
 
 Expected behavior:
 - Popup writes the new mode to storage.

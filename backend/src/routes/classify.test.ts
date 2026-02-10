@@ -37,7 +37,7 @@ const classifySingleMock = mock(async () => ({
 }));
 
 const classifyBatchMock = mock(async () => [
-  { post_id: 'post-1', decision: 'dim' as const, source: 'cache' as const },
+  { post_id: 'post-1', decision: 'hide' as const, source: 'cache' as const },
   { post_id: 'post-2', error: 'quota_exceeded' as const },
 ]);
 
@@ -272,7 +272,7 @@ describe('Classify Routes (unit)', () => {
       .map((line) => JSON.parse(line));
 
     expect(lines).toEqual([
-      { post_id: 'post-1', decision: 'dim', source: 'cache' },
+      { post_id: 'post-1', decision: 'hide', source: 'cache' },
       { post_id: 'post-2', error: 'quota_exceeded' },
     ]);
   });
@@ -430,7 +430,7 @@ describe('Scoring Engine', () => {
     expect(result.decision).toBe('keep');
   });
 
-  it('applies toxic veto before dim rules', () => {
+  it('applies toxic veto before hide rules', () => {
     const engine = new ScoringEngine();
     const atLowerBound = engine.score(uniform(0.5, 0.7));
     const middle = engine.score(uniform(0.4, 0.4));

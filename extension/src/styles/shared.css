@@ -16,7 +16,6 @@
   --good: #46E3A6;
   --warning: #FF6B6B;
   --keep: #46E3A6;
-  --dim: #FFB54C;
   --hide: #FF6B6B;
   --radius: 12px;
   --radius2: 16px;
@@ -404,7 +403,6 @@ form {
 }
 
 .breakdown-dot.keep { background: var(--keep); }
-.breakdown-dot.dim { background: var(--dim); }
 .breakdown-dot.hide { background: var(--hide); }
 
 .breakdown-name {
@@ -428,7 +426,6 @@ form {
 }
 
 .breakdown-bar.keep { background: var(--keep); }
-.breakdown-bar.dim { background: var(--dim); }
 .breakdown-bar.hide { background: var(--hide); }
 
 .breakdown-count {
