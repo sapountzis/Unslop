@@ -57,6 +57,6 @@ h4 {
 
 @media (max-width: 640px) {
   .slide {
-    padding: 1.25rem;
+    padding: 1.25rem 1.25rem calc(7rem + env(safe-area-inset-bottom));
   }
 }
