@@ -1,4 +1,4 @@
----
+  ---
 import '../styles/global.css';
 
 interface Props {
@@ -20,6 +20,7 @@ const { title, description } = Astro.props;
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   </head>
   <body>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fullPage.js/4.0.9/vendors/scrolloverflow.min.js"></script>
     <slot />
   </body>
 </html>

@@ -11,6 +11,7 @@
         "@types/react-dom": "^19.2.3",
         "astro": "^5.17.1",
         "framer-motion": "^12.34.0",
+        "fullpage.js": "^4.0.40",
         "react": "^19.2.4",
         "react-dom": "^19.2.4",
         "tailwindcss": "^4.1.18",
@@ -468,6 +469,8 @@
     "framer-motion": ["framer-motion@12.34.0", "", { "dependencies": { "motion-dom": "^12.34.0", "motion-utils": "^12.29.2", "tslib": "^2.4.0" }, "peerDependencies": { "@emotion/is-prop-valid": "*", "react": "^18.0.0 || ^19.0.0", "react-dom": "^18.0.0 || ^19.0.0" }, "optionalPeers": ["@emotion/is-prop-valid", "react", "react-dom"] }, "sha512-+/H49owhzkzQyxtn7nZeF4kdH++I2FWrESQ184Zbcw5cEqNHYkE5yxWxcTLSj5lNx3NWdbIRy5FHqUvetD8FWg=="],
 
     "fsevents": ["fsevents@2.3.3", "", { "os": "darwin" }, "sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw=="],
+
+    "fullpage.js": ["fullpage.js@4.0.40", "", {}, "sha512-IpA+lLseNjOS/3XUUTPv+yAuWjYFTv/WGgnWh0VGxdRH/KBHdhsemOWwYgdG32VZxS2c9P255zkyo9l6kEtjnw=="],
 
     "gensync": ["gensync@1.0.0-beta.2", "", {}, "sha512-3hN7NaskYvMDLQY55gnW3NQ+mesEAepTqlg+VEbj7zzqEMBVNhzcGYYeqFo/TlYz6eQiFcp1HcsCZO+nGgS8zg=="],
 

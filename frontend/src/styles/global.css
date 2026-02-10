@@ -40,23 +40,6 @@ h4 {
   letter-spacing: -0.01em;
 }
 
-.scroll-deck {
-  height: 100vh;
-  overflow-y: auto;
-  scroll-snap-type: y mandatory;
-}
-
-.slide {
-  min-height: 100vh;
-  scroll-snap-align: start;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem 1.5rem;
-}
-
-@media (max-width: 640px) {
-  .slide {
-    padding: 1.25rem 1.25rem calc(7rem + env(safe-area-inset-bottom));
-  }
+.fp-watermark {
+  display: none !important;
 }
