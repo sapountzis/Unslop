@@ -7,6 +7,7 @@ import { HIDE_RENDER_MODE_STORAGE_KEY, resolveHideRenderMode } from '../lib/hide
 
 export class App {
   private container: HTMLElement;
+  private readonly logoUrl: string;
 
   constructor(containerId: string) {
     const container = document.getElementById(containerId);
@@ -14,6 +15,7 @@ export class App {
       throw new Error(`Container ${containerId} not found`);
     }
     this.container = container;
+    this.logoUrl = chrome.runtime.getURL('icons/logo.svg');
   }
 
   async render(): Promise<void> {
@@ -59,7 +61,7 @@ export class App {
   private renderSignIn(): void {
     this.container.innerHTML = `
       <div class="text-center">
-        <h2>Unslop</h2>
+        ${this.renderBrand()}
         <p>Sign in to filter your LinkedIn feed</p>
         <form id="signin-form">
           <input
@@ -134,7 +136,7 @@ export class App {
 
     this.container.innerHTML = `
       <div>
-        <h2>Unslop</h2>
+        ${this.renderBrand()}
 
         <div class="mb-8">
           <label class="toggle-label">
@@ -209,5 +211,14 @@ export class App {
       await chrome.runtime.sendMessage({ type: MESSAGE_TYPES.CLEAR_JWT });
       this.render();
     });
+  }
+
+  private renderBrand(): string {
+    return `
+      <div class="brand brand--center mb-8" aria-label="Unslop">
+        <img class="brand__mark" src="${this.logoUrl}" alt="" aria-hidden="true" />
+        <span class="brand__name">Unslop</span>
+      </div>
+    `;
   }
 }

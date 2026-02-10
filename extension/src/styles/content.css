@@ -1,6 +1,16 @@
 /* extension/src/styles/content.css */
 /* Styles injected into LinkedIn for Unslop UI elements */
 
+:root {
+  --unslop-label-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --unslop-label-keep-border: #b7e2c2;
+  --unslop-label-keep-bg: #effaf2;
+  --unslop-label-keep-fg: #1f7a33;
+  --unslop-label-hide-border: #f0b7bf;
+  --unslop-label-hide-bg: #fff1f3;
+  --unslop-label-hide-fg: #a61a2f;
+}
+
 /* Pre-classification mode: keep layout intact so LinkedIn can initialize post internals (for example "...more"). */
 html[data-unslop-preclassify="true"] [data-finite-scroll-hotkey-item]:has(.feed-shared-update-v2[role="article"]):not([data-unslop-processed]):not([data-id^="urn:li:aggregate:"]):not(:has(.feed-shared-aggregated-content)):not(:has(.update-components-feed-discovery-entity)) {
   opacity: 0 !important;
@@ -12,20 +22,41 @@ html[data-unslop-preclassify="true"] [data-finite-scroll-hotkey-item]:has(.feed-
   display: none !important;
 }
 
-/* Local label mode: keep post visible and prepend a compact decision pill. */
-.unslop-hidden-label {
+/* Local label mode: keep post visible and add an in-post compact decision pill. */
+.unslop-decision-host {
+  position: relative !important;
+}
+
+.unslop-decision-label {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
   display: inline-flex;
   align-items: center;
   padding: 2px 8px;
-  margin: 0 0 8px;
-  border: 1px solid #f0b7bf;
+  margin: 0;
+  border: 1px solid transparent;
   border-radius: 999px;
-  background: #fff1f3;
-  color: #a61a2f;
   font-size: 11px;
   font-weight: 600;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--unslop-label-font);
   letter-spacing: 0.01em;
+  pointer-events: none;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.unslop-decision-label--keep {
+  border-color: var(--unslop-label-keep-border);
+  background: var(--unslop-label-keep-bg);
+  color: var(--unslop-label-keep-fg);
+}
+
+.unslop-decision-label--hide {
+  border-color: var(--unslop-label-hide-border);
+  background: var(--unslop-label-hide-bg);
+  color: var(--unslop-label-hide-fg);
 }
 
 /* Auth success page */

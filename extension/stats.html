@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>Unslop Statistics</title>
+  <link rel="icon" type="image/svg+xml" href="./icons/logo.svg">
   <link rel="stylesheet" href="./src/styles/shared.css">
   <style>
     /* Stats page-specific styles */
@@ -24,6 +25,10 @@
       text-align: center;
     }
 
+    .brand-row {
+      margin-bottom: 12px;
+    }
+
     .subtitle {
       color: var(--muted);
       font-size: 14px;
@@ -35,6 +40,10 @@
     <a href="#" class="back-btn" id="back-btn">← Back to Extension</a>
 
     <header>
+      <div class="brand brand--center brand-row" aria-label="Unslop">
+        <img class="brand__mark" src="./icons/logo.svg" alt="" aria-hidden="true" />
+        <span class="brand__name">Unslop</span>
+      </div>
       <h1>Your Statistics</h1>
       <p class="subtitle">See how Unslop has been filtering your LinkedIn feed</p>
     </header>

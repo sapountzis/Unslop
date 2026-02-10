@@ -156,11 +156,11 @@ summary:focus-visible {
 }
 .brand { display: flex; align-items: center; gap: 10px; }
 .brand__mark {
-  width: 34px; height: 34px; display: grid; place-items: center;
-  border-radius: 12px;
-  background: linear-gradient(135deg, rgba(90,162,255,0.95), rgba(180,92,255,0.85));
-  box-shadow: 0 10px 24px rgba(90,162,255,0.20);
-  color: rgba(255,255,255,0.95); font-weight: 800;
+  width: 34px;
+  height: 34px;
+  display: block;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(7, 10, 18, 0.24);
 }
 .brand__name { font-weight: 800; letter-spacing: -0.02em; }
 

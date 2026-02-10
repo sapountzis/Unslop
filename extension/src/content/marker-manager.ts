@@ -11,6 +11,8 @@ export function resetPostElementState(element: HTMLElement): void {
   element.removeAttribute(ATTRIBUTES.decision);
   element.removeAttribute(ATTRIBUTES.identity);
   element.classList.remove('unslop-hidden-post');
+  element.classList.remove('unslop-decision-host');
+  removeScopedChild(element, ':scope > .unslop-decision-label');
   removeScopedChild(element, ':scope > .unslop-hidden-label');
   element.style.opacity = '1';
 }

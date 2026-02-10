@@ -10,9 +10,10 @@ describe('marker manager', () => {
       ATTRIBUTES.decision,
       ATTRIBUTES.identity,
     ]);
-    const classes = new Set<string>(['unslop-hidden-post']);
+    const classes = new Set<string>(['unslop-hidden-post', 'unslop-decision-host']);
     const style: { opacity?: string } = { opacity: '0.35' };
 
+    const decisionLabel = { removed: false, remove() { this.removed = true; } };
     const hiddenLabel = { removed: false, remove() { this.removed = true; } };
 
     const element = {
@@ -25,6 +26,7 @@ describe('marker manager', () => {
         },
       },
       querySelector: (selector: string) => {
+        if (selector === ':scope > .unslop-decision-label') return decisionLabel;
         if (selector === ':scope > .unslop-hidden-label') return hiddenLabel;
         return null;
       },
@@ -43,6 +45,8 @@ describe('marker manager', () => {
     expect(attrs.has(ATTRIBUTES.decision)).toBe(false);
     expect(attrs.has(ATTRIBUTES.identity)).toBe(false);
     expect(classes.has('unslop-hidden-post')).toBe(false);
+    expect(classes.has('unslop-decision-host')).toBe(false);
+    expect(decisionLabel.removed).toBe(true);
     expect(hiddenLabel.removed).toBe(true);
     expect(style.opacity).toBe('1');
   });
