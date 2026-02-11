@@ -50,12 +50,10 @@ const DecisionSchema = z.object({
   u: z.number(),
   d: z.number(),
   c: z.number(),
-  h: z.number(),
   rb: z.number(),
   eb: z.number(),
   sp: z.number(),
-  ts: z.number(),
-  sf: z.number(),
+  p: z.number(),
   x: z.number(),
 });
 

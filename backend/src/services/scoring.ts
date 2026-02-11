@@ -5,28 +5,27 @@ import {
 import { logger } from "../lib/logger";
 
 // =========================================================
-// CONSTANTS & THRESHOLDS
+// THRESHOLDS — each independently tunable
 // =========================================================
 
-// Filter 1: Safety / Toxic Veto
-const THRESHOLD_TOXIC_RB = 0.6; // Rage bait
-const THRESHOLD_TOXIC_X = 0.6;  // Deception/Lies
+// Step 1: Hard Vetoes (extreme values, always hide)
+const HARD_VETO_RB = 0.7;   // Rage bait
+const HARD_VETO_X = 0.7;    // Deception
+const HARD_VETO_SP = 0.8;   // Pure sales funnel
 
-// Filter 2: Spam Veto
-const THRESHOLD_SPAM_SP = 0.6;  // Sales pitch
+// Step 2: Signal Rescue — safety gate
+const RESCUE_GATE_RB = 0.5; // Max rb allowed for rescue
+const RESCUE_GATE_X = 0.5;  // Max x allowed for rescue
+const RESCUE_U = 0.6;       // Usefulness rescue threshold
+const RESCUE_D = 0.6;       // Depth rescue threshold
+const RESCUE_C = 0.6;       // Connection rescue threshold
 
-// Filter 3: High Signal Rescue
-const THRESHOLD_SIGNAL_U = 0.6; // Utility
-const THRESHOLD_SIGNAL_D = 0.6; // Depth
-
-// Filter 4: Human Connection Rescue
-const THRESHOLD_HUMAN_C = 0.6;  // Authentic connection
-const MAX_TOXIC_LOAD_FOR_HUMAN = 1.2; // (rb + eb + sp) must be below this
-
-// Filter 5: Slop Trap (Annoyance)
-const THRESHOLD_SLOP_TS = 0.8;  // Template slop (Viral bro)
-const THRESHOLD_SLOP_EB = 0.6;  // Ego bait (Humblebrag)
-const THRESHOLD_SLOP_SF = 0.6;  // Spammy formatting (Emoji wall)
+// Step 3: Soft Vetoes (moderate negatives, no redeeming signal)
+const SOFT_VETO_RB = 0.5;   // Moderate rage bait
+const SOFT_VETO_X = 0.5;    // Moderate deception
+const SOFT_VETO_SP = 0.5;   // Moderate sales pitch
+const SOFT_VETO_P = 0.7;    // Packaging slop
+const SOFT_VETO_EB = 0.6;   // Ego noise
 
 // =========================================================
 // TYPE DEFINITIONS
@@ -36,24 +35,30 @@ type ScoreMap = Record<string, number>;
 
 export type DecisionReason =
     | "toxic_content"
+    | "deception"
     | "aggressive_sales"
     | "high_signal"
     | "genuine_human"
-    | "template_slop"
+    | "rage_bait"
+    | "misleading"
+    | "sales_pitch"
+    | "packaging_slop"
     | "ego_noise"
-    | "formatting_noise"
     | "neutral_safe"
     | "error";
 
 export type RuleId =
-    | "H1_TOXIC"
-    | "H2_SPAM"
+    | "H1_RAGE"
+    | "H1_DECEPTION"
+    | "H1_SALES"
     | "K1_SIGNAL"
-    | "K2_HUMAN"
-    | "H3_SLOP"
-    | "D1_EGO"
-    | "D2_FORMAT"
-    | "K3_NEUTRAL"
+    | "K1_HUMAN"
+    | "S1_RAGE"
+    | "S1_DECEPTION"
+    | "S1_SALES"
+    | "S1_PACKAGING"
+    | "S1_EGO"
+    | "K2_NEUTRAL"
     | "E0_ERROR";
 
 export type ScoringOutput = {
@@ -61,11 +66,13 @@ export type ScoringOutput = {
     reason: DecisionReason;
     ruleId: RuleId;
     audit: {
-        valueScore: number; // The highest positive signal found
-        slopScore: number;  // The highest negative signal found
+        valueScore: number;
+        slopScore: number;
         clampedScores: ScoreMap;
     };
 };
+
+const DIMENSION_KEYS = ["u", "d", "c", "rb", "eb", "sp", "p", "x"] as const;
 
 export class ScoringEngine {
 
@@ -79,57 +86,57 @@ export class ScoringEngine {
         const s = this.sanitize(result);
 
         // 2. Calculate Aggregates for Audit
-        // We use the MAXIMUM signal found to represent "Potential Value"
-        // We use the MAXIMUM noise found to represent "Potential Slop"
-        // This ensures the UI always shows the true peak stats of the post.
         const maxSignal = Math.max(s.u, s.d, s.c);
-        const maxNoise = Math.max(s.rb, s.sp, s.ts, s.eb, s.sf, s.x);
+        const maxNoise = Math.max(s.rb, s.sp, s.p, s.eb, s.x);
 
-        // 3. Execute Independent Filters (The Waterfall)
+        // ─── STEP 1: HARD VETOES (extreme values, always hide) ───
 
-        // --- Filter 1: TOXIC VETO (Safety) ---
-        if (s.rb >= THRESHOLD_TOXIC_RB) {
-            return this.buildOutput("hide", "toxic_content", "H1_TOXIC", s, maxNoise, maxSignal);
+        if (s.rb >= HARD_VETO_RB) {
+            return this.buildOutput("hide", "toxic_content", "H1_RAGE", s, maxNoise, maxSignal);
         }
-        if (s.x >= THRESHOLD_TOXIC_X) {
-            return this.buildOutput("hide", "toxic_content", "H1_TOXIC", s, maxNoise, maxSignal);
+        if (s.x >= HARD_VETO_X) {
+            return this.buildOutput("hide", "deception", "H1_DECEPTION", s, maxNoise, maxSignal);
         }
-
-        // --- Filter 2: SPAM VETO (Focus) ---
-        if (s.sp >= THRESHOLD_SPAM_SP) {
-            return this.buildOutput("hide", "aggressive_sales", "H2_SPAM", s, maxNoise, maxSignal);
+        if (s.sp >= HARD_VETO_SP) {
+            return this.buildOutput("hide", "aggressive_sales", "H1_SALES", s, maxNoise, maxSignal);
         }
 
-        // --- Filter 3: SIGNAL RESCUE (Utility) ---
-        if (s.u >= THRESHOLD_SIGNAL_U || s.d >= THRESHOLD_SIGNAL_D) {
-            return this.buildOutput("keep", "high_signal", "K1_SIGNAL", s, maxNoise, maxSignal);
+        // ─── STEP 2: SIGNAL RESCUE (with safety gate) ───
+        // Only rescue if rage and deception are below the safety gate.
+        // This prevents "useful but ragey/deceptive" content from passing.
+
+        const safetyGatePasses = s.rb < RESCUE_GATE_RB && s.x < RESCUE_GATE_X;
+
+        if (safetyGatePasses) {
+            if (s.u >= RESCUE_U || s.d >= RESCUE_D) {
+                return this.buildOutput("keep", "high_signal", "K1_SIGNAL", s, maxNoise, maxSignal);
+            }
+            if (s.c >= RESCUE_C) {
+                return this.buildOutput("keep", "genuine_human", "K1_HUMAN", s, maxNoise, maxSignal);
+            }
         }
 
-        // --- Filter 4: HUMAN RESCUE (Community) ---
-        const toxicLoad = s.rb + s.eb + s.sp;
-        if (s.c >= THRESHOLD_HUMAN_C && toxicLoad < MAX_TOXIC_LOAD_FOR_HUMAN) {
-            return this.buildOutput("keep", "genuine_human", "K2_HUMAN", s, maxNoise, maxSignal);
+        // ─── STEP 3: SOFT VETOES (moderate negatives, no redeeming signal) ───
+
+        if (s.rb >= SOFT_VETO_RB) {
+            return this.buildOutput("hide", "rage_bait", "S1_RAGE", s, maxNoise, maxSignal);
+        }
+        if (s.x >= SOFT_VETO_X) {
+            return this.buildOutput("hide", "misleading", "S1_DECEPTION", s, maxNoise, maxSignal);
+        }
+        if (s.sp >= SOFT_VETO_SP) {
+            return this.buildOutput("hide", "sales_pitch", "S1_SALES", s, maxNoise, maxSignal);
+        }
+        if (s.p >= SOFT_VETO_P) {
+            return this.buildOutput("hide", "packaging_slop", "S1_PACKAGING", s, maxNoise, maxSignal);
+        }
+        if (s.eb >= SOFT_VETO_EB) {
+            return this.buildOutput("hide", "ego_noise", "S1_EGO", s, maxNoise, maxSignal);
         }
 
-        // --- Filter 5: SLOP TRAP (Annoyance) ---
+        // ─── STEP 4: DEFAULT ───
 
-        // 5a. Template Slop (Hide)
-        if (s.ts >= THRESHOLD_SLOP_TS) {
-            return this.buildOutput("hide", "template_slop", "H3_SLOP", s, maxNoise, maxSignal);
-        }
-
-        // 5b. Ego Bait (Hide)
-        if (s.eb >= THRESHOLD_SLOP_EB) {
-            return this.buildOutput("hide", "ego_noise", "D1_EGO", s, maxNoise, maxSignal);
-        }
-
-        // 5c. Spammy Formatting (Hide)
-        if (s.sf >= THRESHOLD_SLOP_SF) {
-            return this.buildOutput("hide", "formatting_noise", "D2_FORMAT", s, maxNoise, maxSignal);
-        }
-
-        // --- Filter 6: DEFAULT (Neutral) ---
-        return this.buildOutput("keep", "neutral_safe", "K3_NEUTRAL", s, maxNoise, maxSignal);
+        return this.buildOutput("keep", "neutral_safe", "K2_NEUTRAL", s, maxNoise, maxSignal);
     }
 
     /**
@@ -149,8 +156,8 @@ export class ScoringEngine {
             reason,
             ruleId,
             audit: {
-                valueScore, // Now reflects the actual Max Signal
-                slopScore,  // Now reflects the actual Max Noise
+                valueScore,
+                slopScore,
                 clampedScores,
             },
         };
@@ -169,9 +176,8 @@ export class ScoringEngine {
 
     private sanitize(result: ScoreResult): ScoreMap {
         const clamped: ScoreMap = {};
-        const keys = ["u", "d", "c", "h", "rb", "eb", "sp", "ts", "sf", "x"];
 
-        for (const k of keys) {
+        for (const k of DIMENSION_KEYS) {
             const val = result[k as keyof ScoreResult] ?? 0;
             clamped[k] = Math.max(0, Math.min(1, val));
         }

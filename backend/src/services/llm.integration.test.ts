@@ -12,8 +12,8 @@ import {
 import type { AppLogger } from '../lib/logger-types';
 
 const testLogger: Pick<AppLogger, 'warn' | 'error'> = {
-  warn: () => {},
-  error: () => {},
+  warn: () => { },
+  error: () => { },
 };
 
 const testConfig = {
@@ -42,12 +42,10 @@ function createOpenAiCapture() {
                   u: 0.0,
                   d: 0.0,
                   c: 0.0,
-                  h: 0.0,
                   rb: 0.0,
                   eb: 0.0,
                   sp: 0.0,
-                  ts: 0.0,
-                  sf: 0.0,
+                  p: 0.0,
                   x: 0.0,
                 },
               },
@@ -197,13 +195,11 @@ describe('LLM Service (integration)', () => {
       u: 0.1,
       d: 0.2,
       c: 0.3,
-      h: 0.4,
-      rb: 0.5,
-      eb: 0.6,
-      sp: 0.7,
-      ts: 0.8,
-      sf: 0.9,
-      x: 1.0,
+      rb: 0.4,
+      eb: 0.5,
+      sp: 0.6,
+      p: 0.7,
+      x: 0.8,
     };
 
     const parsed = parseAndValidateResponse(JSON.stringify(payload));

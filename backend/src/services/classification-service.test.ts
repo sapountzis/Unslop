@@ -21,12 +21,10 @@ const fullScores: ScoreResult = {
   u: 0.1,
   d: 0.1,
   c: 0.1,
-  h: 0.1,
   rb: 0.1,
   eb: 0.1,
   sp: 0.1,
-  ts: 0.1,
-  sf: 0.1,
+  p: 0.1,
   x: 0.1,
 };
 

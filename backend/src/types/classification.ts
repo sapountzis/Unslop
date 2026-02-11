@@ -9,12 +9,10 @@ export interface ScoreResult {
   u: number;
   d: number;
   c: number;
-  h: number;
   rb: number;
   eb: number;
   sp: number;
-  ts: number;
-  sf: number;
+  p: number;
   x: number;
   [key: string]: number | undefined;
 }
