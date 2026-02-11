@@ -4,12 +4,13 @@
 import { PostData } from '../types';
 
 /**
- * Post surface: the content root (for extraction), render root (for decision rendering),
- * and a stable identity string for deduplication.
+ * Post surface: the content root (for extraction), render root (for hide/collapse decisions),
+ * label root (for pill placement in label mode), and a stable identity string for deduplication.
  */
 export type PostSurface = {
     contentRoot: HTMLElement;
     renderRoot: HTMLElement;
+    labelRoot: HTMLElement;
     identity: string;
 };
 

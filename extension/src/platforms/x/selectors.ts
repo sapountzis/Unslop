@@ -22,6 +22,6 @@ export const SELECTORS = {
     // Images
     imageNodes: '[data-testid="tweetPhoto"] img',
 
-    // Quote tweets
-    quoteTweet: '[data-testid="quoteTweet"]',
+    // Quote tweets - matches both data-testid and aria-labelledby pattern
+    quoteTweet: '[data-testid="quoteTweet"], [role="link"][tabindex="0"]:has([data-testid="tweetText"])',
 } as const;

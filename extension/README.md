@@ -74,14 +74,15 @@ flowchart LR
    - attaches a body observer until the feed root appears.
 6. Added nodes are converted to post surfaces:
    - `contentRoot` (for parsing/classification)
-   - `renderRoot` (for visual write operations)
+   - `renderRoot` (for hide/collapse decisions)
+   - `labelRoot` (for pill placement in label mode)
    - `identity` (stable post instance key)
 7. Mutation buffer batches candidate processing.
 8. Each candidate is parsed into a multimodal payload (`nodes[]` + attachment refs) and sent through `batch-queue` to background.
 9. Background resolves attachment refs best-effort (image bytes + PDF excerpt) before calling `/v1/classify/batch`.
 10. Background streams NDJSON classify results from backend back to content runtime.
 11. Render commit pipeline coalesces decisions by `renderRoot`, sorts in DOM order, and flushes on RAF.
-12. Decision renderer applies one terminal visual state on `renderRoot` and marks it processed.
+12. Decision renderer applies visual state on `labelRoot` and marks `renderRoot` as processed.
 13. Route/toggle off triggers one centralized runtime dispose path.
 
 ## Core Concepts
@@ -91,11 +92,13 @@ flowchart LR
 - `contentRoot`
   - Semantic post node used by parser (`src/content/linkedin-parser.ts`).
 - `renderRoot`
-  - Outer post container where keep/hide classes and markers are applied.
+  - Outer post container where hide/collapse classes and markers are applied.
+- `labelRoot`
+  - Element where the decision pill is placed in label mode (may differ from renderRoot on platforms with nested wrappers).
 - `Identity`
   - Post instance key from `data-id` / `data-urn` / nested URN fallback.
 - `Terminal State`
-  - Decision already committed for a specific `renderRoot + identity`.
+  - Decision already committed for a specific `renderRoot + identity` (tracked per renderRoot, rendered on labelRoot).
 - `Fail Open`
   - Timeout/error/invalid classify result resolves to `keep`.
 - `Multimodal Payload`
@@ -163,11 +166,19 @@ Rules:
 - Public surface: `ensureAttached`, `detachAll`, `isLive`.
 
 `src/content/post-surface.ts`
-- Converts arbitrary nodes into canonical `{ contentRoot, renderRoot, identity }`.
+- Converts arbitrary nodes into canonical `{ contentRoot, renderRoot, labelRoot, identity }`.
 
 `src/content/linkedin-parser.ts`
 - Extracts deterministic `nodes` in DOM order (`root` then `repost-*`).
 - Extracts attachment references (image/pdf metadata only, no binary fetch).
+
+`src/platforms/x/parser.ts`
+- Uses scoped parsing (`root` vs quoted repost) and assigns attachments to the correct node.
+- Uses hydration-aware media waiting before final extraction:
+  - waits for late `tweetPhoto` insertion on newly mounted tweets,
+  - observes `src`/`srcset`/`style` mutations,
+  - exits early for likely text-only tweets with a short no-hint timeout.
+- Resolves image source from `img[src|currentSrc|srcset]` and CSS `background-image` fallbacks to reduce empty-attachment payloads during X lazy render.
 
 `src/content/mutation-buffer.ts`
 - Deduplicated queue of candidate elements.

@@ -7,6 +7,7 @@ const POSITION_FOLLOWING = typeof Node === 'undefined' ? 4 : Node.DOCUMENT_POSIT
 
 export type RenderCommitEntry = {
   renderRoot: HTMLElement;
+  labelRoot?: HTMLElement;
   decision: Decision;
   postId?: string;
   hideMode: HideRenderMode;
@@ -149,7 +150,8 @@ export function createRenderCommitPipeline(options: RenderCommitPipelineOptions)
         continue;
       }
 
-      options.render(entry.renderRoot, entry.decision, entry.postId, { hideMode: entry.hideMode });
+      const renderTarget = entry.labelRoot ?? entry.renderRoot;
+      options.render(renderTarget, entry.decision, entry.postId, { hideMode: entry.hideMode });
       finalize(entry, 'applied');
     }
   }

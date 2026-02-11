@@ -228,7 +228,7 @@ export function createPlatformRuntime(platform: PlatformPlugin): void {
             if (!runtimeController.isEnabledForProcessing()) return;
 
             if (!postData) {
-                renderDecision(surface.renderRoot, 'keep');
+                renderDecision(surface.labelRoot, 'keep');
                 setTerminalState(surface.renderRoot, surface.identity, 'keep');
                 incrementCounter('postsProcessed');
                 return;
@@ -270,6 +270,7 @@ export function createPlatformRuntime(platform: PlatformPlugin): void {
             handedToRenderPipeline = true;
             renderCommitPipeline.enqueue({
                 renderRoot: expectedRenderRoot,
+                labelRoot: surface.labelRoot,
                 decision,
                 postId: postData.post_id,
                 hideMode: hideRenderMode,
@@ -291,7 +292,7 @@ export function createPlatformRuntime(platform: PlatformPlugin): void {
             console.error('Error processing post:', err);
             if (!runtimeController.isEnabledForProcessing()) return;
 
-            renderDecision(surface.renderRoot, 'keep');
+            renderDecision(surface.labelRoot, 'keep');
             setTerminalState(surface.renderRoot, surface.identity, 'keep');
             incrementCounter('postsProcessed');
         } finally {

@@ -12,7 +12,7 @@ The extension uses a **platform plugin system** to support multiple social media
   - `plugin.ts` — wires together all platform-specific modules into a `PlatformPlugin`.
   - `selectors.ts` — platform-specific DOM selectors.
   - `parser.ts` — post data extraction and identity reading.
-  - `surface.ts` — post surface resolution (content root → render root → identity).
+  - `surface.ts` — post surface resolution (content root, render root, label root → identity).
   - `route-detector.ts` — route eligibility and key extraction.
   - `index.ts` — entry point: imports `createPlatformRuntime` and the plugin, calls it.
 

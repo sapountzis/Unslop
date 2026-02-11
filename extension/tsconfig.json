@@ -15,8 +15,7 @@
     "downlevelIteration": true,
     "noEmit": true,
     "types": [
-      "chrome",
-      "node"
+      "chrome"
     ]
   },
   "include": [

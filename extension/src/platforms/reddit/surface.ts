@@ -51,9 +51,13 @@ export function resolvePostSurface(node: HTMLElement): PostSurface | null {
         return null;
     }
 
+    // Reddit uses the same root for label mode as hide mode
+    const labelRoot = renderRoot;
+
     return {
         contentRoot,
         renderRoot,
+        labelRoot,
         identity,
     };
 }

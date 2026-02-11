@@ -353,19 +353,11 @@ async function sha256Hex(bytes: Uint8Array): Promise<string> {
 }
 
 function toBase64(bytes: Uint8Array): string {
-  if (typeof Buffer !== 'undefined') {
-    return Buffer.from(bytes).toString('base64');
-  }
-
   let binary = '';
   const chunkSize = 0x8000;
   for (let i = 0; i < bytes.length; i += chunkSize) {
     const chunk = bytes.subarray(i, i + chunkSize);
     binary += String.fromCharCode(...chunk);
-  }
-
-  if (typeof btoa !== 'function') {
-    throw new Error('base64_unavailable');
   }
   return btoa(binary);
 }

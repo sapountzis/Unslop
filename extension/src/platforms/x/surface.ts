@@ -50,9 +50,14 @@ export function resolvePostSurface(node: HTMLElement): PostSurface | null {
         return null;
     }
 
+    // For label mode, use the article (contentRoot) instead of the wrapper (renderRoot)
+    // to avoid empty space issues with the positioned pill
+    const labelRoot = contentRoot;
+
     return {
         contentRoot,
         renderRoot,
+        labelRoot,
         identity,
     };
 }
