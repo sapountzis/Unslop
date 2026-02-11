@@ -1,6 +1,6 @@
 # AGENTS.md – Unslop (Root)
 
-This repo contains **Unslop**, a Chrome extension + backend API that filters the LinkedIn feed by **dimming or hiding posts based on a backend decision**.
+This repo contains **Unslop**, a Chrome extension + backend API that filters social media feeds (LinkedIn, X/Twitter, Reddit) by **dimming or hiding posts based on a backend decision**.
 
 ## Project layout
 

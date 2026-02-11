@@ -1,4 +1,5 @@
-import { ATTRIBUTES, SELECTORS } from '../lib/selectors';
+import { ATTRIBUTES } from '../lib/selectors';
+import type { PlatformSelectors } from '../platforms/platform';
 
 function removeScopedChild(element: HTMLElement, selector: string): void {
   const child = element.querySelector<HTMLElement>(selector);
@@ -17,8 +18,8 @@ export function resetPostElementState(element: HTMLElement): void {
   element.style.opacity = '1';
 }
 
-export function clearUnslopStateInDocument(): void {
-  const candidates = document.querySelectorAll(`${SELECTORS.renderPostRoot}, ${SELECTORS.candidatePostRoot}`);
+export function clearUnslopStateInDocument(selectors: PlatformSelectors): void {
+  const candidates = document.querySelectorAll(`${selectors.renderPostRoot}, ${selectors.candidatePostRoot}`);
   for (const candidate of candidates) {
     if (candidate instanceof HTMLElement) {
       resetPostElementState(candidate);

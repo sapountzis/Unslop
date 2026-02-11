@@ -37,7 +37,7 @@ function renderSuccessPage(): void {
     <div class="unslop-auth-success">
       <div class="unslop-auth-success-content">
         <h1>Sign in successful</h1>
-        <p>You can close this tab and return to LinkedIn.</p>
+        <p>You can close this tab and return to your feed.</p>
       </div>
     </div>
   `;

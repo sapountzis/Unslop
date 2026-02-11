@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Unslop",
-  "version": "0.1.0",
-  "description": "Filter your LinkedIn feed",
+  "version": "0.2.0",
+  "description": "Filter your social media feeds",
   "permissions": [
     "storage",
     "activeTab"
@@ -10,6 +10,10 @@
   "host_permissions": [
     "https://www.linkedin.com/*",
     "https://media.licdn.com/*",
+    "https://x.com/*",
+    "https://twitter.com/*",
+    "https://www.reddit.com/*",
+    "https://old.reddit.com/*",
     "https://api.getunslop.com/*",
     "http://localhost:3000/*"
   ],
@@ -23,7 +27,27 @@
         "https://www.linkedin.com/*"
       ],
       "js": [
-        "src/content/linkedin.ts"
+        "src/platforms/linkedin/index.ts"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://x.com/*",
+        "https://twitter.com/*"
+      ],
+      "js": [
+        "src/platforms/x/index.ts"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://www.reddit.com/*",
+        "https://old.reddit.com/*"
+      ],
+      "js": [
+        "src/platforms/reddit/index.ts"
       ],
       "run_at": "document_start"
     },
@@ -58,7 +82,11 @@
         "assets/*"
       ],
       "matches": [
-        "https://www.linkedin.com/*"
+        "https://www.linkedin.com/*",
+        "https://x.com/*",
+        "https://twitter.com/*",
+        "https://www.reddit.com/*",
+        "https://old.reddit.com/*"
       ]
     }
   ]

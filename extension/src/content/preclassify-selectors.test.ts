@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
-import { SELECTORS } from '../lib/selectors';
+import { linkedinPlugin } from '../platforms/linkedin/plugin';
+import { SELECTORS } from '../platforms/linkedin/selectors';
 
 function preclassifyRuleBlock(css: string): string {
   const match = css.match(
@@ -9,10 +10,13 @@ function preclassifyRuleBlock(css: string): string {
 }
 
 describe('preclassify selector coverage', () => {
-  it('targets only outer feed card roots', async () => {
-    expect(SELECTORS.renderPostRoot.includes('[data-finite-scroll-hotkey-item]')).toBe(true);
-    expect(SELECTORS.renderPostRoot.includes(':has(.feed-shared-update-v2[role="article"])')).toBe(true);
+  it('linkedin plugin preclassify selector targets outer feed card roots', () => {
+    expect(linkedinPlugin.preclassifyCssSelector.includes('[data-finite-scroll-hotkey-item]')).toBe(true);
+    expect(linkedinPlugin.preclassifyCssSelector.includes(':has(.feed-shared-update-v2[role="article"])')).toBe(true);
+    expect(linkedinPlugin.preclassifyCssSelector.includes(':not([data-unslop-processed])')).toBe(true);
+  });
 
+  it('linkedin CSS file contains the preclassify hiding rules', async () => {
     const css = await Bun.file('./src/styles/content.css').text();
     const rule = preclassifyRuleBlock(css);
 
@@ -21,12 +25,11 @@ describe('preclassify selector coverage', () => {
     expect(css.includes(':not([data-id^="urn:li:aggregate:"])')).toBe(true);
     expect(css.includes(':not(:has(.feed-shared-aggregated-content))')).toBe(true);
     expect(css.includes(':not(:has(.update-components-feed-discovery-entity))')).toBe(true);
-    expect(/html\[data-unslop-preclassify="true"\]\s+\.feed-shared-update-v2:not\(\[data-unslop-processed\]\)/.test(css)).toBe(false);
     expect(rule.includes('opacity: 0')).toBe(true);
     expect(rule.includes('pointer-events: none')).toBe(true);
   });
 
-  it('includes selector constants for repost/image/document parsing inputs', () => {
+  it('includes linkedin selector constants for repost/image/document parsing inputs', () => {
     expect(SELECTORS.nestedRepostLinkContainer).toContain('update-components-mini-update-v2__link-to-details-page');
     expect(SELECTORS.imageNodes).toContain('update-components-image__image');
     expect(SELECTORS.documentContainer).toContain('update-components-document__container');

@@ -1,4 +1,4 @@
-export const SYSTEM_PROMPT = `You are a careful content quality rater for a professional social network feed (LinkedIn-like).
+export const SYSTEM_PROMPT = `You are a careful content quality rater for a social network feed (e.g. LinkedIn, X/Twitter, Reddit).
 
 Your job: analyze ONE post and output ONLY numeric scores (0.0-1.0) across independent dimensions.
 

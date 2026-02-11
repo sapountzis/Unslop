@@ -12,14 +12,22 @@ export function createApp(deps: AppDependencies): Hono {
   const app = new Hono();
 
   app.use('*', createRequestLogger({ logger: deps.logger }));
+  const ALLOWED_ORIGINS = new Set([
+    'https://www.linkedin.com',
+    'https://x.com',
+    'https://twitter.com',
+    'https://www.reddit.com',
+    'https://old.reddit.com',
+  ]);
+
   app.use(
     '*',
     cors({
       origin: (origin) => {
-        if (origin.startsWith('chrome-extension://') || origin === 'https://www.linkedin.com') {
+        if (origin.startsWith('chrome-extension://') || ALLOWED_ORIGINS.has(origin)) {
           return origin;
         }
-        return 'https://www.linkedin.com';
+        return '';
       },
       allowHeaders: ['Content-Type', 'Authorization'],
       allowMethods: ['GET', 'POST', 'OPTIONS'],

@@ -187,7 +187,7 @@ export class App {
       const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (typeof activeTab?.id === 'number') {
         await chrome.runtime.sendMessage({
-          type: MESSAGE_TYPES.RELOAD_ACTIVE_LINKEDIN_TAB,
+          type: MESSAGE_TYPES.RELOAD_ACTIVE_TAB,
           tabId: activeTab.id,
         });
       }

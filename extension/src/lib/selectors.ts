@@ -1,52 +1,6 @@
 // extension/src/lib/selectors.ts
-// Centralized DOM selectors for LinkedIn parsing
-// Update these if LinkedIn changes their DOM structure
-
-export const SELECTORS = {
-    // Feed container selectors (try in order)
-    feed: '.scaffold-finite-scroll__content, main .scaffold-finite-scroll, main',
-
-    // Semantic content card used for extraction/classification.
-    candidatePostRoot: '.feed-shared-update-v2[role="article"]',
-    // Outer layout owner used for keep/hide rendering.
-    renderPostRoot: '[data-finite-scroll-hotkey-item]:has(.feed-shared-update-v2[role="article"])',
-    postUrn: '[data-urn^="urn:li:activity:"], [data-urn^="urn:li:share:"]',
-
-    // Author extraction
-    authorLink: 'a[href*="/in/"], a[href*="/company/"]',
-
-    // Author name extraction (multiple fallbacks)
-    authorName: [
-        '.update-components-actor__title span[aria-hidden="true"]:first-child',
-        'span[aria-hidden="true"][class*="visually-hidden"] ~ span[aria-hidden="true"]',
-        '[data-anonymize="person-name"]',
-    ].join(', '),
-
-    // Post content extraction
-    postContent: '.feed-shared-text, .feed-shared-update-v2__description, [data-anonymize="text"]',
-    nestedRepostLinkContainer: '.update-components-mini-update-v2__link-to-details-page',
-    imageNodes: '.update-components-image__image',
-    documentContainer: '.update-components-document__container',
-    documentIframe: '.document-s-container__document-element',
-    documentSourceHints: [
-        '[class*="feedshare-document"]',
-        '[data-test-id*="feedshare-document"]',
-        '[href*="feedshare-document"]',
-        '[src*="feedshare-document"]',
-    ].join(', '),
-
-    // Discovery/recommendation cards (for example "Recommended for you" people suggestions)
-    recommendationEntity: '.update-components-feed-discovery-entity, .feed-shared-aggregated-content',
-
-    // Auth page JWT meta tag
-    jwtMeta: 'meta[name="unslop-jwt"]',
-} as const;
-
-// URL patterns for author ID extraction
-export const AUTHOR_PATTERNS = {
-    profile: /\/in\/([^\/?]+)/,
-    company: /\/company\/([^\/?]+)/,
-} as const;
+// Shared data attributes used by the extension (platform-agnostic).
+// Platform-specific DOM selectors live in src/platforms/<platform>/selectors.ts.
 
 // Data attributes used by the extension
 export const ATTRIBUTES = {
@@ -55,4 +9,9 @@ export const ATTRIBUTES = {
     decision: 'data-unslop-decision',
     preclassify: 'data-unslop-preclassify',
     identity: 'data-unslop-identity',
+} as const;
+
+// Auth selectors (shared across platforms, used by auth.ts)
+export const SELECTORS = {
+    jwtMeta: 'meta[name="unslop-jwt"]',
 } as const;

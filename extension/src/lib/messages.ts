@@ -15,7 +15,7 @@ export const MESSAGE_TYPES = {
   SET_JWT: 'SET_JWT',
   CLEAR_JWT: 'CLEAR_JWT',
   TOGGLE_ENABLED: 'TOGGLE_ENABLED',
-  RELOAD_ACTIVE_LINKEDIN_TAB: 'RELOAD_ACTIVE_LINKEDIN_TAB',
+  RELOAD_ACTIVE_TAB: 'RELOAD_ACTIVE_TAB',
   GET_USAGE: 'GET_USAGE',
   GET_STATS: 'GET_STATS',
 } as const;
@@ -58,8 +58,8 @@ export type ToggleEnabledMessage = {
   type: typeof MESSAGE_TYPES.TOGGLE_ENABLED;
 };
 
-export type ReloadActiveLinkedInTabMessage = {
-  type: typeof MESSAGE_TYPES.RELOAD_ACTIVE_LINKEDIN_TAB;
+export type ReloadActiveTabMessage = {
+  type: typeof MESSAGE_TYPES.RELOAD_ACTIVE_TAB;
   tabId: number;
 };
 
@@ -79,7 +79,7 @@ export type RuntimeRequest =
   | SetJwtMessage
   | ClearJwtMessage
   | ToggleEnabledMessage
-  | ReloadActiveLinkedInTabMessage
+  | ReloadActiveTabMessage
   | GetUsageMessage
   | GetStatsMessage;
 
@@ -92,7 +92,7 @@ export type RuntimeResponseByType = {
   [MESSAGE_TYPES.SET_JWT]: { status: 'ok' };
   [MESSAGE_TYPES.CLEAR_JWT]: { status: 'ok' };
   [MESSAGE_TYPES.TOGGLE_ENABLED]: { enabled: boolean };
-  [MESSAGE_TYPES.RELOAD_ACTIVE_LINKEDIN_TAB]: { status: 'reloaded' | 'ignored' };
+  [MESSAGE_TYPES.RELOAD_ACTIVE_TAB]: { status: 'reloaded' | 'ignored' };
   [MESSAGE_TYPES.GET_USAGE]: UsageInfo | null;
   [MESSAGE_TYPES.GET_STATS]: StatsInfo | null;
 };
