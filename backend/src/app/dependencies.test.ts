@@ -184,6 +184,7 @@ describe('app dependency wiring', () => {
             {
               plan: 'free',
               planStatus: 'inactive',
+              createdAt: new Date('2026-01-15T00:00:00.000Z'),
               subscriptionPeriodStart: null,
               subscriptionPeriodEnd: null,
             },
@@ -206,7 +207,7 @@ describe('app dependency wiring', () => {
     const context = await service.resolveQuotaContext('user-1');
 
     expect(context).not.toBeNull();
-    expect(context?.periodStart).toBe('2026-04-01');
-    expect(context?.resetDate).toBe('2026-05-01T00:00:00.000Z');
+    expect(context?.periodStart).toBe('2026-04-15');
+    expect(context?.resetDate).toBe('2026-05-15T00:00:00.000Z');
   });
 });

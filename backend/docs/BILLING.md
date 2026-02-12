@@ -29,8 +29,8 @@ Guardrails:
 
 ## Auth-time billing recovery sync
 
-On `POST /v1/auth/start`, when `getOrCreateUserByEmail` inserts a brand new user row,
-the backend performs a best-effort Polar sync by email before sending the magic link.
+On `POST /v1/auth/start`, the backend performs a best-effort Polar sync by email
+for both newly created and existing users before sending the magic link.
 
 Flow:
 
@@ -50,7 +50,7 @@ Processing steps:
 2. Verify signature with `@polar-sh/sdk/webhooks.validateEvent`.
 3. Filter to supported subscription event types.
 4. Claim idempotency using `webhook-id` header in `webhook_deliveries`.
-5. Normalize `event.data` with `src/services/polar-webhook-schema.ts`.
+5. Normalize `event.data` with `src/services/polar-webhook-schema.ts` (camelCase SDK shape + snake_case aliases).
 6. Apply subscription transition in `src/services/polar.ts`.
 7. On processing failure, release idempotency claim and return non-2xx so Polar retries.
 
@@ -60,12 +60,20 @@ Processing steps:
 - `subscription.active` -> `plan=pro`, `plan_status=active`
 - `subscription.uncanceled` -> `plan=pro`, `plan_status=active`
 - `subscription.canceled` -> `plan=pro`, `plan_status=canceled`
+- `subscription.past_due` -> `plan=pro`, `plan_status=past_due`
 - `subscription.updated`:
   - `active|trialing` -> active
   - `canceled` -> canceled
   - `past_due|unpaid` -> past_due
   - other statuses -> ignored
 - `subscription.revoked` -> `plan=free`, `plan_status=inactive`
+
+## Quota period anchors
+
+- Free users: monthly window anchored to `users.created_at` (UTC day/time).
+- Pro active users: use `subscription_period_start` + `subscription_period_end`.
+- Pro canceled users keep Pro quota until `subscription_period_end`.
+- Revoked/expired/past-due states use free anchor semantics.
 
 ## Idempotency contract
 

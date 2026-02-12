@@ -109,7 +109,7 @@ export const postFeedback = pgTable('post_feedback', {
 
 export const userUsage = pgTable('user_usage', {
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  monthStart: date('month_start').notNull(), // billing period anchor date in UTC (free: month start, pro: subscription start)
+  monthStart: date('month_start').notNull(), // billing period anchor date in UTC (free: account-created anchor, pro: subscription start)
   llmCalls: integer('llm_calls').notNull().default(0),
 }, (table) => [
   primaryKey({ columns: [table.userId, table.monthStart] }),

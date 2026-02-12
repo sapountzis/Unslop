@@ -63,9 +63,10 @@ async function createWebhookEndpoint(
         'subscription.created',
         'subscription.active',
         'subscription.updated',
+        'subscription.uncanceled',
         'subscription.canceled',
         'subscription.revoked',
-        'subscription.uncancelled',
+        'subscription.past_due',
       ],
     }),
   });

@@ -33,7 +33,7 @@ let usageResult:
   remaining: 258,
   plan: 'free',
   plan_status: 'inactive',
-  reset_date: '2026-03-01T00:00:00.000Z',
+  reset_date: '2026-03-15T10:00:00.000Z',
 };
 
 const getUsageMock = mock(async () => usageResult);
@@ -62,7 +62,7 @@ describe('Stats Routes (unit)', () => {
       remaining: 258,
       plan: 'free',
       plan_status: 'inactive',
-      reset_date: '2026-03-01T00:00:00.000Z',
+      reset_date: '2026-03-15T10:00:00.000Z',
     };
     getStatsMock.mockClear();
     getUsageMock.mockClear();
@@ -107,7 +107,7 @@ describe('Stats Routes (unit)', () => {
       remaining: 258,
       plan: 'free',
       plan_status: 'inactive',
-      reset_date: '2026-03-01T00:00:00.000Z',
+      reset_date: '2026-03-15T10:00:00.000Z',
     });
   });
 
