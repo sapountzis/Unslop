@@ -17,3 +17,18 @@ port = 3000
 binding = "HYPERDRIVE"
 id = "b219bbac14db4b7fbf60251d59cd37b2"
 localConnectionString = "postgresql://postgres:postgres@localhost:5432/unslop"
+
+[observability]
+enabled = false
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+persist = true
+invocation_logs = true
+
+[observability.traces]
+enabled = false
+persist = true
+head_sampling_rate = 1
