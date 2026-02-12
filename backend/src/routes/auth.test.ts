@@ -25,12 +25,23 @@ const authService = {
   })),
 };
 
+const statsService = {
+  getUsage: mock(async () => ({ found: false as const })),
+  getStats: mock(async () => ({
+    all_time: { keep: 0, hide: 0, total: 0 },
+    last_30_days: { keep: 0, hide: 0, total: 0 },
+    today: { keep: 0, hide: 0, total: 0 },
+    daily_breakdown: [],
+  })),
+};
+
 const app = createTestApp((testApp) => {
   testApp.route(
     '/',
     createAuthRoutes({
       authMiddleware: createAuthMiddleware({ verifySessionToken }),
       authService,
+      statsService,
       logger: {
         error: mock(() => undefined),
       },

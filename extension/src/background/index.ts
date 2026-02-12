@@ -1,10 +1,9 @@
 // extension/src/background/index.ts
 import {
   classifyPostsBatch,
-  getUserInfo,
+  getUserInfoWithUsage,
   createCheckout,
   startAuthFlow,
-  getUsage,
   getStats,
 } from './api';
 import { MESSAGE_TYPES, RuntimeRequest } from '../lib/messages';
@@ -91,7 +90,7 @@ chrome.runtime.onMessage.addListener((message: RuntimeRequest, sender, sendRespo
         case MESSAGE_TYPES.GET_USER_INFO: {
           const jwt = await getJwtFromStorage();
           if (jwt) {
-            const userInfo = await getUserInfo(jwt);
+            const userInfo = await getUserInfoWithUsage(jwt);
             sendResponse(userInfo);
           } else {
             sendResponse(null);
@@ -145,17 +144,6 @@ chrome.runtime.onMessage.addListener((message: RuntimeRequest, sender, sendRespo
 
           await chrome.tabs.reload(tab.id);
           sendResponse({ status: 'reloaded' });
-          return;
-        }
-
-        case MESSAGE_TYPES.GET_USAGE: {
-          const jwt = await getJwtFromStorage();
-          if (jwt) {
-            const usage = await getUsage(jwt);
-            sendResponse(usage);
-          } else {
-            sendResponse(null);
-          }
           return;
         }
 

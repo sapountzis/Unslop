@@ -75,6 +75,7 @@ export function createApp(deps: AppDependencies): Hono {
     createAuthRoutes({
       authMiddleware: deps.authMiddleware,
       authService: deps.services.auth,
+      statsService: deps.services.stats,
       logger: deps.logger,
     }),
   );

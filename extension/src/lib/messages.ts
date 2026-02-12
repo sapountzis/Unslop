@@ -2,8 +2,7 @@ import {
   BatchClassifyResult,
   PostData,
   StatsInfo,
-  UsageInfo,
-  UserInfo,
+  UserInfoWithUsage,
 } from '../types';
 
 export const MESSAGE_TYPES = {
@@ -16,7 +15,6 @@ export const MESSAGE_TYPES = {
   CLEAR_JWT: 'CLEAR_JWT',
   TOGGLE_ENABLED: 'TOGGLE_ENABLED',
   RELOAD_ACTIVE_TAB: 'RELOAD_ACTIVE_TAB',
-  GET_USAGE: 'GET_USAGE',
   GET_STATS: 'GET_STATS',
 } as const;
 
@@ -63,10 +61,6 @@ export type ReloadActiveTabMessage = {
   tabId: number;
 };
 
-export type GetUsageMessage = {
-  type: typeof MESSAGE_TYPES.GET_USAGE;
-};
-
 export type GetStatsMessage = {
   type: typeof MESSAGE_TYPES.GET_STATS;
 };
@@ -80,20 +74,18 @@ export type RuntimeRequest =
   | ClearJwtMessage
   | ToggleEnabledMessage
   | ReloadActiveTabMessage
-  | GetUsageMessage
   | GetStatsMessage;
 
 export type RuntimeResponseByType = {
   [MESSAGE_TYPES.CLASSIFY_BATCH]: { status: 'ok' | 'disabled' | 'error' };
   [MESSAGE_TYPES.CLASSIFY_BATCH_RESULT]: undefined;
-  [MESSAGE_TYPES.GET_USER_INFO]: UserInfo | null;
+  [MESSAGE_TYPES.GET_USER_INFO]: UserInfoWithUsage | null; // Now includes usage data (UserInfoWithUsage)
   [MESSAGE_TYPES.CREATE_CHECKOUT]: { checkout_url: string | null };
   [MESSAGE_TYPES.START_AUTH]: { status: 'ok' };
   [MESSAGE_TYPES.SET_JWT]: { status: 'ok' };
   [MESSAGE_TYPES.CLEAR_JWT]: { status: 'ok' };
   [MESSAGE_TYPES.TOGGLE_ENABLED]: { enabled: boolean };
   [MESSAGE_TYPES.RELOAD_ACTIVE_TAB]: { status: 'reloaded' | 'ignored' };
-  [MESSAGE_TYPES.GET_USAGE]: UsageInfo | null;
   [MESSAGE_TYPES.GET_STATS]: StatsInfo | null;
 };
 

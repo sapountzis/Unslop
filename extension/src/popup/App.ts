@@ -1,5 +1,5 @@
 // extension/src/popup/App.ts
-import { UserInfo, UsageInfo } from '../types';
+import { UserInfoWithUsage } from '../types';
 import { MESSAGE_TYPES } from '../lib/messages';
 import { resolveEnabled } from '../lib/enabled-state';
 import type { HideRenderMode } from '../lib/config';
@@ -24,18 +24,18 @@ export class App {
 
     if (!storage.jwt) {
       this.renderSignIn();
+      return;
+    }
+
+    const userInfo = await this.getUserInfo();
+    if (userInfo) {
+      this.renderDashboard(userInfo, resolveEnabled(storage.enabled), hideRenderMode);
     } else {
-      const userInfo = await this.getUserInfo();
-      if (userInfo) {
-        const usageInfo = await this.getUsageInfo();
-        this.renderDashboard(userInfo, usageInfo, resolveEnabled(storage.enabled), hideRenderMode);
-      } else {
-        this.renderSignIn();
-      }
+      this.renderSignIn();
     }
   }
 
-  private async getUserInfo(): Promise<UserInfo | null> {
+  private async getUserInfo(): Promise<UserInfoWithUsage | null> {
     try {
       const response = await chrome.runtime.sendMessage({ type: MESSAGE_TYPES.GET_USER_INFO });
       if (!response || !response.email) {
@@ -44,16 +44,6 @@ export class App {
       return response;
     } catch (err) {
       console.error('GetUserInfo error:', err);
-      return null;
-    }
-  }
-
-  private async getUsageInfo(): Promise<UsageInfo | null> {
-    try {
-      const response = await chrome.runtime.sendMessage({ type: MESSAGE_TYPES.GET_USAGE });
-      return response;
-    } catch (err) {
-      console.error('GetUsageInfo error:', err);
       return null;
     }
   }
@@ -101,33 +91,32 @@ export class App {
   }
 
   private renderDashboard(
-    userInfo: UserInfo,
-    usageInfo: UsageInfo | null,
+    userInfo: UserInfoWithUsage,
     enabled: boolean,
     hideRenderMode: HideRenderMode
   ): void {
     const isPro = userInfo.plan === 'pro' && userInfo.plan_status === 'active';
 
-    // Usage display
+    // Usage display - data now embedded in userInfo
     let usageHtml = '';
-    if (usageInfo) {
-      const usagePercent = Math.round((usageInfo.current_usage / usageInfo.limit) * 100);
-      const isLow = usageInfo.remaining < usageInfo.limit * 0.1;
+    if (userInfo.current_usage !== undefined) {
+      const usagePercent = Math.round((userInfo.current_usage / userInfo.limit!) * 100);
+      const isLow = userInfo.remaining! < userInfo.limit! * 0.1;
       const barColor = isLow ? 'var(--warning)' : 'var(--good)';
-      const resetDate = new Date(usageInfo.reset_date);
+      const resetDate = new Date(userInfo.reset_date!);
       const resetStr = resetDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
       usageHtml = `
         <div class="card usage-card mb-8">
           <div class="usage-header">
             <span class="usage-label">Monthly Usage</span>
-            <span class="usage-count ${isLow ? 'low' : ''}">${usageInfo.remaining} remaining</span>
+            <span class="usage-count ${isLow ? 'low' : ''}">${userInfo.remaining} remaining</span>
           </div>
           <div class="usage-bar-bg">
             <div class="usage-bar" style="width: ${Math.min(usagePercent, 100)}%; background: ${barColor};"></div>
           </div>
           <div class="usage-footer">
-            <span>${usageInfo.current_usage} / ${usageInfo.limit} calls</span>
+            <span>${userInfo.current_usage} / ${userInfo.limit} calls</span>
             <span>Resets ${resetStr}</span>
           </div>
         </div>
@@ -162,7 +151,7 @@ export class App {
         </div>
 
         ${!isPro ? `
-          <button id="upgrade-btn" class="primary mb-8">Upgrade to Pro ($3.99/mo)</button>
+          <button id="upgrade-btn" class="primary mb-8">Upgrade to Pro ($5/mo)</button>
         ` : ''}
 
         <button id="stats-btn" class="secondary mb-8">View Statistics</button>

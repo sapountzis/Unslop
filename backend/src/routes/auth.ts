@@ -3,11 +3,13 @@ import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import type { MiddlewareHandler } from 'hono';
 import type { AuthService } from '../services/auth-service';
+import type { StatsService } from '../services/stats-service';
 import type { AppLogger } from '../lib/logger-types';
 
 export interface AuthRoutesDeps {
   authMiddleware: MiddlewareHandler;
   authService: AuthService;
+  statsService: StatsService;
   logger: Pick<AppLogger, 'error'>;
 }
 
@@ -75,7 +77,13 @@ export function createAuthRoutes(deps: AuthRoutesDeps): Hono {
 
   auth.get('/v1/me', deps.authMiddleware, async (c) => {
     const user = c.get('user');
-    const userData = await deps.authService.getCurrentUser(user.sub);
+
+    // Fetch user data and usage in parallel
+    const [userData, usageData] = await Promise.all([
+      deps.authService.getCurrentUser(user.sub),
+      // Usage fetch may fail if user/quota context not found - fail open
+      deps.statsService.getUsage(user.sub).catch(() => ({ found: false as const })),
+    ]);
 
     if (!userData) {
       return c.json({ error: 'User not found' }, 404);
@@ -86,6 +94,13 @@ export function createAuthRoutes(deps: AuthRoutesDeps): Hono {
       email: userData.email,
       plan: userData.plan,
       plan_status: userData.planStatus,
+      // Include usage data if available
+      ...(usageData.found ? {
+        current_usage: usageData.current_usage,
+        limit: usageData.limit,
+        remaining: usageData.remaining,
+        reset_date: usageData.reset_date,
+      } : {}),
     });
   });
 

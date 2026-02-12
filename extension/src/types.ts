@@ -88,6 +88,13 @@ export interface UserInfo {
   plan_status: 'active' | 'inactive';
 }
 
+export interface UserInfoWithUsage extends UserInfo {
+  current_usage?: number;
+  limit?: number;
+  remaining?: number;
+  reset_date?: string;
+}
+
 export interface UsageInfo {
   current_usage: number;
   limit: number;
