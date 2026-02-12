@@ -1,0 +1,158 @@
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
+import { renderDecision } from './decision-renderer';
+import { ATTRIBUTES } from '../lib/selectors';
+
+class MockClassList {
+  private tokens = new Set<string>();
+
+  add(token: string): void {
+    this.tokens.add(token);
+  }
+
+  remove(token: string): void {
+    this.tokens.delete(token);
+  }
+
+  contains(token: string): boolean {
+    return this.tokens.has(token);
+  }
+}
+
+class MockElement {
+  parentElement: MockElement | null = null;
+  children: MockElement[] = [];
+  style: Record<string, string> = {};
+  className = '';
+  classList = new MockClassList();
+  innerHTML = '';
+
+  private attributes = new Map<string, string>();
+
+  setAttribute(name: string, value: string): void {
+    this.attributes.set(name, value);
+  }
+
+  getAttribute(name: string): string | null {
+    return this.attributes.get(name) ?? null;
+  }
+
+  hasAttribute(name: string): boolean {
+    return this.attributes.has(name);
+  }
+
+  removeAttribute(name: string): void {
+    this.attributes.delete(name);
+  }
+
+  prepend(child: MockElement): void {
+    child.parentElement = this;
+    this.children.unshift(child);
+  }
+
+  append(...children: MockElement[]): void {
+    for (const child of children) {
+      child.parentElement = this;
+      this.children.push(child);
+    }
+  }
+
+  querySelector(selector: string): MockElement | null {
+    if (selector === ':scope > .unslop-decision-label' || selector === '.unslop-decision-label') {
+      return this.children.find((child) => child.className.includes('unslop-decision-label')) ?? null;
+    }
+    return null;
+  }
+
+  addEventListener(): void {
+    // no-op for tests in this suite
+  }
+
+  remove(): void {
+    if (!this.parentElement) return;
+    this.parentElement.children = this.parentElement.children.filter((child) => child !== this);
+    this.parentElement = null;
+  }
+}
+
+type MockHTMLElement = MockElement & HTMLElement;
+type DocumentLike = {
+  createElement: (tagName?: string) => MockElement;
+};
+type TestGlobal = typeof globalThis & { document?: Document | DocumentLike };
+
+const testGlobal = globalThis as TestGlobal;
+const originalDocument = testGlobal.document;
+
+describe('renderDecision', () => {
+  beforeEach(() => {
+    testGlobal.document = {
+      createElement: () => new MockElement(),
+    };
+  });
+
+  afterEach(() => {
+    if (typeof originalDocument === 'undefined') {
+      Reflect.deleteProperty(testGlobal, 'document');
+      return;
+    }
+    testGlobal.document = originalDocument;
+  });
+
+  it('marks keep decisions as processed only', () => {
+    const post = new MockElement();
+    renderDecision(post as MockHTMLElement, 'keep');
+
+    expect(post.hasAttribute(ATTRIBUTES.processed)).toBe(true);
+    expect(post.getAttribute(ATTRIBUTES.decision)).toBeNull();
+    expect(post.querySelector(':scope > .unslop-decision-label')).toBeNull();
+  });
+
+  it('applies collapse hide style', () => {
+    const post = new MockElement();
+    renderDecision(post as MockHTMLElement, 'hide', 'post-1');
+    renderDecision(post as MockHTMLElement, 'hide', 'post-1');
+
+    expect(post.hasAttribute(ATTRIBUTES.processed)).toBe(true);
+    expect(post.getAttribute(ATTRIBUTES.decision)).toBe('hide');
+    expect(post.classList.contains('unslop-hidden-post')).toBe(true);
+    expect(post.querySelector(':scope > .unslop-decision-label')).toBeNull();
+  });
+
+  it('keeps post node mounted and does not inject a visible replacement label', () => {
+    const feed = new MockElement();
+    const post = new MockElement();
+    feed.prepend(post);
+
+    renderDecision(post as MockHTMLElement, 'hide');
+
+    expect(feed.children.includes(post)).toBe(true);
+    expect(post.hasAttribute(ATTRIBUTES.processed)).toBe(true);
+    expect(post.getAttribute(ATTRIBUTES.decision)).toBe('hide');
+    expect(post.classList.contains('unslop-hidden-post')).toBe(true);
+    expect(post.querySelector(':scope > .unslop-decision-label')).toBeNull();
+  });
+
+  it('supports label mode for hide decision in local testing', () => {
+    const post = new MockElement();
+
+    renderDecision(post as MockHTMLElement, 'hide', 'post-2', { hideMode: 'label' });
+
+    expect(post.classList.contains('unslop-decision-host')).toBe(true);
+    expect(post.classList.contains('unslop-hidden-post')).toBe(false);
+    expect(post.hasAttribute(ATTRIBUTES.processed)).toBe(true);
+    expect(post.getAttribute(ATTRIBUTES.decision)).toBe('hide');
+    expect(post.querySelector(':scope > .unslop-decision-label')).not.toBeNull();
+  });
+
+  it('supports label mode for keep decision in local testing', () => {
+    const post = new MockElement();
+
+    renderDecision(post as MockHTMLElement, 'keep', 'post-3', { hideMode: 'label' });
+
+    expect(post.classList.contains('unslop-decision-host')).toBe(true);
+    expect(post.classList.contains('unslop-hidden-post')).toBe(false);
+    expect(post.hasAttribute(ATTRIBUTES.processed)).toBe(true);
+    expect(post.getAttribute(ATTRIBUTES.decision)).toBeNull();
+    expect(post.querySelector(':scope > .unslop-decision-label')).not.toBeNull();
+  });
+});

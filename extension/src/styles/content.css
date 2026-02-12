@@ -1,0 +1,90 @@
+/* extension/src/styles/content.css */
+/* Styles injected into LinkedIn for Unslop UI elements */
+
+:root {
+  --unslop-label-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --unslop-label-keep-border: #9DB39A;
+  --unslop-label-keep-bg: #EDF2EC;
+  --unslop-label-keep-fg: #4A6C48;
+  --unslop-label-hide-border: #D2A3A3;
+  --unslop-label-hide-bg: #F7ECEC;
+  --unslop-label-hide-fg: #C15C5C;
+}
+
+/* Pre-classification mode: keep layout intact so LinkedIn can initialize post internals (for example "...more"). */
+html[data-unslop-preclassify="true"] [data-finite-scroll-hotkey-item]:has(.feed-shared-update-v2[role="article"]):not([data-unslop-processed]):not([data-id^="urn:li:aggregate:"]):not(:has(.feed-shared-aggregated-content)):not(:has(.update-components-feed-discovery-entity)) {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Keep LinkedIn's outer post node in DOM; collapse it to avoid visible placeholders and costly unmount/remount behavior. */
+.unslop-hidden-post {
+  display: none !important;
+}
+
+/* Local label mode: keep post visible and add an in-post compact decision pill. */
+.unslop-decision-host {
+  position: relative !important;
+}
+
+.unslop-decision-label {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  margin: 0;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--unslop-label-font);
+  letter-spacing: 0.01em;
+  pointer-events: none;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.unslop-decision-label--keep {
+  border-color: var(--unslop-label-keep-border);
+  background: var(--unslop-label-keep-bg);
+  color: var(--unslop-label-keep-fg);
+}
+
+.unslop-decision-label--hide {
+  border-color: var(--unslop-label-hide-border);
+  background: var(--unslop-label-hide-bg);
+  color: var(--unslop-label-hide-fg);
+}
+
+/* Auth success page */
+.unslop-auth-success {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  font-family: system-ui, -apple-system, sans-serif;
+  background: #f9f8f4;
+}
+
+.unslop-auth-success-content {
+  text-align: center;
+  padding: 48px;
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid rgba(26, 26, 26, 0.12);
+  box-shadow: 0 8px 24px rgba(26, 26, 26, 0.08);
+}
+
+.unslop-auth-success h1 {
+  font-size: 24px;
+  color: #1a1a1a;
+  margin-bottom: 8px;
+}
+
+.unslop-auth-success p {
+  color: #5a5a5a;
+  font-size: 14px;
+}

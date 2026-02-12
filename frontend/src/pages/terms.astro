@@ -1,0 +1,31 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import LegalShell from '../components/LegalShell.astro';
+---
+
+<BaseLayout title="Terms | Unslop" description="Terms of service for Unslop.">
+  <LegalShell title="Terms of Service" updated="February 2026">
+    <section class="space-y-3">
+      <h2 class="font-serif text-2xl text-ink">Service scope</h2>
+      <p>Unslop filters social feed content by dimming or hiding posts based on backend decisions.</p>
+    </section>
+
+    <section class="space-y-3">
+      <h2 class="font-serif text-2xl text-ink">Usage and billing</h2>
+      <p>Do not bypass limits or misuse the service. Paid plans are billed by external providers.</p>
+      <p>Cancellation applies at the end of your billing period.</p>
+    </section>
+
+    <section class="space-y-3">
+      <h2 class="font-serif text-2xl text-ink">Warranty and liability</h2>
+      <p>The service is provided as-is without warranties. Liability is limited to the extent allowed by law.</p>
+    </section>
+
+    <section class="space-y-3">
+      <h2 class="font-serif text-2xl text-ink">Contact</h2>
+      <p>
+        Questions: <a class="underline" href="mailto:support@getunslop.com">support@getunslop.com</a>.
+      </p>
+    </section>
+  </LegalShell>
+</BaseLayout>

@@ -1,0 +1,21 @@
+# Extension .gitignore
+
+# Build output
+dist/
+
+# Dependencies
+node_modules/
+
+# Compiled JS files in source (only commit .ts files)
+src/**/*.js
+
+# IDE
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

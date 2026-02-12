@@ -1,0 +1,60 @@
+name: Release Extension
+
+on:
+  push:
+    branches:
+      - release
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+
+      - name: Install dependencies
+        run: |
+          cd extension
+          bun install
+
+      - name: Build extension
+        run: |
+          cd extension
+          bun run build
+
+      - name: Get version from manifest
+        id: version
+        run: |
+          VERSION=$(cat extension/dist/manifest.json | grep '"version"' | sed 's/.*"version": "\(.*\)".*/\1/')
+          echo "version=v$VERSION" >> $GITHUB_OUTPUT
+          echo "Extension version: v$VERSION"
+
+      - name: Create zip file
+        run: |
+          cd extension/dist
+          zip -r ../../unslop-extension-${{ steps.version.outputs.version }}.zip .
+
+      - name: Create release in public repo
+        uses: softprops/action-gh-release@v1
+        with:
+          repository: sapountzis/Unslop-Releases
+          tag_name: ${{ steps.version.outputs.version }}
+          name: Release ${{ steps.version.outputs.version }}
+          body: |
+            ## Installation Instructions
+            
+            1. Download `unslop-extension-${{ steps.version.outputs.version }}.zip`
+            2. Unzip the file
+            3. Open Chrome and go to `chrome://extensions`
+            4. Enable **Developer mode** (toggle in top right)
+            5. Click **"Load unpacked"**
+            6. Select the unzipped folder
+            
+            ## What's New
+            
+            See [CHANGELOG.md](https://github.com/sapountzis/Unslop-Releases/blob/main/CHANGELOG.md) for details.
+          files: unslop-extension-${{ steps.version.outputs.version }}.zip
+          token: ${{ secrets.RELEASES_REPO_TOKEN }}

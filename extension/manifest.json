@@ -1,0 +1,93 @@
+{
+  "manifest_version": 3,
+  "name": "Unslop",
+  "version": "0.2.0",
+  "description": "Filter your social media feeds",
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://www.linkedin.com/*",
+    "https://media.licdn.com/*",
+    "https://x.com/*",
+    "https://twitter.com/*",
+    "https://www.reddit.com/*",
+    "https://old.reddit.com/*",
+    "https://api.getunslop.com/*",
+    "http://localhost:3000/*"
+  ],
+  "background": {
+    "service_worker": "src/background/index.ts",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.linkedin.com/*"
+      ],
+      "js": [
+        "src/platforms/linkedin/index.ts"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://x.com/*",
+        "https://twitter.com/*"
+      ],
+      "js": [
+        "src/platforms/x/index.ts"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://www.reddit.com/*",
+        "https://old.reddit.com/*"
+      ],
+      "js": [
+        "src/platforms/reddit/index.ts"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://api.getunslop.com/*",
+        "http://localhost:3000/*"
+      ],
+      "js": [
+        "src/content/auth.ts"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "index.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "icons/*",
+        "assets/*"
+      ],
+      "matches": [
+        "https://www.linkedin.com/*",
+        "https://x.com/*",
+        "https://twitter.com/*",
+        "https://www.reddit.com/*",
+        "https://old.reddit.com/*"
+      ]
+    }
+  ]
+}
