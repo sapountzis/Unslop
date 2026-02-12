@@ -15,7 +15,7 @@ port = 3000
 
 [[hyperdrive]]
 binding = "HYPERDRIVE"
-id = "b219bbac14db4b7fbf60251d59cd37b2"
+id = "e830e84446394295b4c1ea3ac82fa73e"
 localConnectionString = "postgresql://postgres:postgres@localhost:5432/unslop"
 
 [observability]
