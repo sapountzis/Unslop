@@ -269,3 +269,88 @@ describe('webhook handlers', () => {
     expect(mockUpdate).not.toHaveBeenCalled();
   });
 });
+
+describe('syncUserSubscriptionByEmail', () => {
+  beforeEach(() => {
+    fetchMock.mockClear();
+    mockUpdate.mockClear();
+  });
+
+  it('promotes newly created user to PRO when Polar has active subscription for configured product', async () => {
+    const mockSet = mock(() => ({ where: mock(() => Promise.resolve([])) }));
+    mockUpdate.mockReturnValue({ set: mockSet });
+    fetchMock.mockImplementation((url: string) => {
+      if (url.includes('/v1/customers?')) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              items: [{ id: 'cust_123' }],
+            }),
+          ),
+        );
+      }
+
+      if (url.includes('/v1/customers/cust_123/state')) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              id: 'cust_123',
+              active_subscriptions: [
+                {
+                  id: 'sub_123',
+                  product_id: 'prod_test_123',
+                  status: 'active',
+                  current_period_start: '2026-02-01T00:00:00.000Z',
+                  current_period_end: '2026-03-01T00:00:00.000Z',
+                },
+              ],
+            }),
+          ),
+        );
+      }
+
+      return Promise.resolve(new Response('{}', { status: 404 }));
+    });
+
+    const service = buildService();
+    await service.syncUserSubscriptionByEmail({
+      userId: 'u1',
+      email: 'test@example.com',
+    });
+
+    expect(mockSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plan: Plan.PRO,
+        planStatus: PlanStatus.ACTIVE,
+        polarCustomerId: 'cust_123',
+        polarSubscriptionId: 'sub_123',
+      }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/v1/customers?email=test%40example.com'),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer test-key',
+        }),
+      }),
+    );
+  });
+
+  it('leaves user unchanged when no Polar customer exists for email', async () => {
+    fetchMock.mockImplementation((url: string) => {
+      if (url.includes('/v1/customers?')) {
+        return Promise.resolve(new Response(JSON.stringify({ items: [] })));
+      }
+
+      return Promise.resolve(new Response('{}', { status: 404 }));
+    });
+
+    const service = buildService();
+    await service.syncUserSubscriptionByEmail({
+      userId: 'u1',
+      email: 'missing@example.com',
+    });
+
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+});

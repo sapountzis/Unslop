@@ -38,6 +38,7 @@ const app = createTestApp((testApp) => {
       },
       polarService: {
         createCheckoutSession: mock(async () => ({ checkout_url: 'https://polar.sh/checkout/test' })),
+        syncUserSubscriptionByEmail: mock(async () => undefined),
         buildWebhookDeliveryKey: mock(() => 'legacy'),
         claimWebhookDelivery: mock(async () => ({ webhookId: 'legacy', isDuplicate: false })),
         claimWebhookDeliveryById: claimWebhookDeliveryByIdMock,

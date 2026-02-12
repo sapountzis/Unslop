@@ -30,7 +30,7 @@ function makeDeps(overrides: AppDependencyOverrides = {}): AppDependencies {
     config: {
       testMode: true,
       server: { nodeEnv: 'test', port: 3000, appUrl: 'http://localhost:3000' },
-      db: { url: 'postgresql://local', driver: 'postgres' },
+      db: { url: 'postgresql://local' },
       llm: { apiKey: '', textModel: '', vlmModel: '', baseUrl: '' },
       billing: {
         polarEnv: 'sandbox',
@@ -54,12 +54,12 @@ function makeDeps(overrides: AppDependencyOverrides = {}): AppDependencies {
       c.set('user', { sub: 'user-1', email: 'user@example.com', iat: 0, exp: 0 });
       await next();
     },
-      services: {
-        classification: {
-          classifySingle,
-          classifyBatch,
-          hasAvailableQuota: mock(async () => true),
-        },
+    services: {
+      classification: {
+        classifySingle,
+        classifyBatch,
+        hasAvailableQuota: mock(async () => true),
+      },
       auth: {
         startAuth: mock(async () => undefined),
         completeMagicLink: mock(async () => ({ sessionToken: 'token' })),
@@ -74,6 +74,7 @@ function makeDeps(overrides: AppDependencyOverrides = {}): AppDependencies {
       },
       polar: {
         createCheckoutSession: mock(async () => ({ checkout_url: 'https://polar/checkout' })),
+        syncUserSubscriptionByEmail: mock(async () => undefined),
         buildWebhookDeliveryKey: mock(() => 'k'),
         claimWebhookDeliveryById: mock(async () => ({ webhookId: 'wh', isDuplicate: false })),
         releaseWebhookDeliveryById: mock(async () => undefined),

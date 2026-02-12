@@ -1,4 +1,5 @@
 import { eq } from 'drizzle-orm';
+import { z } from 'zod';
 import { users, webhookDeliveries } from '../db/schema';
 import type { Database } from '../db';
 import { logger as defaultLogger } from '../lib/logger';
@@ -45,6 +46,7 @@ export interface PolarServiceDeps {
 
 export interface PolarService {
   createCheckoutSession: (userId: string) => Promise<{ checkout_url: string }>;
+  syncUserSubscriptionByEmail: (input: { userId: string; email: string }) => Promise<void>;
   buildWebhookDeliveryKey: (payload: BillingWebhookPayload) => string;
   claimWebhookDeliveryById: (input: ClaimWebhookDeliveryByIdInput) => Promise<WebhookDeliveryClaim>;
   releaseWebhookDeliveryById: (webhookId: string) => Promise<void>;
@@ -57,9 +59,47 @@ export interface PolarService {
   handleSubscriptionUpdated: (data: unknown) => Promise<void>;
 }
 
+const polarCustomerListSchema = z
+  .object({
+    items: z.array(
+      z
+        .object({
+          id: z.string(),
+        })
+        .passthrough(),
+    ),
+  })
+  .passthrough();
+
+const polarCustomerStateSchema = z
+  .object({
+    id: z.string(),
+    active_subscriptions: z.array(
+      z
+        .object({
+          id: z.string(),
+          product_id: z.string().optional(),
+          status: z.string().optional(),
+          current_period_start: z.union([z.string(), z.date()]).nullable().optional(),
+          current_period_end: z.union([z.string(), z.date()]).nullable().optional(),
+        })
+        .passthrough(),
+    ),
+  })
+  .passthrough();
+
 function asIsoTimestamp(timestamp: Date | string): string {
   const parsed = timestamp instanceof Date ? timestamp : new Date(timestamp);
   return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString();
+}
+
+function parseOptionalDate(value: string | Date | null | undefined): Date | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const parsed = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
 }
 
 export function createPolarService(deps: PolarServiceDeps): PolarService {
@@ -138,6 +178,80 @@ export function createPolarService(deps: PolarServiceDeps): PolarService {
 
     const data = (await response.json()) as { url: string };
     return { checkout_url: data.url };
+  }
+
+  async function syncUserSubscriptionByEmail(input: { userId: string; email: string }): Promise<void> {
+    const customerResponse = await fetchImpl(
+      `${deps.config.apiBase}/v1/customers?email=${encodeURIComponent(input.email)}&limit=1`,
+      {
+        headers: { Authorization: `Bearer ${deps.config.apiKey}` },
+      },
+    );
+    if (!customerResponse.ok) {
+      throw new Error(`Failed to fetch customer by email: ${customerResponse.status}`);
+    }
+
+    const customerPayload = polarCustomerListSchema.safeParse(await customerResponse.json());
+    if (!customerPayload.success) {
+      throw new Error('Invalid Polar customer list payload');
+    }
+
+    const customer = customerPayload.data.items[0];
+    if (!customer) {
+      return;
+    }
+
+    const customerStateResponse = await fetchImpl(`${deps.config.apiBase}/v1/customers/${customer.id}/state`, {
+      headers: { Authorization: `Bearer ${deps.config.apiKey}` },
+    });
+    if (!customerStateResponse.ok) {
+      throw new Error(`Failed to fetch customer state: ${customerStateResponse.status}`);
+    }
+
+    const customerStatePayload = polarCustomerStateSchema.safeParse(await customerStateResponse.json());
+    if (!customerStatePayload.success) {
+      throw new Error('Invalid Polar customer state payload');
+    }
+
+    const subscription = customerStatePayload.data.active_subscriptions.find(
+      (candidate) => candidate.product_id === deps.config.productId,
+    );
+    if (!subscription) {
+      return;
+    }
+
+    const subscriptionPeriodStart = parseOptionalDate(subscription.current_period_start);
+    const subscriptionPeriodEnd = parseOptionalDate(subscription.current_period_end);
+    const sharedTierState: Partial<{
+      polarCustomerId: string;
+      polarSubscriptionId: string;
+      subscriptionPeriodStart: Date;
+      subscriptionPeriodEnd: Date;
+    }> = {
+      polarCustomerId: customerStatePayload.data.id,
+      polarSubscriptionId: subscription.id,
+    };
+    if (subscriptionPeriodStart) {
+      sharedTierState.subscriptionPeriodStart = subscriptionPeriodStart;
+    }
+    if (subscriptionPeriodEnd) {
+      sharedTierState.subscriptionPeriodEnd = subscriptionPeriodEnd;
+    }
+
+    switch (mapSubscriptionStatusToAction(subscription.status)) {
+      case 'activate':
+        await setUserTier(input.userId, Plan.PRO, PlanStatus.ACTIVE, sharedTierState);
+        return;
+      case 'cancel':
+        await setUserTier(input.userId, Plan.PRO, PlanStatus.CANCELED, sharedTierState);
+        return;
+      case 'past_due':
+        await setUserTier(input.userId, Plan.PRO, PlanStatus.PAST_DUE, sharedTierState);
+        return;
+      case 'ignore':
+      default:
+        return;
+    }
   }
 
   function buildWebhookDeliveryKey(payload: BillingWebhookPayload): string {
@@ -293,6 +407,7 @@ export function createPolarService(deps: PolarServiceDeps): PolarService {
 
   return {
     createCheckoutSession,
+    syncUserSubscriptionByEmail,
     buildWebhookDeliveryKey,
     claimWebhookDeliveryById,
     releaseWebhookDeliveryById,

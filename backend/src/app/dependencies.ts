@@ -131,6 +131,8 @@ export function createDependencies(options: CreateDependenciesOptions = {}): App
     userRepository,
     jwt,
     email,
+    billingSync: polarService,
+    logger: appLogger,
   });
 
   const feedbackService = createFeedbackService({ db });

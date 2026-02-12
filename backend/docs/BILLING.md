@@ -27,6 +27,19 @@ Guardrails:
 - active Pro user -> `409 { "error": "already_pro" }`
 - checkout creation failure -> `500 { "error": "checkout_failed" }`
 
+## Auth-time billing recovery sync
+
+On `POST /v1/auth/start`, when `getOrCreateUserByEmail` inserts a brand new user row,
+the backend performs a best-effort Polar sync by email before sending the magic link.
+
+Flow:
+
+1. Query Polar customers by email (`GET /v1/customers?email=<normalized>&limit=1`).
+2. If customer exists, fetch customer state (`GET /v1/customers/{id}/state`).
+3. Find active subscription for configured `POLAR_PRODUCT_ID`.
+4. If found, set local plan/tier fields from Polar state (`plan`, `plan_status`, subscription ids, period bounds).
+5. If sync fails, auth flow continues (warning log only), so login is not blocked by Polar outages.
+
 ## Webhook flow
 
 Endpoint: `POST /v1/billing/polar/webhook`

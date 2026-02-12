@@ -10,8 +10,13 @@ export type UserSummary = {
   planStatus: string;
 };
 
+export type GetOrCreateUserResult = {
+  user: UserSummary;
+  isNew: boolean;
+};
+
 export interface UserRepository {
-  getOrCreateUserByEmail: (normalizedEmail: string) => Promise<UserSummary>;
+  getOrCreateUserByEmail: (normalizedEmail: string) => Promise<GetOrCreateUserResult>;
   findUserById: (userId: string) => Promise<UserSummary | null>;
 }
 
@@ -43,7 +48,7 @@ function toUserSummary(row: {
 export function createUserRepository(deps: UserRepositoryDeps): UserRepository {
   const { db } = deps;
 
-  async function getOrCreateUserByEmail(normalizedEmail: string): Promise<UserSummary> {
+  async function getOrCreateUserByEmail(normalizedEmail: string): Promise<GetOrCreateUserResult> {
     const inserted = await db
       .insert(users)
       .values({
@@ -55,7 +60,10 @@ export function createUserRepository(deps: UserRepositoryDeps): UserRepository {
       .returning();
 
     if (inserted.length > 0) {
-      return toUserSummary(inserted[0]);
+      return {
+        user: toUserSummary(inserted[0]),
+        isNew: true,
+      };
     }
 
     const existing = await db
@@ -68,7 +76,10 @@ export function createUserRepository(deps: UserRepositoryDeps): UserRepository {
       throw new Error('USER_UPSERT_FAILED');
     }
 
-    return toUserSummary(existing[0]);
+    return {
+      user: toUserSummary(existing[0]),
+      isNew: false,
+    };
   }
 
   async function findUserById(userId: string): Promise<UserSummary | null> {
