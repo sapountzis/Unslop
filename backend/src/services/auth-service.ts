@@ -29,20 +29,18 @@ export function createAuthService(deps: AuthServiceDeps): AuthService {
 
   async function startAuth(email: string): Promise<void> {
     const normalizedEmail = email.toLowerCase().trim();
-    const { user, isNew } = await deps.userRepository.getOrCreateUserByEmail(normalizedEmail);
+    const { user } = await deps.userRepository.getOrCreateUserByEmail(normalizedEmail);
 
-    if (isNew) {
-      try {
-        await deps.billingSync.syncUserSubscriptionByEmail({
-          userId: user.id,
-          email: normalizedEmail,
-        });
-      } catch (error) {
-        serviceLogger.warn('billing_reconciliation_failed_during_auth_start', {
-          userId: user.id,
-          error,
-        });
-      }
+    try {
+      await deps.billingSync.syncUserSubscriptionByEmail({
+        userId: user.id,
+        email: normalizedEmail,
+      });
+    } catch (error) {
+      serviceLogger.warn('billing_reconciliation_failed_during_auth_start', {
+        userId: user.id,
+        error,
+      });
     }
 
     const token = await deps.jwt.generateMagicLinkToken(user.id);

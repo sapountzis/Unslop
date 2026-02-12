@@ -16,13 +16,42 @@ export interface BillingRoutesDeps {
   polarWebhookSecret: string;
 }
 
-const subscriptionEventTypes = new Set(POLAR_SUBSCRIPTION_EVENT_TYPES);
+type SubscriptionEventType = (typeof POLAR_SUBSCRIPTION_EVENT_TYPES)[number];
+
+const subscriptionEventTypes = new Set<SubscriptionEventType>(POLAR_SUBSCRIPTION_EVENT_TYPES);
 
 function toError(error: unknown): Error {
   if (error instanceof Error) {
     return error;
   }
   return new Error(typeof error === 'string' ? error : 'Unknown error');
+}
+
+function isSubscriptionEventType(eventType: string): eventType is SubscriptionEventType {
+  return subscriptionEventTypes.has(eventType as SubscriptionEventType);
+}
+
+function parseWebhookEventFromRawBody(rawBody: string): { type: string; data: unknown } | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawBody);
+  } catch {
+    return null;
+  }
+
+  if (typeof parsed !== 'object' || parsed === null) {
+    return null;
+  }
+
+  const event = parsed as Record<string, unknown>;
+  if (typeof event.type !== 'string') {
+    return null;
+  }
+
+  return {
+    type: event.type,
+    data: event.data,
+  };
 }
 
 export function createBillingRoutes(deps: BillingRoutesDeps): Hono {
@@ -62,65 +91,82 @@ export function createBillingRoutes(deps: BillingRoutesDeps): Hono {
       'webhook-signature': c.req.header('webhook-signature') ?? '',
     };
 
-    let event: ReturnType<typeof validateEvent>;
+    let eventType: string;
+    let eventData: unknown;
     try {
-      event = validateEvent(rawBody, headers, deps.polarWebhookSecret);
+      const event = validateEvent(rawBody, headers, deps.polarWebhookSecret);
+      eventType = event.type;
+      eventData = event.data;
     } catch (error) {
       if (error instanceof WebhookVerificationError) {
         return c.json({ received: false }, 403);
       }
 
-      deps.logger.error('billing_webhook_validation_failed', toError(error));
-      return c.json({ received: false }, 500);
+      // SDK versions before explicit past_due parsing can still verify signatures but reject event parsing.
+      const fallbackEvent = parseWebhookEventFromRawBody(rawBody);
+      if (fallbackEvent?.type === 'subscription.past_due') {
+        eventType = fallbackEvent.type;
+        eventData = fallbackEvent.data;
+        deps.logger.info('billing_webhook_sdk_parse_fallback_used', {
+          event_type: eventType,
+          webhook_id: webhookId,
+        });
+      } else {
+        deps.logger.error('billing_webhook_validation_failed', toError(error));
+        return c.json({ received: false }, 500);
+      }
     }
 
-    if (!subscriptionEventTypes.has(event.type as (typeof POLAR_SUBSCRIPTION_EVENT_TYPES)[number])) {
+    if (!isSubscriptionEventType(eventType)) {
       return c.json({ received: true });
     }
 
     const claim = await deps.polarService.claimWebhookDeliveryById({
       webhookId,
-      eventType: event.type,
-      subscriptionId: getSubscriptionIdFromWebhookData(event.data),
+      eventType,
+      subscriptionId: getSubscriptionIdFromWebhookData(eventData),
     });
 
     if (claim.isDuplicate) {
       deps.logger.info('billing_webhook_duplicate', {
-        event_type: event.type,
+        event_type: eventType,
         webhook_id: webhookId,
       });
       return c.json({ received: true });
     }
 
     try {
-      switch (event.type) {
+      switch (eventType) {
         case 'subscription.created':
-          if (typeof event.data === 'object' && event.data !== null && 'status' in event.data) {
-            if ((event.data as { status?: unknown }).status === 'active') {
-              await deps.polarService.handleSubscriptionActive(event.data);
+          if (typeof eventData === 'object' && eventData !== null && 'status' in eventData) {
+            if ((eventData as { status?: unknown }).status === 'active') {
+              await deps.polarService.handleSubscriptionActive(eventData);
             }
           }
           break;
         case 'subscription.active':
-          await deps.polarService.handleSubscriptionActive(event.data);
+          await deps.polarService.handleSubscriptionActive(eventData);
           break;
         case 'subscription.updated':
-          await deps.polarService.handleSubscriptionUpdated(event.data);
+          await deps.polarService.handleSubscriptionUpdated(eventData);
           break;
         case 'subscription.uncanceled':
-          await deps.polarService.handleSubscriptionUncanceled(event.data);
+          await deps.polarService.handleSubscriptionUncanceled(eventData);
           break;
         case 'subscription.canceled':
-          await deps.polarService.handleSubscriptionCanceled(event.data);
+          await deps.polarService.handleSubscriptionCanceled(eventData);
           break;
         case 'subscription.revoked':
-          await deps.polarService.handleSubscriptionRevoked(event.data);
+          await deps.polarService.handleSubscriptionRevoked(eventData);
+          break;
+        case 'subscription.past_due':
+          await deps.polarService.handleSubscriptionPastDue(eventData);
           break;
       }
     } catch (error) {
       await deps.polarService.releaseWebhookDeliveryById(webhookId);
       deps.logger.error('billing_webhook_processing_failed', toError(error), {
-        event_type: event.type,
+        event_type: eventType,
         webhook_id: webhookId,
       });
       return c.json({ received: false }, 500);

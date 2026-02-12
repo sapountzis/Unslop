@@ -5,7 +5,9 @@ const subscriptionDataSchema = z
   .object({
     id: z.string().optional(),
     subscription_id: z.string().optional(),
+    subscriptionId: z.string().optional(),
     customer_id: z.string().optional(),
+    customerId: z.string().optional(),
     customer: z
       .object({
         id: z.string().optional(),
@@ -14,13 +16,10 @@ const subscriptionDataSchema = z
       .optional(),
     status: z.string().optional(),
     current_period_start: z.union([z.string(), z.date()]).optional(),
+    currentPeriodStart: z.union([z.string(), z.date()]).optional(),
     current_period_end: z.union([z.string(), z.date()]).optional(),
-    metadata: z
-      .object({
-        user_id: z.string().optional(),
-      })
-      .passthrough()
-      .optional(),
+    currentPeriodEnd: z.union([z.string(), z.date()]).optional(),
+    metadata: z.record(z.string(), z.unknown()).optional(),
   })
   .passthrough();
 
@@ -46,13 +45,17 @@ function parseDate(value: string | Date | undefined): Date | undefined {
   return Number.isNaN(parsed.getTime()) ? undefined : parsed;
 }
 
+function readString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
 export function getSubscriptionIdFromWebhookData(data: unknown): string | null {
   const parsed = subscriptionDataSchema.safeParse(data);
   if (!parsed.success) {
     return null;
   }
 
-  const subscriptionId = parsed.data.id || parsed.data.subscription_id;
+  const subscriptionId = parsed.data.id || parsed.data.subscription_id || parsed.data.subscriptionId;
   return subscriptionId && subscriptionId.length > 0 ? subscriptionId : null;
 }
 
@@ -62,12 +65,12 @@ export function normalizeSubscriptionData(data: unknown): NormalizedSubscription
     return null;
   }
 
-  const subscriptionId = parsed.data.id || parsed.data.subscription_id;
+  const subscriptionId = parsed.data.id || parsed.data.subscription_id || parsed.data.subscriptionId;
   if (!subscriptionId) {
     return null;
   }
 
-  const userId = parsed.data.metadata?.user_id;
+  const userId = readString(parsed.data.metadata?.user_id) ?? readString(parsed.data.metadata?.userId);
   if (!userId) {
     return null;
   }
@@ -75,10 +78,10 @@ export function normalizeSubscriptionData(data: unknown): NormalizedSubscription
   return {
     subscriptionId,
     userId,
-    customerId: parsed.data.customer_id || parsed.data.customer?.id,
+    customerId: parsed.data.customer_id || parsed.data.customerId || parsed.data.customer?.id,
     status: parsed.data.status,
-    periodStart: parseDate(parsed.data.current_period_start),
-    periodEnd: parseDate(parsed.data.current_period_end),
+    periodStart: parseDate(parsed.data.current_period_start ?? parsed.data.currentPeriodStart),
+    periodEnd: parseDate(parsed.data.current_period_end ?? parsed.data.currentPeriodEnd),
   };
 }
 

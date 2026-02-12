@@ -130,6 +130,12 @@ CREATE TABLE user_usage (
 
 Consumption is done atomically in DB updates (`tryConsumeQuota`).
 
+Period anchor semantics:
+
+- Free windows: `month_start` is anchored to `users.created_at` (UTC monthly cycle by creation day/time).
+- Pro windows: `month_start` is anchored to `users.subscription_period_start`.
+- If Pro entitlement is inactive/expired, usage keys return to free anchor semantics.
+
 ## user_activity
 
 Per-classification activity rows used by stats endpoints.

@@ -188,6 +188,31 @@ describe('webhook handlers', () => {
     );
   });
 
+  it('handleSubscriptionActive parses sdk camelCase period and customer fields', async () => {
+    const mockSet = mock(() => ({ where: mock(() => Promise.resolve([])) }));
+    mockUpdate.mockReturnValue({ set: mockSet });
+
+    const service = buildService();
+    await service.handleSubscriptionActive({
+      id: 'sub_456',
+      customerId: 'cust_456',
+      status: 'active',
+      currentPeriodStart: '2026-02-15T10:00:00.000Z',
+      currentPeriodEnd: '2026-03-15T10:00:00.000Z',
+      metadata: { user_id: 'test-user-id' },
+    });
+
+    expect(mockSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plan: Plan.PRO,
+        planStatus: PlanStatus.ACTIVE,
+        polarCustomerId: 'cust_456',
+        subscriptionPeriodStart: new Date('2026-02-15T10:00:00.000Z'),
+        subscriptionPeriodEnd: new Date('2026-03-15T10:00:00.000Z'),
+      }),
+    );
+  });
+
   it('handleSubscriptionCanceled sets PRO/CANCELED', async () => {
     const mockSet = mock(() => ({ where: mock(() => Promise.resolve([])) }));
     mockUpdate.mockReturnValue({ set: mockSet });

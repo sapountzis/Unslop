@@ -31,5 +31,6 @@ export const POLAR_SUBSCRIPTION_EVENT_TYPES = [
   'subscription.uncanceled',
   'subscription.canceled',
   'subscription.revoked',
+  'subscription.past_due',
 ] as const;
 export type PolarSubscriptionEventType = (typeof POLAR_SUBSCRIPTION_EVENT_TYPES)[number];

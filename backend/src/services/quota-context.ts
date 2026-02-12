@@ -25,6 +25,70 @@ export interface QuotaContextDeps {
   now?: () => Date;
 }
 
+interface MonthlyWindow {
+  periodStart: string;
+  resetDate: string;
+}
+
+function getDaysInUtcMonth(year: number, month: number): number {
+  return new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+}
+
+function shiftUtcMonth(year: number, month: number, delta: number): { year: number; month: number } {
+  const totalMonths = year * 12 + month + delta;
+  const shiftedYear = Math.floor(totalMonths / 12);
+  const shiftedMonth = ((totalMonths % 12) + 12) % 12;
+  return { year: shiftedYear, month: shiftedMonth };
+}
+
+function buildAnchoredUtcDate(anchor: Date, year: number, month: number): Date {
+  const clampedDay = Math.min(anchor.getUTCDate(), getDaysInUtcMonth(year, month));
+
+  return new Date(
+    Date.UTC(
+      year,
+      month,
+      clampedDay,
+      anchor.getUTCHours(),
+      anchor.getUTCMinutes(),
+      anchor.getUTCSeconds(),
+      anchor.getUTCMilliseconds(),
+    ),
+  );
+}
+
+function toPeriodStartString(date: Date): string {
+  return date.toISOString().split('T')[0];
+}
+
+function resolveMonthlyWindowFromAnchor(anchor: Date, now: Date): MonthlyWindow {
+  const currentMonthAnchor = buildAnchoredUtcDate(anchor, now.getUTCFullYear(), now.getUTCMonth());
+  const previousMonth = shiftUtcMonth(now.getUTCFullYear(), now.getUTCMonth(), -1);
+
+  const periodStartDate =
+    now.getTime() >= currentMonthAnchor.getTime()
+      ? currentMonthAnchor
+      : buildAnchoredUtcDate(anchor, previousMonth.year, previousMonth.month);
+
+  const normalizedPeriodStart =
+    periodStartDate.getTime() < anchor.getTime()
+      ? anchor
+      : periodStartDate;
+
+  const nextMonth = shiftUtcMonth(normalizedPeriodStart.getUTCFullYear(), normalizedPeriodStart.getUTCMonth(), 1);
+  const resetDate = buildAnchoredUtcDate(anchor, nextMonth.year, nextMonth.month);
+
+  return {
+    periodStart: toPeriodStartString(normalizedPeriodStart),
+    resetDate: resetDate.toISOString(),
+  };
+}
+
+function resolveNextMonthlyAnchor(anchor: Date): string {
+  const nextMonth = shiftUtcMonth(anchor.getUTCFullYear(), anchor.getUTCMonth(), 1);
+  return buildAnchoredUtcDate(anchor, nextMonth.year, nextMonth.month).toISOString();
+}
+
 export function createQuotaContextService(deps: QuotaContextDeps): QuotaContextService {
   const now = deps.now ?? (() => new Date());
 
@@ -33,6 +97,7 @@ export function createQuotaContextService(deps: QuotaContextDeps): QuotaContextS
       .select({
         plan: users.plan,
         planStatus: users.planStatus,
+        createdAt: users.createdAt,
         subscriptionPeriodStart: users.subscriptionPeriodStart,
         subscriptionPeriodEnd: users.subscriptionPeriodEnd,
       })
@@ -45,27 +110,29 @@ export function createQuotaContextService(deps: QuotaContextDeps): QuotaContextS
     }
 
     const user = userRecords[0];
-    const isPro = user.plan === Plan.PRO && user.planStatus === PlanStatus.ACTIVE;
+    const current = now();
+    const subscriptionPeriodEnd = user.subscriptionPeriodEnd;
+    const hasCanceledGraceAccess =
+      user.planStatus === PlanStatus.CANCELED &&
+      subscriptionPeriodEnd !== null &&
+      subscriptionPeriodEnd.getTime() > current.getTime();
+    const keepsProAccess =
+      user.plan === Plan.PRO &&
+      (user.planStatus === PlanStatus.ACTIVE || hasCanceledGraceAccess);
+
+    const isPro = keepsProAccess;
     const limit = isPro ? deps.quotas.proMonthlyLlmCalls : deps.quotas.freeMonthlyLlmCalls;
 
-    const current = now();
-    let periodStart: string;
-    let resetDate: string;
-
-    if (isPro && user.subscriptionPeriodStart) {
-      periodStart = user.subscriptionPeriodStart.toISOString().split('T')[0];
-      if (user.subscriptionPeriodEnd) {
-        resetDate = user.subscriptionPeriodEnd.toISOString();
-      } else {
-        const fallbackEnd = new Date(user.subscriptionPeriodStart);
-        fallbackEnd.setMonth(fallbackEnd.getMonth() + 1);
-        resetDate = fallbackEnd.toISOString();
-      }
+    let window: MonthlyWindow;
+    if (keepsProAccess && user.subscriptionPeriodStart) {
+      window = {
+        periodStart: toPeriodStartString(user.subscriptionPeriodStart),
+        resetDate: user.subscriptionPeriodEnd
+          ? user.subscriptionPeriodEnd.toISOString()
+          : resolveNextMonthlyAnchor(user.subscriptionPeriodStart),
+      };
     } else {
-      const monthStart = new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth(), 1));
-      const nextMonth = new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth() + 1, 1));
-      periodStart = monthStart.toISOString().split('T')[0];
-      resetDate = nextMonth.toISOString();
+      window = resolveMonthlyWindowFromAnchor(user.createdAt, current);
     }
 
     return {
@@ -73,8 +140,8 @@ export function createQuotaContextService(deps: QuotaContextDeps): QuotaContextS
       planStatus: user.planStatus,
       isPro,
       limit,
-      periodStart,
-      resetDate,
+      periodStart: window.periodStart,
+      resetDate: window.resetDate,
     };
   }
 

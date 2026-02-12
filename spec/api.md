@@ -25,6 +25,7 @@ Behavior:
 
 - normalizes email (`lowercase + trim`)
 - get-or-create user row (race-safe)
+- best-effort Polar subscription reconciliation by email for both new and existing users (fail-open)
 - sends magic link email
 - returns `202 { "status": "accepted" }`
 
@@ -257,7 +258,7 @@ Response:
   "remaining": 258,
   "plan": "free",
   "plan_status": "inactive",
-  "reset_date": "2026-03-01T00:00:00.000Z"
+  "reset_date": "2026-03-15T10:00:00.000Z"
 }
 ```
 
@@ -302,6 +303,8 @@ Behavior:
   - `subscription.uncanceled`
   - `subscription.canceled`
   - `subscription.revoked`
+  - `subscription.past_due`
+- parses SDK-normalized camelCase payload fields (and accepts snake_case aliases for compatibility)
 - processing failures return non-2xx so provider retries
 
 Typical success response:

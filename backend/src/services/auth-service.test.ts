@@ -42,7 +42,7 @@ describe('auth service startAuth billing reconciliation', () => {
     expect(sendMagicLinkEmail).toHaveBeenCalledWith('user@example.com', 'magic-token');
   });
 
-  it('does not sync billing data for existing user', async () => {
+  it('syncs billing data for existing user', async () => {
     const getOrCreateUserByEmail = mock(async () => ({
       user: { id: 'u-existing', email: 'user@example.com', plan: 'pro', planStatus: 'active' },
       isNew: false,
@@ -72,7 +72,10 @@ describe('auth service startAuth billing reconciliation', () => {
 
     await service.startAuth('user@example.com');
 
-    expect(syncUserSubscriptionByEmail).not.toHaveBeenCalled();
+    expect(syncUserSubscriptionByEmail).toHaveBeenCalledWith({
+      userId: 'u-existing',
+      email: 'user@example.com',
+    });
   });
 
   it('continues auth flow when billing sync fails', async () => {

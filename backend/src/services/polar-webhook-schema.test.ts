@@ -22,6 +22,23 @@ describe('polar webhook schema normalization', () => {
     expect(result?.status).toBe('active');
   });
 
+  it('parses sdk-normalized camelCase payload shape', () => {
+    const result = normalizeSubscriptionData({
+      id: 'sub_123',
+      customerId: 'cust_123',
+      status: 'active',
+      currentPeriodStart: '2026-02-15T10:00:00.000Z',
+      currentPeriodEnd: '2026-03-15T10:00:00.000Z',
+      metadata: { user_id: 'user_123' },
+    });
+
+    expect(result).not.toBeNull();
+    expect(result?.subscriptionId).toBe('sub_123');
+    expect(result?.customerId).toBe('cust_123');
+    expect(result?.periodStart?.toISOString()).toBe('2026-02-15T10:00:00.000Z');
+    expect(result?.periodEnd?.toISOString()).toBe('2026-03-15T10:00:00.000Z');
+  });
+
   it('returns null when metadata.user_id is missing', () => {
     const result = normalizeSubscriptionData({
       id: 'sub_123',

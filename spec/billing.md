@@ -54,12 +54,19 @@ Handled subscription events:
 - `subscription.uncanceled`
 - `subscription.canceled`
 - `subscription.revoked`
+- `subscription.past_due`
+
+Webhook payload normalization:
+
+- webhook signatures are verified via Polar SDK `validateEvent`
+- payload parsing accepts SDK camelCase fields (for example `customerId`, `currentPeriodStart`, `currentPeriodEnd`)
+- snake_case aliases are also accepted for compatibility with raw/internal payload paths
 
 State updates:
 
 - activation/uncancel => `plan='pro'`, `plan_status='active'`
 - canceled => `plan='pro'`, `plan_status='canceled'`
-- past_due/unpaid (via updated) => `plan='pro'`, `plan_status='past_due'`
+- past_due/unpaid (via updated or `subscription.past_due`) => `plan='pro'`, `plan_status='past_due'`
 - revoked => `plan='free'`, `plan_status='inactive'`
 
 Webhook processing persists idempotency records in `webhook_deliveries`.
@@ -68,7 +75,14 @@ Webhook processing persists idempotency records in `webhook_deliveries`.
 
 - Pro access is enabled only when:
   - `plan='pro' AND plan_status='active'`
-- non-active states (`canceled`, `past_due`, `inactive`) do not grant Pro quota.
+  - `plan='pro' AND plan_status='canceled'` while `subscription_period_end > now()`
+- non-active states after grace (`past_due`, `inactive`, canceled with expired `subscription_period_end`) do not grant Pro quota.
+
+## Quota Period Anchors
+
+- Free quota windows are anchored to `users.created_at` (UTC monthly cycle by account-creation day/time).
+- Pro quota windows use Polar subscription window fields (`subscription_period_start`, `subscription_period_end`).
+- If Pro access is inactive/expired, quota window falls back to free account-creation anchor semantics.
 
 ## Out of Scope
 
