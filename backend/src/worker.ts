@@ -5,6 +5,7 @@ import { createDb } from './db';
 import type { Database } from './db';
 import { createLogger } from './lib/logger';
 import type { Hyperdrive } from '@cloudflare/workers-types';
+import { Client } from 'pg';
 
 interface Env {
     HYPERDRIVE: Hyperdrive;
@@ -19,11 +20,15 @@ export default {
         // Reuse across requests within the same isolate
         if (!cachedApp) {
             const config = loadRuntimeConfig(env as Record<string, string | undefined>);
-            // Set db.url from Hyperdrive for use by services
-            config.db.url = env.HYPERDRIVE.connectionString;
             const logger = createLogger({ nodeEnv: 'production' });
+
+            const client = new Client({
+                connectionString: env.HYPERDRIVE.connectionString,
+            });
+            await client.connect();
+
             cachedDb = createDb({
-                url: config.db.url,
+                client,
                 logger,
             }) as Database;
             const deps = createDependencies({ config, db: cachedDb, logger });

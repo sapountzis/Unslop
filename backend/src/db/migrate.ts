@@ -1,15 +1,21 @@
-import { drizzle } from 'drizzle-orm/postgres-js';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { Client } from 'pg';
 import { logger } from '../lib/logger';
 import { loadRuntimeConfig } from '../config/runtime';
 
 async function main() {
   logger.info('db_migration_start');
 
-  const { migrate } = await import('drizzle-orm/postgres-js/migrator');
+  const { migrate } = await import('drizzle-orm/node-postgres/migrator');
   const runtime = loadRuntimeConfig();
-  const db = drizzle(runtime.db.url);
+
+  const client = new Client({ connectionString: runtime.db.url });
+  await client.connect();
+
+  const db = drizzle({ client });
   await migrate(db, { migrationsFolder: './drizzle' });
 
+  await client.end();
   logger.info('db_migration_complete');
   process.exit(0);
 }

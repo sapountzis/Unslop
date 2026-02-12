@@ -3,10 +3,15 @@ import { createDependencies } from './app/dependencies';
 import { loadRuntimeConfig } from './config/runtime';
 import { createDb } from './db';
 import { createLogger } from './lib/logger';
+import { Client } from 'pg';
 
 const config = loadRuntimeConfig();
 const logger = createLogger({ nodeEnv: config.server.nodeEnv });
-const db = createDb({ url: config.db.url, logger });
+
+const client = new Client({ connectionString: config.db.url });
+await client.connect();
+
+const db = createDb({ client, logger });
 const dependencies = createDependencies({ config, db, logger });
 const app = createApp(dependencies);
 

@@ -1,12 +1,14 @@
 import { describe, expect, it, mock } from 'bun:test';
 import { createDb } from './index';
+import { Client } from 'pg';
 
 describe('db factory', () => {
   it('creates a postgres connection and logs provider', () => {
     const infoSpy = mock((_event: string, _ctx?: Record<string, unknown>) => undefined);
 
+    const client = new Client({ connectionString: 'postgresql://user:pw@localhost:5432/db' });
     const db = createDb({
-      url: 'postgresql://user:pw@localhost:5432/db',
+      client,
       logger: { info: infoSpy },
     });
 
