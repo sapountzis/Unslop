@@ -237,7 +237,6 @@ async function callLLMWithRetry(
           temperature: LLM_TEMPERATURE,
           max_tokens: LLM_MAX_TOKENS,
           response_format: zodResponseFormat(DecisionSchema, RESPONSE_SCHEMA_NAME),
-          reasoning_effort: 'none',
         });
 
         const message = completion.choices[0]?.message;
