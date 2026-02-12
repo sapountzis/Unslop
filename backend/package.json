@@ -2,8 +2,10 @@
   "name": "unslop-backend",
   "version": "0.1.0",
   "scripts": {
-    "dev": "bun run src/index.ts",
-    "start": "bun run src/index.ts",
+    "dev": "bun run --env-file .env src/index.ts",
+    "dev:workers": "wrangler dev",
+    "start": "bun run --env-file .env src/index.ts",
+    "deploy": "wrangler deploy",
     "test": "bun run test:unit",
     "test:unit": "for f in $(rg --files src tests | rg '\\.test\\.ts$' | rg -v '\\.(integration|e2e)\\.test\\.ts$'); do bun test \"$f\" || exit 1; done",
     "test:integration": "for f in $(rg --files src tests | rg '\\.integration\\.test\\.ts$'); do bun test \"$f\" || exit 1; done",
@@ -14,9 +16,7 @@
     "migrate:push": "bun run src/db/migrate.ts"
   },
   "dependencies": {
-    "@hono/node-server": "^1.14.1",
     "@hono/zod-validator": "^0.4.0",
-    "@neondatabase/serverless": "^0.10.4",
     "@polar-sh/hono": "^0.5.3",
     "async-retry": "^1.3.3",
     "dotenv": "^17.2.3",
@@ -28,10 +28,12 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.0.0",
     "@types/async-retry": "^1.4.9",
     "@types/node": "^22.0.0",
     "bun-types": "^1.2.2",
     "drizzle-kit": "^1.0.0-beta.13-f728631",
-    "typescript": "^5.9.0"
+    "typescript": "^5.9.0",
+    "wrangler": "^4.0.0"
   }
 }

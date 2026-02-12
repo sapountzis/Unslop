@@ -1,6 +1,6 @@
 // JWT utilities for session management
 import { sign, verify } from 'hono/jwt';
-import { runtime } from '../config/runtime';
+import { loadRuntimeConfig } from '../config/runtime';
 import { MAGIC_LINK_TOKEN_TTL_SECONDS, SESSION_TOKEN_TTL_SECONDS } from './policy-constants';
 
 export interface JWTPayload {
@@ -18,6 +18,7 @@ interface MagicLinkTokenPayload {
 }
 
 function getJwtSecret(): string {
+  const runtime = loadRuntimeConfig();
   if (!runtime.auth.jwtSecret) {
     throw new Error('JWT_SECRET environment variable is required');
   }

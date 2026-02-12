@@ -1,0 +1,36 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches: [main]
+    paths: ['backend/**']
+
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        working-directory: backend
+        run: bun install --frozen-lockfile
+
+      - name: Run migrations
+        working-directory: backend
+        run: bunx drizzle-kit migrate
+        env:
+          DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+
+      - name: Deploy to Workers
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          workingDirectory: backend

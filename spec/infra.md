@@ -1,4 +1,4 @@
-# Infra & Deployment (v0.1)
+# Infra & Deployment (v0.2)
 
 ## Domains
 
@@ -10,11 +10,12 @@ The extension only calls the API domain.
 ## Stack (pinned)
 
 Backend:
-- Runtime: **Bun v1.3.8**
+- Runtime: **Cloudflare Workers** (production), **Bun v1.3.8** (local dev + tests)
 - Language: **TypeScript 5.9.x**
 - HTTP Framework: **Hono 4.11.x**
-- ORM: **Drizzle ORM 1.0.0-beta.13** (Neon HTTP + postgres-js drivers)
-- Hosting: **Railway** (container)
+- ORM: **Drizzle ORM 1.0.0-beta.13** (postgres-js driver via Hyperdrive)
+- Hosting: **Cloudflare Workers** (edge deployment)
+- DB Connection: **Cloudflare Hyperdrive** (connection pooler)
 - Database: **Neon Postgres**
 
 Extension:
@@ -28,88 +29,65 @@ Frontend site:
 ## Environments
 
 Two environments:
-- `dev`
-- `prod`
+- `dev` — local, `.env` file or `.dev.vars`
+- `prod` — Cloudflare Workers secrets + Hyperdrive
 
 Each environment has its own:
 - `DATABASE_URL`
-- secrets (JWT/Magic link/Polar/OpenRouter)
+- Secrets (JWT/Polar/OpenRouter/Resend)
 
-## Backend environment variables (required)
+## Backend environment variables
 
-Database:
-- `DATABASE_URL`
+See `backend/README.md` for the full reference table.
 
-Auth:
-- `JWT_SECRET`
-- `MAGIC_LINK_SECRET`
-- `MAGIC_LINK_BASE_URL` (e.g. `https://api.getunslop.com/v1/auth/callback`)
+## Backend deploy (Cloudflare Workers)
 
-Billing (Polar):
-- `POLAR_API_KEY`
-- `POLAR_WEBHOOK_SECRET`
+Config: `backend/wrangler.toml`
+Entry point: `backend/src/worker.ts`
 
-LLM provider (OpenRouter):
-- `LLM_API_KEY`
-- `LLM_BASE_URL` (default `https://openrouter.ai/api/v1`)
-- `LLM_MODEL` (required text-only route model)
-- `VLM_MODEL` (required attachment-aware route model)
-
-Routing policy:
-- Use `LLM_MODEL` when a post is text-only.
-- Use `VLM_MODEL` when a post includes any supported attachment payload (including PDF-only payloads).
-- Runtime config must provide both model vars; no cross-fallback inference between them.
-
-Quotas:
-- `FREE_MONTHLY_LLM_CALLS` (default 300)
-- `PRO_MONTHLY_LLM_CALLS` (default 10000)
-
-Cache policy:
-- classification cache freshness is fixed at 30 days in service code (non-configurable env surface)
-
-Server:
-- `NODE_ENV=production`
-- `PORT=3000`
-
-## Backend deploy (Railway)
-
-- Dockerfile deploy.
-- Ensure env vars set per environment.
-
-Minimal Dockerfile:
-
-```Dockerfile
-FROM oven/bun:1.3.8
-
-WORKDIR /app
-COPY package.json bun.lockb ./
-RUN bun install --production
-COPY . .
-ENV PORT=3000
-EXPOSE 3000
-CMD ["bun", "run", "start"]
+Deploy command:
+```bash
+cd backend && bun run deploy
 ```
+
+Automatic deploy: push to `main` triggers `.github/workflows/deploy-backend.yml` which runs Drizzle migrations then `wrangler deploy`.
+
+### One-time setup
+
+1. Create Hyperdrive config and paste ID into `wrangler.toml`
+2. Set all secrets via `wrangler secret put`
+3. Add `CLOUDFLARE_API_TOKEN` and `NEON_DATABASE_URL` as GitHub repo secrets
+4. Bind `api.getunslop.com` as custom domain in Cloudflare Workers dashboard
+
+Full step-by-step instructions in `backend/README.md`.
 
 ## Database (Neon)
 
 - Separate branches/DBs for dev and prod.
-- Run migrations via Drizzle (script name depends on repo tooling).
+- Migrations run via Drizzle:
+  - Locally: `bun run migrate:push`
+  - CI/CD: `bunx drizzle-kit migrate` with `NEON_DATABASE_URL` secret
+
+## CI/CD (GitHub Actions)
+
+| Workflow | Trigger | Steps |
+|----------|---------|-------|
+| `backend-ci.yml` | PR → `backend/**` | `bun install` → `tsc --noEmit` → `bun run test` |
+| `deploy-backend.yml` | Push to `main` → `backend/**` | `bun install` → `drizzle-kit migrate` → `wrangler deploy` |
 
 ## Frontend deploy (static site)
 
-Recommended simplest path:
-
 - Use any static hosting that can serve a folder with HTML files and attach a custom domain.
-- Requirements:
-  - Serve `frontend/` directory as the site root.
-  - Provide HTTPS.
-  - Optionally redirect `www.` to apex.
+- Serve `frontend/` directory as the site root.
+- Provide HTTPS.
+- Optionally redirect `www.` to apex.
 
-No environment variables required for the frontend site in v0.1.
+No environment variables required for the frontend site.
 
-## Logging (minimal)
+## Logging
 
-- Log request method/path/status/duration.
-- Log LLM call at high level:
-  - decision, model, latency
-- Do not log full post payload text/attachments in production logs.
+- Workers pipe `console.log`/`console.error` to Cloudflare's log stream.
+- View live: `npx wrangler tail`
+- Structured JSON logs with sensitive key redaction.
+- Log LLM calls at high level: decision, model, latency.
+- Do not log full post payload text/attachments.

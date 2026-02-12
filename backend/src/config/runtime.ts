@@ -1,11 +1,10 @@
-import 'dotenv/config';
 import {
   DEFAULT_BATCH_LLM_CONCURRENCY,
   DEFAULT_FREE_MONTHLY_LLM_CALLS,
   DEFAULT_PRO_MONTHLY_LLM_CALLS,
 } from '../lib/policy-constants';
 
-export type DbDriver = 'postgres' | 'neon';
+
 
 type EnvSource = Record<string, string | undefined>;
 
@@ -18,7 +17,6 @@ export interface RuntimeConfig {
   };
   db: {
     url: string;
-    driver: DbDriver;
   };
   llm: {
     apiKey: string;
@@ -92,25 +90,7 @@ function parseBoolean(env: EnvSource, name: string, fallback: boolean): boolean 
   throw new Error(`Invalid boolean env var ${name}: "${raw}" (expected true|false)`);
 }
 
-function inferDbDriver(url: string): DbDriver {
-  if (url.includes('neon.tech') || url.includes('neon.com')) {
-    return 'neon';
-  }
-  return 'postgres';
-}
 
-function parseDbDriver(env: EnvSource, url: string): DbDriver {
-  const raw = env.DB_DRIVER?.trim();
-  if (!raw) {
-    return inferDbDriver(url);
-  }
-
-  if (raw === 'postgres' || raw === 'neon') {
-    return raw;
-  }
-
-  throw new Error(`Invalid DB_DRIVER value: "${raw}" (expected postgres|neon)`);
-}
 
 function readSecret(env: EnvSource, name: string, allowMissing: boolean): string {
   if (allowMissing) {
@@ -126,7 +106,8 @@ export function loadRuntimeConfig(
   const testMode = env.TEST_MODE === 'true';
   const allowMissingSecrets = options.allowMissingSecrets ?? testMode;
 
-  const databaseUrl = requireString(env, 'DATABASE_URL');
+  // In Workers, db.url comes from HYPERDRIVE.connectionString, not DATABASE_URL
+  const databaseUrl = env.DATABASE_URL ?? '';
   const appUrl = requireString(env, 'APP_URL');
 
   const polarEnv = env.POLAR_ENV === 'sandbox' ? 'sandbox' : 'production';
@@ -140,7 +121,6 @@ export function loadRuntimeConfig(
     },
     db: {
       url: databaseUrl,
-      driver: parseDbDriver(env, databaseUrl),
     },
     llm: {
       apiKey: readSecret(env, 'LLM_API_KEY', allowMissingSecrets),
@@ -172,5 +152,3 @@ export function loadRuntimeConfig(
     },
   };
 }
-
-export const runtime = Object.freeze(loadRuntimeConfig());

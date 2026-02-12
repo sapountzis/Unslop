@@ -1,6 +1,5 @@
-import { db as defaultDb } from '../db';
 import type { Database } from '../db';
-import { runtime, type RuntimeConfig } from '../config/runtime';
+import type { RuntimeConfig } from '../config/runtime';
 import { logger } from '../lib/logger';
 import type { AppLogger } from '../lib/logger-types';
 import {
@@ -43,8 +42,8 @@ export interface AppDependencies {
 }
 
 export interface CreateDependenciesOptions {
-  config?: RuntimeConfig;
-  db?: Database;
+  config: RuntimeConfig;
+  db: Database;
   logger?: AppLogger;
   fetchImpl?: typeof fetch;
   now?: () => Date;
@@ -59,9 +58,9 @@ export interface CreateDependenciesOptions {
   };
 }
 
-export function createDependencies(options: CreateDependenciesOptions = {}): AppDependencies {
-  const config = options.config ?? runtime;
-  const db = options.db ?? defaultDb;
+export function createDependencies(options: CreateDependenciesOptions): AppDependencies {
+  const config = options.config;
+  const db = options.db;
   const appLogger = options.logger ?? logger;
   const now = options.now ?? (() => new Date());
   const fetchImpl = options.fetchImpl ?? fetch;

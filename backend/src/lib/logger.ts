@@ -1,10 +1,14 @@
-import { runtime } from '../config/runtime';
+
 import type { AppLogger, LogMeta } from './logger-types';
 
 const SENSITIVE_KEY_PATTERN = /(token|authorization|password|secret|api[_-]?key|cookie|jwt|session)/i;
 const MAX_DEPTH = 4;
 
-function sanitizeValue(value: unknown, depth = 0): unknown {
+export interface LoggerConfig {
+  nodeEnv: string;
+}
+
+function sanitizeValue(value: unknown, depth = 0, isDev: boolean): unknown {
   if (depth > MAX_DEPTH) {
     return '[truncated]';
   }
@@ -21,12 +25,12 @@ function sanitizeValue(value: unknown, depth = 0): unknown {
     return {
       name: value.name,
       message: value.message,
-      stack: runtime.server.nodeEnv === 'production' ? undefined : value.stack,
+      stack: isDev ? value.stack : undefined,
     };
   }
 
   if (Array.isArray(value)) {
-    return value.map((item) => sanitizeValue(item, depth + 1));
+    return value.map((item) => sanitizeValue(item, depth + 1, isDev));
   }
 
   if (typeof value === 'object') {
@@ -36,7 +40,7 @@ function sanitizeValue(value: unknown, depth = 0): unknown {
       if (SENSITIVE_KEY_PATTERN.test(key)) {
         sanitized[key] = '[redacted]';
       } else {
-        sanitized[key] = sanitizeValue(nestedValue, depth + 1);
+        sanitized[key] = sanitizeValue(nestedValue, depth + 1, isDev);
       }
     }
 
@@ -46,8 +50,8 @@ function sanitizeValue(value: unknown, depth = 0): unknown {
   return value;
 }
 
-function writeLog(level: 'info' | 'warn' | 'error', message: string, payload: LogMeta = {}): void {
-  const sanitizedPayload = sanitizeValue(payload) as LogMeta;
+function writeLog(level: 'info' | 'warn' | 'error', message: string, payload: LogMeta = {}, isDev: boolean): void {
+  const sanitizedPayload = sanitizeValue(payload, 0, isDev) as LogMeta;
   const event = {
     level,
     timestamp: new Date().toISOString(),
@@ -55,25 +59,31 @@ function writeLog(level: 'info' | 'warn' | 'error', message: string, payload: Lo
     ...sanitizedPayload,
   };
 
-  const line = `${JSON.stringify(event)}\n`;
+  const line = JSON.stringify(event);
   if (level === 'error') {
-    process.stderr.write(line);
+    console.error(line);
   } else {
-    process.stdout.write(line);
+    console.log(line);
   }
 }
 
-export const logger: AppLogger = {
-  info: (message: string, meta: LogMeta = {}) => {
-    writeLog('info', message, meta);
-  },
-  warn: (message: string, meta: LogMeta = {}) => {
-    writeLog('warn', message, meta);
-  },
-  error: (message: string, error: unknown, meta: LogMeta = {}) => {
-    writeLog('error', message, {
-      ...meta,
-      error,
-    });
-  },
-};
+export function createLogger(config: LoggerConfig): AppLogger {
+  const isDev = config.nodeEnv === 'development';
+
+  return {
+    info: (message: string, meta: LogMeta = {}) => {
+      writeLog('info', message, meta, isDev);
+    },
+    warn: (message: string, meta: LogMeta = {}) => {
+      writeLog('warn', message, meta, isDev);
+    },
+    error: (message: string, error: unknown, meta: LogMeta = {}) => {
+      writeLog('error', message, {
+        ...meta,
+        error,
+      }, isDev);
+    },
+  };
+}
+
+export const logger = createLogger({ nodeEnv: process.env.NODE_ENV ?? 'development' });

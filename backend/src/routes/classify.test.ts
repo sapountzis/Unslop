@@ -414,27 +414,29 @@ describe('Scoring Engine', () => {
     u: value,
     d: value,
     c: value,
-    h: value,
     rb: slop,
     eb: slop,
     sp: slop,
-    ts: slop,
-    sf: slop,
+    p: slop,
     x: slop,
   });
 
   it('scores keep for strong value and weak slop', () => {
     const engine = new ScoringEngine();
-    const result = engine.score(uniform(0.7, 0.5));
+    // rb=0.3 is below safety gate (0.5), so rescue can fire; u=0.7 >= RESCUE_U (0.6)
+    const result = engine.score(uniform(0.7, 0.3));
 
     expect(result.decision).toBe('keep');
   });
 
   it('applies toxic veto before hide rules', () => {
     const engine = new ScoringEngine();
+    // rb=0.7 hard veto → hide
     const atLowerBound = engine.score(uniform(0.5, 0.7));
+    // rb=0.4 below all thresholds, no rescue → keep neutral
     const middle = engine.score(uniform(0.4, 0.4));
-    const nearUpperBound = engine.score(uniform(0.69, 0.51));
+    // rb=0.45 below safety gate (0.5), u=0.69 >= RESCUE_U (0.6) → keep rescued
+    const nearUpperBound = engine.score(uniform(0.69, 0.45));
 
     expect(atLowerBound.decision).toBe('hide');
     expect(middle.decision).toBe('keep');

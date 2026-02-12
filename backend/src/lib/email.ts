@@ -1,23 +1,16 @@
 // Email utility for sending magic link emails via Resend
 import { Resend } from 'resend';
-import { runtime } from '../config/runtime';
+import { loadRuntimeConfig } from '../config/runtime';
 import { logger } from './logger';
 import { buildMagicLinkEmailContent } from './email-template';
 
-const RESEND_API_KEY = runtime.email.resendApiKey;
-const MAGIC_LINK_BASE_URL = runtime.email.magicLinkBaseUrl;
-
-if (!MAGIC_LINK_BASE_URL) {
-  throw new Error('MAGIC_LINK_BASE_URL environment variable is required');
-}
-
-// Only initialize Resend if we have a real API key
-const resend = RESEND_API_KEY && !RESEND_API_KEY.startsWith('re_dummy')
-  ? new Resend(RESEND_API_KEY)
-  : null;
-
 export async function sendMagicLinkEmail(email: string, token: string): Promise<void> {
-  const linkUrl = new URL(MAGIC_LINK_BASE_URL);
+  const runtime = loadRuntimeConfig();
+  const apiKey = runtime.email.resendApiKey;
+  const baseUrl = runtime.email.magicLinkBaseUrl;
+  const resend = apiKey && !apiKey.startsWith('re_dummy') ? new Resend(apiKey) : null;
+
+  const linkUrl = new URL(baseUrl);
   linkUrl.searchParams.set('token', token);
   const link = linkUrl.toString();
   const content = buildMagicLinkEmailContent({

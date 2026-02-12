@@ -1,4 +1,4 @@
-# AGENTS.md – Backend (Bun + Hono API)
+# AGENTS.md – Backend (Cloudflare Workers + Bun + Hono API)
 
 You are working in the **backend** service.
 
@@ -35,6 +35,7 @@ If a change violates these rules, it is not complete.
 - Domain logic must not depend on Hono request/response objects.
 - `process.env` access is allowed only in a dedicated runtime config module.
 - External dependencies (`db`, logger, clock, API clients, config) must be injected explicitly; avoid hidden module-level singletons for business logic.
+- No module-level side effects that read runtime config at import time — Workers load all modules before env bindings are available.
 
 ### 2) Type safety and API contracts (mandatory)
 
@@ -97,11 +98,17 @@ Prohibited:
 From `backend/`:
 
 - `bun install`
-- `bun run dev`
+- `bun run dev` — local dev on Bun (reads `.env`)
+- `bun run dev:workers` — local Workers simulation via Miniflare (reads `.dev.vars`)
 - `bun run test` (deterministic unit tests only; no live DB/network/server)
 - `bun run test:integration` (DB/service dependent tests)
 - `bun run test:e2e` (requires running API server at `APP_URL`)
 - `bun run type-check`
+- `bun run deploy` — deploy to Cloudflare Workers
+
+Two entry points exist:
+- `src/index.ts` — used by `bun run dev` (Bun runtime)
+- `src/worker.ts` — used by `wrangler dev` / production Workers
 
 ## Boundaries
 

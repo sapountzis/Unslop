@@ -1,29 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { logger } from './logger';
 
-const stdoutWrite = process.stdout.write.bind(process.stdout);
-const stderrWrite = process.stderr.write.bind(process.stderr);
+const originalConsoleLog = console.log;
+const originalConsoleError = console.error;
 
 describe('logger sanitization', () => {
-  const stdoutSpy = mock((line: string) => {
-    void line;
-    return true;
-  });
-  const stderrSpy = mock((line: string) => {
-    void line;
-    return true;
-  });
+  const logSpy = mock((..._args: unknown[]) => { });
+  const errorSpy = mock((..._args: unknown[]) => { });
 
   beforeEach(() => {
-    stdoutSpy.mockClear();
-    stderrSpy.mockClear();
-    process.stdout.write = stdoutSpy as typeof process.stdout.write;
-    process.stderr.write = stderrSpy as typeof process.stderr.write;
+    logSpy.mockClear();
+    errorSpy.mockClear();
+    console.log = logSpy;
+    console.error = errorSpy;
   });
 
   afterEach(() => {
-    process.stdout.write = stdoutWrite;
-    process.stderr.write = stderrWrite;
+    console.log = originalConsoleLog;
+    console.error = originalConsoleError;
   });
 
   it('redacts sensitive keys including nested payloads', () => {
@@ -38,8 +32,8 @@ describe('logger sanitization', () => {
       },
     });
 
-    expect(stdoutSpy).toHaveBeenCalledTimes(1);
-    const line = String(stdoutSpy.mock.calls[0]?.[0] ?? '');
+    expect(logSpy).toHaveBeenCalledTimes(1);
+    const line = String(logSpy.mock.calls[0]?.[0] ?? '');
     const parsed = JSON.parse(line);
 
     expect(parsed.authorization).toBe('[redacted]');
@@ -54,8 +48,8 @@ describe('logger sanitization', () => {
       request: { cookie: 'abc' },
     });
 
-    expect(stderrSpy).toHaveBeenCalledTimes(1);
-    const line = String(stderrSpy.mock.calls[0]?.[0] ?? '');
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    const line = String(errorSpy.mock.calls[0]?.[0] ?? '');
     const parsed = JSON.parse(line);
 
     expect(parsed.token).toBe('[redacted]');
@@ -63,3 +57,4 @@ describe('logger sanitization', () => {
     expect(parsed.error.message).toBe('boom');
   });
 });
+

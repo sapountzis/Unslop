@@ -1,0 +1,12 @@
+name = "unslop-api"
+main = "src/worker.ts"
+compatibility_date = "2026-02-12"
+compatibility_flags = ["nodejs_compat"]
+
+[dev]
+port = 3000
+
+[[hyperdrive]]
+binding = "HYPERDRIVE"
+id = "b219bbac14db4b7fbf60251d59cd37b2"
+localConnectionString = "postgresql://postgres:postgres@localhost:5432/unslop"

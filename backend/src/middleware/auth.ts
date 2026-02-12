@@ -1,6 +1,6 @@
 // JWT auth middleware for Hono
-import { MiddlewareHandler } from 'hono';
-import { verifySessionToken, type JWTPayload } from '../lib/jwt';
+import type { MiddlewareHandler } from 'hono';
+import type { JWTPayload } from '../lib/jwt';
 
 export interface AuthMiddlewareDeps {
   verifySessionToken: (token: string) => Promise<JWTPayload>;
@@ -25,8 +25,6 @@ export function createAuthMiddleware(deps: AuthMiddlewareDeps): MiddlewareHandle
     }
   };
 }
-
-export const authMiddleware = createAuthMiddleware({ verifySessionToken });
 
 declare module 'hono' {
   interface ContextVariableMap {

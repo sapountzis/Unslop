@@ -1,42 +1,18 @@
 import { describe, expect, it, mock } from 'bun:test';
 import { createDb } from './index';
 
-describe('db driver selection', () => {
-  it('uses explicit postgres driver', () => {
-    const neonFactory = mock(() => ({ provider: 'neon' }));
-    const postgresFactory = mock(() => ({ provider: 'postgres' }));
+describe('db factory', () => {
+  it('creates a postgres connection and logs provider', () => {
+    const infoSpy = mock((_event: string, _ctx?: Record<string, unknown>) => undefined);
 
     const db = createDb({
-      url: 'postgresql://local',
-      driver: 'postgres',
-      logger: { info: mock(() => undefined) },
-      factories: {
-        neon: neonFactory,
-        postgres: postgresFactory,
-      },
+      url: 'postgresql://user:pw@localhost:5432/db',
+      logger: { info: infoSpy },
     });
 
-    expect(db).toEqual({ provider: 'postgres' });
-    expect(postgresFactory).toHaveBeenCalledTimes(1);
-    expect(neonFactory).toHaveBeenCalledTimes(0);
-  });
-
-  it('uses explicit neon driver', () => {
-    const neonFactory = mock(() => ({ provider: 'neon' }));
-    const postgresFactory = mock(() => ({ provider: 'postgres' }));
-
-    const db = createDb({
-      url: 'postgresql://local',
-      driver: 'neon',
-      logger: { info: mock(() => undefined) },
-      factories: {
-        neon: neonFactory,
-        postgres: postgresFactory,
-      },
-    });
-
-    expect(db).toEqual({ provider: 'neon' });
-    expect(neonFactory).toHaveBeenCalledTimes(1);
-    expect(postgresFactory).toHaveBeenCalledTimes(0);
+    expect(db).toBeDefined();
+    expect(infoSpy).toHaveBeenCalledTimes(1);
+    expect(infoSpy.mock.calls[0]?.[0]).toBe('db_connect');
   });
 });
+

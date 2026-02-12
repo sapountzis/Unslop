@@ -22,11 +22,19 @@ function baseEnv(overrides: Record<string, string | undefined> = {}): Record<str
 
 describe('runtime config', () => {
   it('enforces required env vars', () => {
-    const env = baseEnv({ DATABASE_URL: undefined });
+    const env = baseEnv({ APP_URL: undefined });
 
     expect(() => loadRuntimeConfig(env, { allowMissingSecrets: false })).toThrow(
-      'Missing required environment variable: DATABASE_URL',
+      'Missing required environment variable: APP_URL',
     );
+  });
+
+  it('allows missing DATABASE_URL for Hyperdrive', () => {
+    const env = baseEnv({ DATABASE_URL: undefined });
+
+    // Should not throw - DATABASE_URL is optional for Hyperdrive
+    const config = loadRuntimeConfig(env, { allowMissingSecrets: false });
+    expect(config.db.url).toBe('');
   });
 
   it('parses numeric values with defaults', () => {
@@ -68,18 +76,6 @@ describe('runtime config', () => {
     ).toThrow('Missing required environment variable: LLM_MODEL');
   });
 
-  it('supports explicit DB_DRIVER values and defaults when omitted', () => {
-    const postgresConfig = loadRuntimeConfig(baseEnv({ DB_DRIVER: 'postgres' }));
-    expect(postgresConfig.db.driver).toBe('postgres');
-
-    const neonConfig = loadRuntimeConfig(baseEnv({ DB_DRIVER: 'neon' }));
-    expect(neonConfig.db.driver).toBe('neon');
-
-    const inferredNeon = loadRuntimeConfig(
-      baseEnv({ DATABASE_URL: 'postgresql://x:y@ep-test.neon.tech/db', DB_DRIVER: undefined }),
-    );
-    expect(inferredNeon.db.driver).toBe('neon');
-  });
 
   it('allows missing secrets in test mode', () => {
     const config = loadRuntimeConfig(
