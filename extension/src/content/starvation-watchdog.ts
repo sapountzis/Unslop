@@ -1,12 +1,15 @@
 export type WatchdogInput = {
   backlogSize: number;
+  actionableBacklogSize?: number;
   processedDelta: number;
   classifyDelta: number;
   pendingBatchCount: number;
   observerLive: boolean;
 };
 
-export function createStarvationWatchdog(onRecover: () => void, threshold = 2) {
+const DEFAULT_STALL_THRESHOLD = 2;
+
+export function createStarvationWatchdog(onRecover: () => void, threshold = DEFAULT_STALL_THRESHOLD) {
   let stalledTicks = 0;
 
   return {
@@ -27,7 +30,8 @@ export function createStarvationWatchdog(onRecover: () => void, threshold = 2) {
         return;
       }
 
-      const hasBacklog = input.backlogSize > 0;
+      const actionableBacklogSize = input.actionableBacklogSize ?? input.backlogSize;
+      const hasBacklog = actionableBacklogSize > 0;
       const hasProgress = input.processedDelta > 0 || input.classifyDelta > 0;
 
       if (!hasBacklog || hasProgress) {

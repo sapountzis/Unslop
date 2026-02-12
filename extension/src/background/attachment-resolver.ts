@@ -8,6 +8,7 @@ import {
 } from '../types';
 
 export const MAX_IMAGE_BYTES = 2_000_000;
+export const MAX_IMAGE_DIMENSION = 1024;
 export const MAX_PDF_FETCH_BYTES = 150_000;
 export const MAX_PDF_EXCERPT_CHARS = 2_000;
 
@@ -19,15 +20,24 @@ export type BatchClassifyRequestLike = {
   posts: PostDataLike[];
 };
 
+export type ResizeImageFn = (
+  bytes: Uint8Array,
+  maxDimension: number,
+  mimeType: string
+) => Promise<{ bytes: Uint8Array; mimeType: string }>;
+
 export type AttachmentResolverDependencies = {
   fetch?: typeof fetch;
+  resizeImage?: ResizeImageFn;
   maxImageBytes?: number;
+  maxImageDimension?: number;
   maxPdfFetchBytes?: number;
   maxPdfExcerptChars?: number;
 };
 
 type AttachmentBudgets = {
   maxImageBytes: number;
+  maxImageDimension: number;
   maxPdfFetchBytes: number;
   maxPdfExcerptChars: number;
 };
@@ -68,6 +78,7 @@ export async function resolveBatchAttachmentPayload(
 function resolveBudgets(dependencies: AttachmentResolverDependencies): AttachmentBudgets {
   return {
     maxImageBytes: dependencies.maxImageBytes ?? MAX_IMAGE_BYTES,
+    maxImageDimension: dependencies.maxImageDimension ?? MAX_IMAGE_DIMENSION,
     maxPdfFetchBytes: dependencies.maxPdfFetchBytes ?? MAX_PDF_FETCH_BYTES,
     maxPdfExcerptChars: dependencies.maxPdfExcerptChars ?? MAX_PDF_EXCERPT_CHARS,
   };
@@ -131,11 +142,15 @@ async function resolveImageAttachment(
     throw new Error(`image_fetch_failed:${response.status}`);
   }
 
-  const bytes = await readBytesWithinBudget(response, budgets.maxImageBytes);
-  const sha256 = await sha256Hex(bytes);
-  const mimeType = normalizeMimeType(
+  const rawBytes = await readBytesWithinBudget(response, budgets.maxImageBytes);
+  const originalMimeType = normalizeMimeType(
     response.headers.get('content-type') ?? readString(record, ['mime_type']) ?? undefined
   );
+
+  const resizeImpl = dependencies.resizeImage ?? resizeImageIfNeeded;
+  const { bytes, mimeType } = await resizeImpl(rawBytes, budgets.maxImageDimension, originalMimeType);
+
+  const sha256 = await sha256Hex(bytes);
 
   return {
     node_id: nodeId,
@@ -360,6 +375,41 @@ function toBase64(bytes: Uint8Array): string {
     binary += String.fromCharCode(...chunk);
   }
   return btoa(binary);
+}
+
+export async function resizeImageIfNeeded(
+  bytes: Uint8Array,
+  maxDimension: number,
+  mimeType: string
+): Promise<{ bytes: Uint8Array; mimeType: string }> {
+  try {
+    const buffer = new ArrayBuffer(bytes.byteLength);
+    new Uint8Array(buffer).set(bytes);
+    const blob = new Blob([buffer], { type: mimeType });
+    const bitmap = await createImageBitmap(blob);
+
+    if (bitmap.width <= maxDimension && bitmap.height <= maxDimension) {
+      return { bytes, mimeType };
+    }
+
+    const scale = Math.min(maxDimension / bitmap.width, maxDimension / bitmap.height);
+    const w = Math.round(bitmap.width * scale);
+    const h = Math.round(bitmap.height * scale);
+
+    const canvas = new OffscreenCanvas(w, h);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      return { bytes, mimeType };
+    }
+
+    ctx.drawImage(bitmap, 0, 0, w, h);
+    const resizedBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.85 });
+    const resizedBytes = new Uint8Array(await resizedBlob.arrayBuffer());
+
+    return { bytes: resizedBytes, mimeType: 'image/jpeg' };
+  } catch {
+    return { bytes, mimeType };
+  }
 }
 
 function isResolvedImageAttachment(value: unknown): value is ResolvedImageAttachment {

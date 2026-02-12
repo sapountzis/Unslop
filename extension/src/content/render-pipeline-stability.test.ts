@@ -91,4 +91,28 @@ describe('render commit pipeline stability', () => {
 
     expect(applied).toEqual([]);
   });
+
+  it('reports deferred visible collapse entries as non-actionable backlog', () => {
+    const element = new MockElement(1) as MockHTMLElement;
+
+    const pipeline = createRenderCommitPipeline({
+      render: () => undefined,
+      visibility: {
+        observe: () => undefined,
+        unobserve: () => undefined,
+        hasSnapshot: () => true,
+        isCurrentlyVisible: () => true,
+        clear: () => undefined,
+        size: () => 0,
+      },
+      requestAnimationFrame: () => 1,
+      cancelAnimationFrame: () => undefined,
+    });
+
+    pipeline.enqueue({ renderRoot: element, decision: 'hide', hideMode: 'collapse' });
+    pipeline.flushNow();
+
+    expect(pipeline.size()).toBe(1);
+    expect(pipeline.actionableSize()).toBe(0);
+  });
 });

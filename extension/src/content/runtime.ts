@@ -24,6 +24,17 @@ import { createRuntimeLifecycle } from './runtime-lifecycle';
 const ROUTE_POLL_MS = 500;
 const WATCHDOG_POLL_MS = 1000;
 const PROCESS_PER_FRAME = 20;
+const SYNC_STORAGE_AREA = 'sync';
+
+const RECONCILE_REASON = {
+    init: 'init',
+    route: 'route',
+    toggle: 'toggle',
+    visibility: 'visibility',
+    watchdog: 'watchdog',
+} as const;
+
+type ReconcileReason = (typeof RECONCILE_REASON)[keyof typeof RECONCILE_REASON];
 
 type TerminalState = {
     identity: string;
@@ -354,7 +365,7 @@ export function createPlatformRuntime(platform: PlatformPlugin): void {
     });
 
     const watchdog = createStarvationWatchdog(() => {
-        scheduleRuntimeReconcile('watchdog');
+        scheduleRuntimeReconcile(RECONCILE_REASON.watchdog);
     });
 
     function startRuntimeWatchdog(): void {
@@ -374,17 +385,28 @@ export function createPlatformRuntime(platform: PlatformPlugin): void {
             lastProcessed = processedNow;
             lastClassify = classifyNow;
 
+            const pendingMutationCount = mutationBuffer.size();
+            const pendingRenderCommitCount = renderCommitPipeline.size();
+            const actionableRenderCommitCount = renderCommitPipeline.actionableSize();
+            const pendingBatchCount = getPendingBatchCount();
+
             const backlogSize =
-                mutationBuffer.size() +
-                renderCommitPipeline.size() +
+                pendingMutationCount +
+                pendingRenderCommitCount +
                 inFlightProcessCount +
-                getPendingBatchCount();
+                pendingBatchCount;
+            const actionableBacklogSize =
+                pendingMutationCount +
+                actionableRenderCommitCount +
+                inFlightProcessCount +
+                pendingBatchCount;
 
             watchdog.tick({
                 backlogSize,
+                actionableBacklogSize,
                 processedDelta,
                 classifyDelta,
-                pendingBatchCount: getPendingBatchCount(),
+                pendingBatchCount,
                 observerLive: attachmentController.isLive(),
             });
         }, WATCHDOG_POLL_MS);
@@ -438,7 +460,7 @@ export function createPlatformRuntime(platform: PlatformPlugin): void {
         isAttachmentLive: (routeKey) => attachmentController.isLive(routeKey),
     });
 
-    function scheduleRuntimeReconcile(reason: 'init' | 'route' | 'toggle' | 'visibility' | 'watchdog'): void {
+    function scheduleRuntimeReconcile(reason: ReconcileReason): void {
         window.setTimeout(() => {
             runtimeController.reconcile(reason).catch((err) => {
                 console.error(`[Unslop][${platform.id}] runtime reconcile failed`, { reason, err });
@@ -451,30 +473,30 @@ export function createPlatformRuntime(platform: PlatformPlugin): void {
         const originalReplaceState = history.replaceState.bind(history);
 
         window.addEventListener('popstate', () => {
-            scheduleRuntimeReconcile('route');
+            scheduleRuntimeReconcile(RECONCILE_REASON.route);
         });
 
         window.addEventListener('visibilitychange', () => {
             if (!document.hidden) {
-                scheduleRuntimeReconcile('visibility');
+                scheduleRuntimeReconcile(RECONCILE_REASON.visibility);
             }
         });
 
         history.pushState = function (...args) {
             originalPushState(...args);
-            scheduleRuntimeReconcile('route');
+            scheduleRuntimeReconcile(RECONCILE_REASON.route);
         };
 
         history.replaceState = function (...args) {
             originalReplaceState(...args);
-            scheduleRuntimeReconcile('route');
+            scheduleRuntimeReconcile(RECONCILE_REASON.route);
         };
 
         window.setInterval(() => {
             if (document.hidden) return;
             const nextRoute = platform.routeKeyFromUrl(window.location.href);
             if (nextRoute !== runtimeController.getState().routeKey) {
-                scheduleRuntimeReconcile('route');
+                scheduleRuntimeReconcile(RECONCILE_REASON.route);
             }
         }, ROUTE_POLL_MS);
     }
@@ -499,9 +521,9 @@ export function createPlatformRuntime(platform: PlatformPlugin): void {
         });
 
         chrome.storage.onChanged.addListener((changes, areaName) => {
-            if (areaName !== 'sync') return;
+            if (areaName !== SYNC_STORAGE_AREA) return;
             if (changes.enabled) {
-                scheduleRuntimeReconcile('toggle');
+                scheduleRuntimeReconcile(RECONCILE_REASON.toggle);
             }
             if (changes[HIDE_RENDER_MODE_STORAGE_KEY]) {
                 hideRenderMode = resolveHideRenderMode(changes[HIDE_RENDER_MODE_STORAGE_KEY].newValue);
@@ -509,7 +531,7 @@ export function createPlatformRuntime(platform: PlatformPlugin): void {
         });
 
         setupNavigationDetection();
-        scheduleRuntimeReconcile('init');
+        scheduleRuntimeReconcile(RECONCILE_REASON.init);
     }
 
     // Eagerly apply pre-classify gate if we're on a feed route at script load time

@@ -212,6 +212,7 @@ Rules:
 `src/content/starvation-watchdog.ts`
 - Detects stalled processing and triggers reconcile.
 - Pending batch classify work is treated as active progress to avoid false watchdog recover loops during normal API latency.
+- Watchdog stall detection uses actionable backlog, not raw pending commit count, so visibility-deferred collapse entries do not trigger forced reattach loops.
 
 `src/background/index.ts`
 - Message hub and auth/enabled enforcement.
@@ -313,7 +314,7 @@ Rationale:
 
 ### Symptom: white screen/rerender loop while scrolling
 
-1. Confirm watchdog does not force reconcile while `getPendingBatchCount()` is non-zero.
+1. Confirm watchdog does not force reconcile while classify work is pending or commit backlog is fully deferred (non-actionable).
 2. Confirm preclassify selector excludes aggregate/discovery modules:
    - `:not([data-id^="urn:li:aggregate:"])`
    - `:not(:has(.feed-shared-aggregated-content))`

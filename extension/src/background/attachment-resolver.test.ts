@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { resolveBatchAttachmentPayload } from './attachment-resolver';
+import { resolveBatchAttachmentPayload, resizeImageIfNeeded } from './attachment-resolver';
 
 const BASE_POST = {
   post_id: 'urn:li:activity:test-post',
@@ -193,5 +193,61 @@ describe('resolveBatchAttachmentPayload', () => {
         base64: 'Z29vZA==',
       },
     ]);
+  });
+
+  it('uses custom resize function via dependency injection', async () => {
+    const request = {
+      posts: [
+        {
+          ...BASE_POST,
+          attachments: [
+            {
+              node_id: 'root',
+              kind: 'image' as const,
+              source_url: 'https://example.com/image.png',
+            },
+          ],
+        },
+      ],
+    };
+
+    const responseBytes = new TextEncoder().encode('original');
+    let resizeCalledWith: { bytes: Uint8Array; maxDim: number; mime: string } | null = null;
+
+    const resolved = await resolveBatchAttachmentPayload(request, {
+      fetch: async () =>
+        new Response(responseBytes, {
+          status: 200,
+          headers: { 'content-type': 'image/png' },
+        }),
+      maxImageDimension: 512,
+      resizeImage: async (bytes, maxDimension, mimeType) => {
+        resizeCalledWith = { bytes, maxDim: maxDimension, mime: mimeType };
+        return { bytes: new TextEncoder().encode('resized'), mimeType: 'image/jpeg' };
+      },
+    });
+
+    expect(resizeCalledWith).toEqual({
+      bytes: responseBytes,
+      maxDim: 512,
+      mime: 'image/png',
+    });
+    expect(resolved.posts[0]?.attachments[0]).toEqual({
+      node_id: 'root',
+      kind: 'image',
+      sha256: 'a68a845c9f88421f423dd4c70561d667c156ad9fd64914cf810b3b7a30794bc8',
+      mime_type: 'image/jpeg',
+      base64: 'cmVzaXplZA==',
+    });
+  });
+});
+
+describe('resizeImageIfNeeded', () => {
+  it('returns original bytes for invalid image data (fail-open)', async () => {
+    const invalidBytes = new TextEncoder().encode('not an image');
+    const result = await resizeImageIfNeeded(invalidBytes, 1024, 'image/png');
+
+    expect(result.bytes).toEqual(invalidBytes);
+    expect(result.mimeType).toBe('image/png');
   });
 });

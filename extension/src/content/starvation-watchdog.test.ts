@@ -73,4 +73,30 @@ describe('starvation watchdog', () => {
 
     expect(recovered).toBe(0);
   });
+
+  it('does not request recovery when backlog is deferred and not actionable', () => {
+    let recovered = 0;
+    const watchdog = createStarvationWatchdog(() => {
+      recovered += 1;
+    });
+
+    watchdog.tick({
+      backlogSize: 5,
+      actionableBacklogSize: 0,
+      processedDelta: 0,
+      classifyDelta: 0,
+      pendingBatchCount: 0,
+      observerLive: true,
+    });
+    watchdog.tick({
+      backlogSize: 5,
+      actionableBacklogSize: 0,
+      processedDelta: 0,
+      classifyDelta: 0,
+      pendingBatchCount: 0,
+      observerLive: true,
+    });
+
+    expect(recovered).toBe(0);
+  });
 });

@@ -4,6 +4,13 @@ import { VisibilityIndex } from './visibility-index';
 
 const POSITION_PRECEDING = typeof Node === 'undefined' ? 2 : Node.DOCUMENT_POSITION_PRECEDING;
 const POSITION_FOLLOWING = typeof Node === 'undefined' ? 4 : Node.DOCUMENT_POSITION_FOLLOWING;
+const FALLBACK_RAF_INTERVAL_MS = 16;
+const HIDE_DECISION: Decision = 'hide';
+const COLLAPSE_HIDE_MODE: HideRenderMode = 'collapse';
+
+type RenderFinalizeStatus = 'applied' | 'discarded';
+const RENDER_FINALIZE_APPLIED: RenderFinalizeStatus = 'applied';
+const RENDER_FINALIZE_DISCARDED: RenderFinalizeStatus = 'discarded';
 
 export type RenderCommitEntry = {
   renderRoot: HTMLElement;
@@ -16,7 +23,7 @@ export type RenderCommitEntry = {
     decision: Decision;
     postId?: string;
   }) => boolean;
-  onFinalized?: (status: 'applied' | 'discarded') => void;
+  onFinalized?: (status: RenderFinalizeStatus) => void;
 };
 
 type InternalEntry = RenderCommitEntry;
@@ -45,7 +52,7 @@ function fallbackRequestAnimationFrame(cb: FrameRequestCallback): number {
   const timer = globalThis.setTimeout(() => {
     fallbackFrameTimers.delete(frameId);
     cb(Date.now());
-  }, 16);
+  }, FALLBACK_RAF_INTERVAL_MS);
   fallbackFrameTimers.set(frameId, timer);
   return frameId;
 }
@@ -66,9 +73,12 @@ function compareDomOrder(a: HTMLElement, b: HTMLElement): number {
   return 0;
 }
 
+function isCollapseHideDecision(entry: Pick<InternalEntry, 'decision' | 'hideMode'>): boolean {
+  return entry.decision === HIDE_DECISION && entry.hideMode === COLLAPSE_HIDE_MODE;
+}
+
 function shouldDeferDestructiveHide(entry: InternalEntry, visibility: VisibilityIndex): boolean {
-  if (entry.decision !== 'hide') return false;
-  if (entry.hideMode !== 'collapse') return false;
+  if (!isCollapseHideDecision(entry)) return false;
   if (!visibility.hasSnapshot(entry.renderRoot)) return true;
   return visibility.isCurrentlyVisible(entry.renderRoot);
 }
@@ -105,7 +115,7 @@ export function createRenderCommitPipeline(options: RenderCommitPipelineOptions)
   const pending = new Map<HTMLElement, InternalEntry>();
   let frameHandle = 0;
 
-  function finalize(entry: InternalEntry, status: 'applied' | 'discarded'): void {
+  function finalize(entry: InternalEntry, status: RenderFinalizeStatus): void {
     entry.onFinalized?.(status);
   }
 
@@ -128,6 +138,18 @@ export function createRenderCommitPipeline(options: RenderCommitPipelineOptions)
     });
   }
 
+  function shouldDefer(entry: InternalEntry): boolean {
+    if (shouldDeferDestructiveHide(entry, options.visibility)) {
+      return true;
+    }
+
+    if (isCollapseHideDecision(entry) && !isWithinCommitBand(entry.renderRoot)) {
+      return true;
+    }
+
+    return false;
+  }
+
   function flushNow(): void {
     if (pending.size === 0) return;
 
@@ -136,23 +158,18 @@ export function createRenderCommitPipeline(options: RenderCommitPipelineOptions)
 
     for (const entry of entries) {
       if (shouldDiscard(entry)) {
-        finalize(entry, 'discarded');
+        finalize(entry, RENDER_FINALIZE_DISCARDED);
         continue;
       }
 
-      if (shouldDeferDestructiveHide(entry, options.visibility)) {
-        pending.set(entry.renderRoot, entry);
-        continue;
-      }
-
-      if (entry.decision === 'hide' && entry.hideMode === 'collapse' && !isWithinCommitBand(entry.renderRoot)) {
+      if (shouldDefer(entry)) {
         pending.set(entry.renderRoot, entry);
         continue;
       }
 
       const renderTarget = entry.labelRoot ?? entry.renderRoot;
       options.render(renderTarget, entry.decision, entry.postId, { hideMode: entry.hideMode });
-      finalize(entry, 'applied');
+      finalize(entry, RENDER_FINALIZE_APPLIED);
     }
   }
 
@@ -173,12 +190,21 @@ export function createRenderCommitPipeline(options: RenderCommitPipelineOptions)
       }
 
       for (const entry of pending.values()) {
-        finalize(entry, 'discarded');
+        finalize(entry, RENDER_FINALIZE_DISCARDED);
       }
       pending.clear();
     },
     size(): number {
       return pending.size;
+    },
+    actionableSize(): number {
+      let count = 0;
+      for (const entry of pending.values()) {
+        if (shouldDiscard(entry)) continue;
+        if (shouldDefer(entry)) continue;
+        count += 1;
+      }
+      return count;
     },
   };
 }
