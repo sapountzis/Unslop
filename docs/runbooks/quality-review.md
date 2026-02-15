@@ -29,7 +29,7 @@ This runbook defines the manual process for keeping `docs/quality/QUALITY_SCORE.
 5. Run documentation freshness steps.
    - Follow `docs/runbooks/docs-freshness.md` for affected docs.
 6. Re-validate documentation and checks as needed for the scope.
-7. Run `make pr-ready` before final PR submission.
+7. Run `make pr-ready` and then `make pr-submit` unless a blocker requires human input.
 
 ## Expected Results
 - `QUALITY_SCORE.md` reflects current reality (not optimistic targets).

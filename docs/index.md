@@ -12,12 +12,9 @@ This repository is agent-first. `AGENTS.md` is the map; `docs/` is the system of
 ## Quick Start For A New Task
 1. Run `make init-feature FEATURE=<task-slug>` from the primary checkout (syncs base from origin, creates worktree, bootstraps env, runs setup).
 2. Fill the generated active plan template before any code edits.
-3. Map the task to one or more specs in `docs/product-specs/index.md`.
-4. Implement minimal scoped changes from the created linked worktree.
-5. Repeat `(edit -> make check -> review update in plan)` until gates pass.
-6. Refresh docs/quality/debt artifacts touched by the change.
-7. Finalize the plan lifecycle per `docs/exec-plans/README.md` (status update + move to `completed/` when done, or blocker note if not done).
-8. Run `make pr-ready` before creating the PR (`make pr-submit` also syncs branch-to-origin and schedules local linked-worktree cleanup).
+3. Follow the canonical sequence in `docs/runbooks/golden-paths.md` for implementation, review loops, and completion.
+4. Use `docs/exec-plans/README.md` for lifecycle rules, Definition of Done, and blocker exception format.
+5. Complete submission with `make pr-ready` and then `make pr-submit` unless blocked or explicit human input is needed.
 
 ## Documentation Areas
 - `docs/product-specs/index.md` and `docs/product-specs/README.md`: authoritative behavior and acceptance criteria.
@@ -35,7 +32,7 @@ Use `docs/runbooks/quality-review.md` to keep `docs/quality/*` aligned with real
 
 ## Agent Harness
 - `AGENTS.md` defines the high-level workflow.
-- `Makefile` defines `make check` as canonical validation plus workflow/PR commands.
+- `Makefile` defines canonical validation and workflow/PR commands.
 - Use `make` targets as the interface; follow command output and remediation text to iterate toward green gates.
 - Harness commands are expected to provide actionable failure diagnostics and clear retry protocol.
 - CI runs `make check` on push and pull request.
