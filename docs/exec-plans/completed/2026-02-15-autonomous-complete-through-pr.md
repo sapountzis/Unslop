@@ -41,7 +41,7 @@ Links:
 - `make check` after reference-first pruning adjustments (2026-02-15): PASS
 
 ## PR
-- PR: pending
+- PR: https://github.com/sapountzis/Unslop/pull/6
 
 ## Blockers (optional)
 - Use docs/exec-plans/README.md blocker exception format when blocked.
