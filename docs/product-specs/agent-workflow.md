@@ -21,6 +21,8 @@ Agent-driven delivery must follow a deterministic path from feature request to P
 - AC5: PR submission tooling validates readiness and preserves links to governing specs and execution plans.
 - AC6: PR submission tooling performs verified local linked-worktree cleanup after successful submission.
 - AC7: Default agent behavior continues autonomously through `make pr-ready` and `make pr-submit`; agents pause only for explicit blockers or required human input.
+- AC8: Top-level agent-facing docs stay abstract and pointer-first; detailed implementation specifics live in canonical runbooks/spec docs.
+- AC9: Harness check failures expose gate-specific diagnostics with concrete remediation/retry steps, while happy-path output remains minimal.
 
 ## constraints
 - Local workflows must remain deterministic and produce actionable failure diagnostics.

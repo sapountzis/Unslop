@@ -10,11 +10,12 @@ This repository is agent-first. `AGENTS.md` is the map; `docs/` is the system of
 5. `docs/exec-plans/active/`
 
 ## Quick Start For A New Task
-1. Run `make init-feature FEATURE=<task-slug>` from the primary checkout (syncs base from origin, creates worktree, bootstraps env, runs setup).
+1. Run `make init-feature FEATURE=<task-slug>` from the primary checkout.
 2. Fill the generated active plan template before any code edits.
-3. Follow the canonical sequence in `docs/runbooks/golden-paths.md` for implementation, review loops, and completion.
-4. Use `docs/exec-plans/README.md` for lifecycle rules, Definition of Done, and blocker exception format.
-5. Complete submission with `make pr-ready` and then `make pr-submit` unless blocked or explicit human input is needed.
+3. Use file pointers for full procedure details:
+   - `docs/runbooks/golden-paths.md` for workflow steps and variants.
+   - `docs/exec-plans/README.md` for lifecycle/DoD/blocker rules.
+   - `docs/product-specs/index.md` for governing-spec selection.
 
 ## Documentation Areas
 - `docs/product-specs/index.md` and `docs/product-specs/README.md`: authoritative behavior and acceptance criteria.

@@ -34,7 +34,7 @@ if [ ! -f "package.json" ]; then
   "devDependencies": {
     "@biomejs/biome": "^2.3.15",
     "@playwright/test": "^1.58.2",
-    "@typescript/native-preview": "7.0.0-dev.20260215.1",
+    "@typescript/native-preview": "latest",
     "@types/bun": "^1.3.8"
   }
 }

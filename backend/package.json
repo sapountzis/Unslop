@@ -32,7 +32,7 @@
 		"@types/async-retry": "^1.4.9",
 		"@types/node": "^22.0.0",
 		"@types/pg": "^8.16.0",
-		"@typescript/native-preview": "7.0.0-dev.20260215.1",
+		"@typescript/native-preview": "latest",
 		"bun-types": "^1.2.2",
 		"drizzle-kit": "^1.0.0-beta.15-859cf75",
 		"typescript": "^5.9.0",

@@ -14,7 +14,7 @@ run_gate() {
   shift 2
   echo "[CHECK] running: $gate"
   if ! (cd "$ROOT_DIR" && "$@") >"$log_file" 2>&1; then
-    echo "[CHECK] FAIL: gate '$gate' failed. See diagnostics above." >&2
+    echo "[CHECK] FAIL: gate '$gate' failed. See gate diagnostics below." >&2
     echo "[CHECK] --- gate log ($gate) ---" >&2
     tail -n 200 "$log_file" >&2 || true
     echo "[CHECK] --- end gate log ($gate) ---" >&2

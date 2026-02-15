@@ -39,14 +39,59 @@ const MIGRATION_SCAN_FILES = [
 let errors = 0;
 let warnings = 0;
 
-function err(message: string, remediation: string) {
+type Violation = {
+	rule: string;
+	message: string;
+	remediation: string;
+};
+
+type WarningNote = {
+	rule: string;
+	message: string;
+};
+
+const violations: Violation[] = [];
+const warningNotes: WarningNote[] = [];
+
+function err(rule: string, message: string, remediation: string) {
 	errors += 1;
-	console.error(`[DOCLINT] ERROR: ${message} Remediation: ${remediation}`);
+	violations.push({ rule, message, remediation });
 }
 
-function warn(message: string) {
+function warn(rule: string, message: string) {
 	warnings += 1;
-	console.warn(`[DOCLINT] WARN: ${message}`);
+	warningNotes.push({ rule, message });
+}
+
+function printGroupedViolations() {
+	const grouped = new Map<string, Violation[]>();
+	for (const violation of violations) {
+		if (!grouped.has(violation.rule)) grouped.set(violation.rule, []);
+		grouped.get(violation.rule)?.push(violation);
+	}
+
+	for (const [rule, items] of grouped.entries()) {
+		console.error(`[DOCLINT] RULE ${rule}: ${items.length} issue(s)`);
+		for (const item of items) {
+			console.error(`[DOCLINT] ERROR: ${item.message}`);
+			console.error(`[DOCLINT] Remediation: ${item.remediation}`);
+		}
+	}
+}
+
+function printWarnings() {
+	const grouped = new Map<string, WarningNote[]>();
+	for (const note of warningNotes) {
+		if (!grouped.has(note.rule)) grouped.set(note.rule, []);
+		grouped.get(note.rule)?.push(note);
+	}
+
+	for (const [rule, items] of grouped.entries()) {
+		console.warn(`[DOCLINT] RULE ${rule}: ${items.length} warning(s)`);
+		for (const item of items) {
+			console.warn(`[DOCLINT] WARN: ${item.message}`);
+		}
+	}
 }
 
 function parseFrontmatter(raw: string): Record<string, string> | null {
@@ -84,6 +129,7 @@ async function ensureRequiredPaths() {
 		const abs = path.join(ROOT, rel);
 		if (!existsSync(abs)) {
 			err(
+				"required-paths",
 				`missing required docs path: ${rel}`,
 				`create ${rel} using the canonical structure in this repository prompt`,
 			);
@@ -96,6 +142,7 @@ async function ensureLegacyPathsRemoved() {
 		const abs = path.join(ROOT, rel);
 		if (existsSync(abs)) {
 			err(
+				"legacy-paths",
 				`legacy path detected: ${rel}`,
 				`move remaining content to docs/ target locations and delete ${rel}`,
 			);
@@ -119,6 +166,7 @@ async function lintLegacySpecReferences() {
 
 		if (LEGACY_SPEC_REF_RE.test(raw)) {
 			err(
+				"legacy-references",
 				`${rel} references legacy spec paths`,
 				`replace spec links with docs/product-specs/* links and remove legacy references`,
 			);
@@ -126,6 +174,7 @@ async function lintLegacySpecReferences() {
 
 		if (LEGACY_PLANS_REF_RE.test(raw)) {
 			err(
+				"legacy-references",
 				`${rel} references legacy docs/plans path`,
 				`replace docs/plans references with docs/exec-plans/* paths`,
 			);
@@ -136,6 +185,7 @@ async function lintLegacySpecReferences() {
 async function lintProductSpecs() {
 	if (!existsSync(PRODUCT_SPECS)) {
 		err(
+			"product-specs",
 			"missing directory: docs/product-specs",
 			"create docs/product-specs and move all product specs into it",
 		);
@@ -148,6 +198,7 @@ async function lintProductSpecs() {
 
 	if (files.length === 0) {
 		err(
+			"product-specs",
 			"docs/product-specs has no spec files to validate",
 			"move migrated product spec files into docs/product-specs/*.md",
 		);
@@ -160,6 +211,7 @@ async function lintProductSpecs() {
 		const fm = parseFrontmatter(raw);
 		if (!fm) {
 			err(
+				"product-spec-frontmatter",
 				`${rel} missing YAML frontmatter block`,
 				`add frontmatter with owner/status/last_verified to ${rel}`,
 			);
@@ -169,6 +221,7 @@ async function lintProductSpecs() {
 		for (const field of ["owner", "status", "last_verified"]) {
 			if (!fm[field]) {
 				err(
+					"product-spec-frontmatter",
 					`${rel} missing frontmatter field '${field}'`,
 					`add '${field}' in frontmatter for ${rel}`,
 				);
@@ -177,6 +230,7 @@ async function lintProductSpecs() {
 
 		if (fm.status && !VALID_STATUS.has(fm.status)) {
 			err(
+				"product-spec-status",
 				`${rel} has invalid status '${fm.status}'`,
 				`use one of: draft, verified, deprecated`,
 			);
@@ -184,6 +238,7 @@ async function lintProductSpecs() {
 
 		if (fm.last_verified && !DATE_RE.test(fm.last_verified)) {
 			err(
+				"product-spec-last-verified",
 				`${rel} has invalid last_verified date '${fm.last_verified}'`,
 				`use YYYY-MM-DD format for last_verified`,
 			);
@@ -195,6 +250,7 @@ async function lintProductSpecs() {
 			);
 			if (ageDays > 90) {
 				warn(
+					"product-spec-staleness",
 					`${rel} is verified but stale (${ageDays} days since last_verified)`,
 				);
 			}
@@ -205,6 +261,7 @@ async function lintProductSpecs() {
 async function lintActivePlans() {
 	if (!existsSync(EXEC_ACTIVE)) {
 		err(
+			"exec-plans-active-dir",
 			"missing directory: docs/exec-plans/active",
 			"create docs/exec-plans/active and place active execution plans there",
 		);
@@ -218,6 +275,7 @@ async function lintActivePlans() {
 		const fm = parseFrontmatter(raw);
 		if (!fm) {
 			err(
+				"exec-plan-frontmatter",
 				`${rel} missing YAML frontmatter block`,
 				`add frontmatter with owner/status/created to ${rel}`,
 			);
@@ -227,6 +285,7 @@ async function lintActivePlans() {
 		for (const field of ["owner", "status", "created"]) {
 			if (!fm[field]) {
 				err(
+					"exec-plan-frontmatter",
 					`${rel} missing frontmatter field '${field}'`,
 					`add '${field}' to frontmatter for ${rel}`,
 				);
@@ -235,6 +294,7 @@ async function lintActivePlans() {
 
 		if (!raw.includes("docs/product-specs/")) {
 			err(
+				"exec-plan-spec-link",
 				`${rel} must reference at least one docs/product-specs/* file`,
 				`add a Spec link under Context pointing to docs/product-specs/<name>.md`,
 			);
@@ -249,8 +309,11 @@ await lintProductSpecs();
 await lintActivePlans();
 
 if (errors > 0) {
+	printGroupedViolations();
+	if (warnings > 0) printWarnings();
 	console.error(`[DOCLINT] FAIL: ${errors} error(s), ${warnings} warning(s)`);
 	process.exit(1);
 }
 
+if (warnings > 0) printWarnings();
 console.log(`[DOCLINT] PASS: 0 error(s), ${warnings} warning(s)`);

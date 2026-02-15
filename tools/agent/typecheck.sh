@@ -70,23 +70,28 @@ if [ "$ENGINE" != "tsgo" ] && [ "$ENGINE" != "tsc" ]; then
   exit 64
 fi
 
+failures=0
+
 if ! run_with_engine "backend" "backend/tsconfig.json" run_backend_tsc "$ENGINE"; then
+  failures=$((failures + 1))
   echo "[TYPE] FAIL: backend type-check failed." >&2
   echo "[TYPE] Remediation: fix backend TypeScript errors shown above." >&2
-  echo "[TYPE] Protocol: re-run 'make type' until it passes." >&2
-  exit 1
 fi
 
 if ! run_with_engine "extension" "extension/tsconfig.json" run_extension_tsc "$ENGINE"; then
+  failures=$((failures + 1))
   echo "[TYPE] FAIL: extension type-check failed." >&2
   echo "[TYPE] Remediation: fix extension TypeScript errors shown above." >&2
-  echo "[TYPE] Protocol: re-run 'make type' until it passes." >&2
-  exit 1
 fi
 
 if ! (cd frontend && bun run build); then
+  failures=$((failures + 1))
   echo "[TYPE] FAIL: frontend build/type validation failed." >&2
   echo "[TYPE] Remediation: fix frontend build/type issues shown above." >&2
+fi
+
+if [ "$failures" -gt 0 ]; then
+  echo "[TYPE] FAIL: ${failures} type/build gate(s) failed." >&2
   echo "[TYPE] Protocol: re-run 'make type' until it passes." >&2
   exit 1
 fi
