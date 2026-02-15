@@ -3,6 +3,7 @@
 ## Prime Directive
 - Implement changes that satisfy acceptance criteria in `docs/product-specs/*`.
 - Initialize every feature task with `make init-feature FEATURE=<task-slug>` before editing code.
+- Never violate the golden path for any reason; if a required step fails, stop and record a blocker instead of bypassing workflow requirements.
 - Progress autonomously through PR creation with `make pr-ready` then `make pr-submit`, unless blocked or explicit human input is required.
 - If knowledge is missing, update docs under `docs/*` so future agents can discover it.
 - Do not inspect or modify `tools/*` internals unless the user explicitly requests it.
