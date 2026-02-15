@@ -37,7 +37,7 @@ Links:
 - `make check` (2026-02-15): PASS. Gates passed: workflow, fmtcheck, lint, type, test, ui, doclint, archlint, taskflow.
 
 ## PR
-- PR: pending (not requested in this task)
+- PR: https://github.com/sapountzis/Unslop/pull/7
 
 ## Blockers (optional)
 - Use docs/exec-plans/README.md blocker exception format when blocked.
