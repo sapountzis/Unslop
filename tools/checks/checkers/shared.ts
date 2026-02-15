@@ -1,6 +1,5 @@
-import path from "node:path";
 import { defineChecker } from "../core/define-checker";
-import { commandOutput, isExecutable, writeIfPresent } from "../core/runtime";
+import { commandOutput, writeIfPresent } from "../core/runtime";
 import type {
 	CheckContext,
 	Checker,
@@ -26,43 +25,48 @@ export async function runAndEmit(
 	return result;
 }
 
-export function biomeMissingToolLines(
-	prefix: "FORMAT" | "LINT",
-	retryCommand: string,
-): string[] {
-	return [
-		`[${prefix}] FAIL: Biome is not installed at './node_modules/.bin/biome'.`,
-		`[${prefix}] Remediation: run 'make setup' to install local tooling dependencies.`,
-		`[${prefix}] Protocol: run 'make setup', then re-run '${retryCommand}' until it passes.`,
-	];
-}
+const CHECK_PACKAGES = ["backend", "extension", "frontend"] as const;
+type CheckPackage = (typeof CHECK_PACKAGES)[number];
 
-export function createBiomeChecker(options: {
+export function createPackageScriptChecker(options: {
 	id: string;
 	retryCommand: string;
-	args: string[];
-	missingToolLines: string[];
-	failLines: string[];
+	prefix: "FORMAT" | "LINT";
+	script: string;
+	perPackageFailure: string;
+	remediationLine: string;
+	protocolLine: string;
+	summaryLine: string;
 	passLine: string;
 }): Checker {
 	return defineChecker({
 		id: options.id,
 		retryCommand: options.retryCommand,
 		async run(ctx) {
-			const biomePath = path.join(
-				process.cwd(),
-				"node_modules",
-				".bin",
-				"biome",
-			);
-			if (!isExecutable(biomePath)) {
-				ctx.fail(options.missingToolLines);
+			const failed: CheckPackage[] = [];
+			for (const pkg of CHECK_PACKAGES) {
+				const result = await ctx.exec({
+					args: ["bun", "run", options.script],
+					cwd: pkg,
+				});
+				if (result.exitCode === 0) {
+					continue;
+				}
+				failed.push(pkg);
+				console.error(`[${options.prefix}] FAIL: ${pkg} ${options.perPackageFailure}.`);
+				console.error(
+					`[${options.prefix}] --- ${pkg} ${options.id} log tail ---`,
+				);
+				console.error(ctx.tail(outputFor(result), 120));
+				console.error(`[${options.prefix}] --- end ${pkg} ${options.id} log ---`);
+				console.error(options.remediationLine);
 			}
-			const result = await runAndEmit(ctx, {
-				args: ["./node_modules/.bin/biome", ...options.args],
-			});
-			if (result.exitCode !== 0) {
-				ctx.fail(options.failLines);
+			if (failed.length > 0) {
+				ctx.fail([
+					`[${options.prefix}] Failed packages: ${failed.join(" ")}`,
+					options.summaryLine,
+					options.protocolLine,
+				]);
 			}
 			console.log(options.passLine);
 		},

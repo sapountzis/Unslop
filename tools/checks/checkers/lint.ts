@@ -1,14 +1,13 @@
-import { biomeMissingToolLines, createBiomeChecker } from "./shared";
+import { createPackageScriptChecker } from "./shared";
 
-export const lintChecker = createBiomeChecker({
+export const lintChecker = createPackageScriptChecker({
 	id: "lint",
 	retryCommand: "make lint",
-	args: ["lint", "--reporter=summary", "."],
-	missingToolLines: biomeMissingToolLines("LINT", "make lint"),
-	failLines: [
-		"[LINT] FAIL: Biome lint checks failed.",
-		"[LINT] Remediation: address the Biome diagnostics shown above.",
-		"[LINT] Protocol: re-run 'make lint' until it passes.",
-	],
+	prefix: "LINT",
+	script: "check:lint",
+	perPackageFailure: "lint checks failed",
+	remediationLine: "[LINT] Remediation: address the diagnostics shown above.",
+	protocolLine: "[LINT] Protocol: re-run 'make lint' until it passes.",
+	summaryLine: "[LINT] FAIL: lint checks failed.",
 	passLine: "[LINT] PASS: lint checks are compliant.",
 });

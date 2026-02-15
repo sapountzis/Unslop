@@ -4,6 +4,10 @@
 	"type": "module",
 	"scripts": {
 		"dev": "vite",
+		"check:fmt": "biome format --write .",
+		"check:fmt:verify": "biome format --reporter=summary .",
+		"check:lint": "biome lint --reporter=summary .",
+		"check:type": "bunx tsgo --noEmit -p tsconfig.json",
 		"build": "bunx tsgo --noEmit -p tsconfig.json && vite build",
 		"preview": "vite preview"
 	},
@@ -12,6 +16,7 @@
 		"chart.js": "^4.5.1"
 	},
 	"devDependencies": {
+		"@biomejs/biome": "~2.3.15",
 		"@rollup/plugin-typescript": "^12.3.0",
 		"@types/chrome": "^0.0.254",
 		"@typescript/native-preview": "latest",

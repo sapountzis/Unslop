@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { createServer } from "node:net";
 import path from "node:path";
 import { defineChecker } from "../core/define-checker";
@@ -34,14 +34,6 @@ export const uiChecker = defineChecker({
 	retryCommand: "make ui",
 	async run(ctx) {
 		const rootDir = process.cwd();
-		if (!existsSync(path.join(rootDir, "package.json"))) {
-			ctx.fail([
-				"[CHECK:UI] FAIL: no root package.json found; UI checks cannot run.",
-				"[CHECK:UI] Remediation: run 'make setup' to bootstrap root tooling.",
-				"[CHECK:UI] Protocol: re-run 'make setup', then re-run 'make ui' until it passes.",
-			]);
-		}
-
 		const tempDir = mkdtempSync(path.join(rootDir, ".tmp-check-ui."));
 		const port = await pickPort(process.env.UI_CHECK_PORT);
 		const logs: string[] = [];
@@ -98,9 +90,12 @@ export const uiChecker = defineChecker({
 					"bunx",
 					"playwright",
 					"test",
+					"--config",
+					"playwright.config.ts",
 					"--output",
 					path.join(tempDir, "test-results"),
 				],
+				cwd: "frontend",
 				env: {
 					UI_CHECK_BASE_URL: `http://127.0.0.1:${port}`,
 					PLAYWRIGHT_HTML_REPORT: path.join(tempDir, "playwright-report"),
