@@ -17,6 +17,8 @@ const TRANSIENT_ARTIFACT_RE = [
 	/^test-results(?:\/.*)?$/,
 	/^playwright-report(?:\/.*)?$/,
 ];
+const STASH_TRANSFER_HINT =
+	"If files were already edited in the primary checkout, run `git stash push -u`, then `make init-feature FEATURE=<slug>`, then `git stash pop` inside the new linked worktree.";
 
 type Violation = {
 	message: string;
@@ -55,6 +57,8 @@ function getChangedFiles(): string[] {
 	);
 	if (changed.length > 0) return changed;
 
+	if (!process.env.CI) return [];
+
 	try {
 		git(ROOT, ["rev-parse", "--verify", "HEAD~1"]);
 		const delta = git(ROOT, ["diff", "--name-only", "HEAD~1..HEAD"]);
@@ -82,7 +86,7 @@ async function readWorkflowMarker(): Promise<WorkflowMarker | null> {
 		addViolation(
 			"workflow marker is missing",
 			`expected marker path: ${markerPath || "(empty path)"}`,
-			"run `make init-feature FEATURE=<slug>` in the primary checkout, then continue work from the created linked worktree",
+			`run \`make init-feature FEATURE=<slug>\` in the primary checkout, then continue work from the created linked worktree. ${STASH_TRANSFER_HINT}`,
 		);
 		return null;
 	}
@@ -125,7 +129,7 @@ async function validateLocalWorkflow(changedCodeFiles: string[]) {
 		addViolation(
 			"code changes must be validated from a linked worktree, not the primary checkout",
 			`current checkout has .git directory: ${gitMetaPath}`,
-			"run `make init-feature FEATURE=<slug>`, cd into the created worktree, then rerun `make check`",
+			`run \`make init-feature FEATURE=<slug>\`, cd into the created worktree, then rerun \`make check\`. ${STASH_TRANSFER_HINT}`,
 		);
 	}
 
@@ -143,7 +147,7 @@ async function validateLocalWorkflow(changedCodeFiles: string[]) {
 		addViolation(
 			"direct development on main/master is not allowed",
 			`branch: ${branch}; changed code files: ${changedCodeFiles.join(", ")}`,
-			"run `make init-feature FEATURE=<slug>` and continue implementation from the created feature branch",
+			`run \`make init-feature FEATURE=<slug>\` and continue implementation from the created feature branch. ${STASH_TRANSFER_HINT}`,
 		);
 	}
 

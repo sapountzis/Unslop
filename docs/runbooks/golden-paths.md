@@ -8,6 +8,7 @@ Update trigger: changes to default delivery workflow, planning workflow, or qual
 - Relevant architecture/constitution files have been reviewed.
 - A linked feature worktree has been initialized via `make init-feature FEATURE=<task-slug>`.
 - The generated active execution plan template is filled before implementation.
+- Golden-path steps are mandatory with no bypasses; if any required step cannot run, stop and log a blocker in the active plan.
 
 ## Steps
 ### Golden Path: Feature or Refactor
