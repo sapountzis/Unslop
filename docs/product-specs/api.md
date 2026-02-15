@@ -1,4 +1,42 @@
+---
+owner: unslop
+status: verified
+last_verified: 2026-02-15
+---
+
 # API Spec (v0.1)
+
+## problem
+The extension and supporting flows need stable backend API contracts for authentication, classification, feedback, usage, and billing.
+
+## non_goals
+- Introducing non-spec endpoints or expanding beyond v0.1 product scope.
+- Breaking response contract changes without synchronized spec updates.
+
+## acceptance_criteria
+- AC1: Auth, classify, feedback, stats/usage, and billing endpoints are explicitly documented.
+- AC2: Error semantics and auth requirements are defined per endpoint.
+- AC3: Request and response payload contracts remain stable for extension/backend integration.
+
+## constraints
+- Performance: Batch classification and cache use must reduce repeated provider calls.
+- Security/Privacy: JWT auth required where specified; webhook signatures verified.
+- Compatibility: Contracts match extension runtime and billing provider expectations.
+
+## telemetry
+- Logs: Endpoint success/failure, auth failures, provider error metadata.
+- Metrics: Route latency, classification source mix, quota and webhook outcomes.
+- Traces: Request lifecycle across auth, classify, feedback, and billing handlers.
+
+## test_plan
+- Unit: Input validation, contract adapters, route error mapping.
+- Integration: Route + service + repository behavior including webhook idempotency.
+- E2E: Extension-to-API auth/classification and checkout flow validation.
+
+## rollout
+- Flags: No endpoint-level feature flags required in v0.1.
+- Migration: Contract-aligned schema changes handled via backend migrations.
+- Backout: Revert route changes while preserving backward-compatible responses.
 
 Base URL: `https://api.getunslop.com/v1`
 

@@ -1,4 +1,42 @@
+---
+owner: unslop
+status: verified
+last_verified: 2026-02-15
+---
+
 # LLM Classification (v0.1)
+
+## problem
+Classification requires deterministic routing and decision derivation on top of external LLM/VLM responses, while remaining fail-open and policy-constrained.
+
+## non_goals
+- Model training, fine-tuning, student models, or heuristic-only classifiers.
+- Runtime fallback swapping between `LLM_MODEL` and `VLM_MODEL` when config is incomplete.
+
+## acceptance_criteria
+- AC1: Model routing policy (text vs attachment-aware) is explicit and deterministic.
+- AC2: Output contract, score derivation, and final `keep|hide` thresholds are documented.
+- AC3: Failure handling, cache/event policy, and required runtime config are explicit.
+
+## constraints
+- Performance: Cache and routing must minimize redundant provider calls.
+- Security/Privacy: Provider calls should avoid unnecessary data and sensitive logging.
+- Compatibility: Contracts must align with backend classification services and API responses.
+
+## telemetry
+- Logs: Model selection, decision source, provider error metadata.
+- Metrics: Provider latency/error rate, cache miss/hit, decision distribution.
+- Traces: Classification pipeline spans including provider call boundaries.
+
+## test_plan
+- Unit: Score clamping, ladder math, threshold decisions, and routing logic.
+- Integration: Provider response parsing/validation and event persistence behavior.
+- E2E: API classification behavior for cache hit/miss and provider failure scenarios.
+
+## rollout
+- Flags: Model selection is config-driven (`LLM_MODEL`, `VLM_MODEL`), no feature flags.
+- Migration: Contract changes require synchronized API/spec updates.
+- Backout: Revert model config/code to last known-good deterministic behavior.
 
 The backend uses external LLM calls (text or multimodal) and a deterministic scoring layer.
 

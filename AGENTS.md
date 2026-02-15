@@ -1,39 +1,79 @@
-# AGENTS.md – Unslop (Root)
+# AGENTS.md - Map for Coding Agents
 
-This repo contains **Unslop**, a Chrome extension + backend API that filters social media feeds (LinkedIn, X/Twitter, Reddit) by **dimming or hiding posts based on a backend decision**.
+## Prime Directive
+- Implement changes that satisfy acceptance criteria in `docs/product-specs/*`.
+- Always run `make check` before opening a PR.
+- If knowledge is missing, update docs under `docs/*` so future agents can discover it.
 
-## Project layout
+## Start Here
+1) `docs/index.md`
+2) `ARCHITECTURE.md`
+3) `docs/core-beliefs.md`
+4) `docs/product-specs/index.md`
+5) `docs/exec-plans/active/`
 
-- `backend/` – Bun + Hono API, Postgres via Neon, Drizzle ORM.
-- `extension/` – Chrome extension (Manifest V3): content script + background + popup.
-- `frontend/` – Static site for `getunslop.com` (landing + privacy/support pages).
-- `spec/` – Source-of-truth specs.
+## Task-to-Spec Mapping
+- Start from `docs/product-specs/index.md` and map the incoming task to at least one spec.
+- If no spec applies, create or update a spec in `docs/product-specs/` before implementation.
+- Use `last_verified` as a freshness signal. If stale or unclear, refresh the spec in the same change.
 
-## Submodule constitutions
+## Commands
+- `make setup`   # install dependencies and local tooling
+- `make fmt`     # apply formatting fixes
+- `make check`   # non-mutating gate: fmtcheck + lint + type + test + ui + doclint + archlint
+- `make ui`      # UI gate only
+- `make test`    # tests only
 
-- For any change under `backend/`, `backend/AGENTS.md` is binding and must be treated as the backend development constitution (quality gates, boundaries, allowed/prohibited behavior).
+## Golden Path (Default)
+1) Choose the governing spec from `docs/product-specs/index.md`.
+2) Read related architecture and runbooks from `ARCHITECTURE.md` and `docs/runbooks/`.
+3) Create or update one plan in `docs/exec-plans/active/<task>.md` using `docs/exec-plans/README.md`.
+4) Implement minimal scoped changes.
+5) Run required checks and capture results in the plan.
+6) Update specs/runbooks/quality docs before marking complete.
 
-Start here: `spec/spec.md`.
+Canonical variants live in `docs/runbooks/golden-paths.md`.
 
-## Global rules
+## Workflow
+1) Read relevant product specs in `docs/product-specs/`.
+2) Create/update an execution plan in `docs/exec-plans/active/<task>.md`.
+3) Implement changes in small commits.
+4) Run `make check` and fix issues until passing.
+5) Update docs/specs/decisions when behavior changes.
+6) Open a focused PR with links to spec and plan.
 
-- Keep the implementation **minimal**:
-  - No model training.
-  - No “student model”.
-  - No heuristic classifier.
-  - No per-author rules or author-level tuning.
-  - No dashboards or analytics UI.
+## Completion Criteria (Definition of Done)
+- Task completion requires all of the following:
+  - Governing specs/runbooks/docs are updated for the delivered behavior.
+  - Verification evidence in the task plan is current and command-specific.
+  - `make check` passes from repository root.
 
-- The system should do only:
-  1) Extension extracts a post and asks the API for a decision.
-  2) API calls an LLM (via an inference provider) when needed.
-  3) API stores the decision + minimal metadata in Postgres.
-  4) Extension applies the decision (hide/keep) and can send feedback.
-  5) Auth + subscription billing + usage quotas.
-  6) A minimal public site that hosts install links + privacy + support.
+## Plan/Task Lifecycle
+1) Start: create or update one plan in `docs/exec-plans/active/` with `status: active`.
+2) During execution: keep steps, risks, and verification evidence current after each material change.
+3) Finalize:
+   - confirm completion criteria are satisfied;
+   - set plan frontmatter to `status: completed` and add `completed: <YYYY-MM-DD>`;
+   - move the plan file to `docs/exec-plans/completed/`.
+4) If blocked: keep the plan in `active/`, capture the blocker + owner action in the standard exception format, and do not mark completed.
 
-## Safety
+## Keeping Docs Fresh
+- Follow `docs/runbooks/docs-freshness.md` on every meaningful change.
+- Run `docs/runbooks/quality-review.md` weekly during active development and after medium/large changes.
+- Keep `docs/quality/QUALITY_SCORE.md` and `docs/quality/tech-debt.md` aligned with real evidence.
 
-- Never log or store secrets (JWTs, API keys).
-- Avoid logging full post text at high volume in production logs (DB storage is per spec; logs must remain minimal).
-- Billing changes must update `spec/billing.md` and `spec/api.md`.
+## Escalate To Humans When
+- Product specs are ambiguous or missing.
+- Security, privacy, compliance, or billing policy changes are involved.
+- A decision has broad cross-domain impact.
+
+## Repository-Specific Boundaries
+- This repo implements a minimal Chrome extension + backend + site.
+- Do not add model training, student models, heuristic classifiers, per-author tuning, or analytics dashboards.
+- Backend constitution is binding for backend changes: `backend/AGENTS.md`.
+- Extension constitution is binding for extension changes: `extension/AGENTS.md`.
+- Never guess dependency versions from memory; verify using repository manifests/lockfiles or explicit prompt instructions.
+
+## Documentation Rule
+`AGENTS.md` is the table of contents, not the encyclopedia.
+Authoritative details belong in `docs/` and are mechanically checked by lint + CI.

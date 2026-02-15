@@ -1,4 +1,42 @@
+---
+owner: unslop
+status: verified
+last_verified: 2026-02-15
+---
+
 # Data Model (v0.1)
+
+## problem
+Backend services require a clear, enforceable schema for identity, classification caching/events, feedback, usage, and billing idempotency.
+
+## non_goals
+- Analytics-only tables and speculative storage not tied to v0.1 behavior.
+- Ambiguous schema ownership outside `backend/src/db/schema.ts`.
+
+## acceptance_criteria
+- AC1: Core tables and invariants are documented and map to backend schema source of truth.
+- AC2: Cache, event, feedback, usage, and webhook idempotency data policies are explicit.
+- AC3: Decision-domain and retention-related schema semantics are consistent with product specs.
+
+## constraints
+- Performance: Indexes support high-frequency classify/event/write paths.
+- Security/Privacy: Store minimal required fields and avoid unnecessary sensitive duplication.
+- Compatibility: Schema must align with repository/service contracts and migrations.
+
+## telemetry
+- Logs: Migration outcomes, write failures, and integrity violations.
+- Metrics: Table growth, cache hit/write rates, event/error persistence rates.
+- Traces: DB operation spans for classify, billing, and feedback flows.
+
+## test_plan
+- Unit: Repository-level invariants and serialization assumptions.
+- Integration: Migration compatibility and repository behavior against real DB.
+- E2E: End-to-end classify/billing paths persist expected rows.
+
+## rollout
+- Flags: No schema flags; use explicit migrations.
+- Migration: Drizzle-managed forward migrations with reversible-safe sequencing.
+- Backout: Roll back app code and apply DB rollback procedures when supported.
 
 Database: Postgres (Neon in production).
 

@@ -1,4 +1,42 @@
+---
+owner: unslop
+status: verified
+last_verified: 2026-02-15
+---
+
 # Frontend (Public Site) Spec (v0.1)
+
+## problem
+The product requires a trustworthy public web presence with stable policy/support pages and install CTA, without becoming an app surface.
+
+## non_goals
+- Application dashboard features, analytics surfaces, or account management UI.
+- Dynamic tracking, cookie banners driven by trackers, or marketing expansion beyond core pages.
+
+## acceptance_criteria
+- AC1: Required pages (`/`, `/privacy`, `/support`) exist with required content blocks.
+- AC2: Privacy copy reflects actual data usage and processors.
+- AC3: Site remains static and deployable without a runtime backend dependency.
+
+## constraints
+- Performance: Static pages should load quickly with minimal assets.
+- Security/Privacy: No analytics scripts, tracking pixels, or cookies by default.
+- Compatibility: Works on static hosting with HTTPS and optional apex/www redirect.
+
+## telemetry
+- Logs: Hosting-level access/error logs only when needed for ops.
+- Metrics: Basic uptime and page availability checks.
+- Traces: Not required for static-site baseline.
+
+## test_plan
+- Unit: Not required for static content-focused pages.
+- Integration: Link integrity and policy/support route availability checks.
+- E2E: UI smoke for required pages and CTA/navigation links.
+
+## rollout
+- Flags: No feature flags required for static content rollout.
+- Migration: Content changes ship as static deploy updates.
+- Backout: Re-deploy previous static bundle.
 
 This is the static website served at:
 

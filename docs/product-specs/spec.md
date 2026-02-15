@@ -1,4 +1,43 @@
+---
+owner: unslop
+status: verified
+last_verified: 2026-02-15
+---
+
 # Unslop – Minimal Project Spec (v0.1)
+
+## problem
+Users need a minimal, fail-open way to filter low-value LinkedIn feed content without introducing brittle UI complexity.
+
+## non_goals
+- Model training, student models, or heuristic classifiers.
+- Per-author tuning/rules and analytics dashboards.
+- Non-extension product surfaces (mobile app, web app dashboard).
+
+## acceptance_criteria
+- AC1: Extension can classify and render `keep|hide` decisions without breaking browsing.
+- AC2: Backend provides auth, classification, billing, and quota behavior defined by linked specs.
+- AC3: Public site exposes install, privacy, and support pages with static hosting constraints.
+
+## constraints
+- Performance: Classification must fail open and tolerate provider failures/timeouts.
+- Security/Privacy: Minimize stored data and avoid sensitive payload leakage in logs.
+- Compatibility: Must work with Chrome MV3, backend API, and static site deployment.
+
+## telemetry
+- Logs: Classification outcomes, source (`llm|cache|error`), and high-level errors.
+- Metrics: Classification throughput/latency, cache hit rate, quota enforcement rates.
+- Traces: Request-level auth/classification/billing route execution where available.
+
+## test_plan
+- Unit: Domain constants, scoring logic, extension rendering primitives.
+- Integration: API routes, billing webhooks, quota enforcement, repository behavior.
+- E2E: Auth + classify + extension runtime + UI smoke.
+
+## rollout
+- Flags: No feature flags required for v0.1 scope.
+- Migration: Data schema evolves through Drizzle migrations.
+- Backout: Revert deployment and rollback migration-compatible changes as needed.
 
 Unslop is a Chrome extension + backend API that filters the LinkedIn feed by **hiding posts** according to a backend decision.
 

@@ -28,9 +28,9 @@ The extension uses a **platform plugin system** to support multiple social media
 - Feedback is in-scope: user can mark a decision wrong (stored by backend).
 
 Refer to:
-- `../spec/extension.md`
-- `../spec/api.md`
-- `../spec/spec.md`
+- `../docs/product-specs/extension.md`
+- `../docs/product-specs/api.md`
+- `../docs/product-specs/spec.md`
 - `./docs/constitution.md` (binding extension constitution)
 
 ## Setup & dev commands
