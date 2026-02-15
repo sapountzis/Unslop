@@ -110,7 +110,7 @@ Full step-by-step instructions in `backend/README.md`.
 
 | Workflow | Trigger | Steps |
 |----------|---------|-------|
-| `backend-ci.yml` | PR → `backend/**` | `bun install` → `type check` → `bun run test` |
+| `ci.yml` | Push/PR → `main`/`master` | `make setup` → `make check` |
 | `deploy-backend.yml` | Push to `main` → `backend/**` | `bun install` → `drizzle-kit migrate` → `wrangler deploy` |
 
 ## Frontend deploy (static site)
