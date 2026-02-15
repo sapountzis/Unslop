@@ -2,6 +2,7 @@
 import { existsSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { git, parseStatusPaths, unique } from "./shared";
 
 const ROOT = process.cwd();
 const BRANCH_RE = /^(feat|fix|chore|docs|refactor)\/[a-z0-9][a-z0-9-]*$/;
@@ -39,50 +40,6 @@ function addViolation(message: string, evidence: string, remediation: string) {
 	violations.push({ message, evidence, remediation });
 }
 
-function git(args: string[]): string {
-	const proc = Bun.spawnSync(["git", ...args], {
-		cwd: ROOT,
-		stdout: "pipe",
-		stderr: "pipe",
-	});
-	if (proc.exitCode !== 0) {
-		const stderr = Buffer.from(proc.stderr).toString("utf8").trim();
-		throw new Error(
-			`git ${args.join(" ")} failed${stderr ? `: ${stderr}` : ""}`,
-		);
-	}
-	return Buffer.from(proc.stdout).toString("utf8");
-}
-
-function normalizeStatusPath(rawPath: string): string {
-	let p = rawPath.trim();
-	if (p.includes(" -> ")) {
-		const pieces = p.split(" -> ");
-		p = pieces[pieces.length - 1];
-	}
-
-	if (p.startsWith('"') && p.endsWith('"')) {
-		p = p.slice(1, -1).replaceAll('\\"', '"').replaceAll("\\\\", "\\");
-	}
-
-	return p;
-}
-
-function parseStatusPaths(raw: string): string[] {
-	const out: string[] = [];
-	for (const line of raw.split("\n")) {
-		if (!line.trim()) continue;
-		if (line.length < 4) continue;
-		const p = normalizeStatusPath(line.slice(3));
-		if (p) out.push(p);
-	}
-	return out;
-}
-
-function unique(items: string[]): string[] {
-	return [...new Set(items)];
-}
-
 function isTransientArtifactPath(rel: string): boolean {
 	return TRANSIENT_ARTIFACT_RE.some((re) => re.test(rel));
 }
@@ -92,15 +49,15 @@ function isDocPath(rel: string): boolean {
 }
 
 function getChangedFiles(): string[] {
-	const porcelain = git(["status", "--porcelain"]);
+	const porcelain = git(ROOT, ["status", "--porcelain"]);
 	let changed = unique(parseStatusPaths(porcelain)).filter(
 		(relPath) => !isTransientArtifactPath(relPath),
 	);
 	if (changed.length > 0) return changed;
 
 	try {
-		git(["rev-parse", "--verify", "HEAD~1"]);
-		const delta = git(["diff", "--name-only", "HEAD~1..HEAD"]);
+		git(ROOT, ["rev-parse", "--verify", "HEAD~1"]);
+		const delta = git(ROOT, ["diff", "--name-only", "HEAD~1..HEAD"]);
 		changed = unique(
 			delta
 				.split("\n")
@@ -116,7 +73,7 @@ function getChangedFiles(): string[] {
 }
 
 async function readWorkflowMarker(): Promise<WorkflowMarker | null> {
-	const markerPath = git([
+	const markerPath = git(ROOT, [
 		"rev-parse",
 		"--git-path",
 		"unslop-workflow.json",
@@ -172,7 +129,7 @@ async function validateLocalWorkflow(changedCodeFiles: string[]) {
 		);
 	}
 
-	const branch = git(["rev-parse", "--abbrev-ref", "HEAD"]).trim();
+	const branch = git(ROOT, ["rev-parse", "--abbrev-ref", "HEAD"]).trim();
 	if (branch === "HEAD") {
 		addViolation(
 			"detached HEAD is not allowed for feature implementation",

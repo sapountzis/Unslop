@@ -2,6 +2,7 @@
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { git, parseStatusPaths, unique } from "./shared";
 
 const ROOT = process.cwd();
 const PLAN_PATH_RE = /^docs\/exec-plans\/(active|completed)\/[^/]+\.md$/;
@@ -55,50 +56,6 @@ function parseFrontmatter(raw: string): Record<string, string> | null {
 		fm[key] = val;
 	}
 	return fm;
-}
-
-function git(args: string[]): string {
-	const proc = Bun.spawnSync(["git", ...args], {
-		cwd: ROOT,
-		stdout: "pipe",
-		stderr: "pipe",
-	});
-	if (proc.exitCode !== 0) {
-		const stderr = Buffer.from(proc.stderr).toString("utf8").trim();
-		throw new Error(
-			`git ${args.join(" ")} failed${stderr ? `: ${stderr}` : ""}`,
-		);
-	}
-	return Buffer.from(proc.stdout).toString("utf8");
-}
-
-function normalizeStatusPath(rawPath: string): string {
-	let p = rawPath.trim();
-	if (p.includes(" -> ")) {
-		const pieces = p.split(" -> ");
-		p = pieces[pieces.length - 1];
-	}
-
-	if (p.startsWith('"') && p.endsWith('"')) {
-		p = p.slice(1, -1).replaceAll('\\"', '"').replaceAll("\\\\", "\\");
-	}
-
-	return p;
-}
-
-function parseStatusPaths(raw: string): string[] {
-	const out: string[] = [];
-	for (const line of raw.split("\n")) {
-		if (!line.trim()) continue;
-		if (line.length < 4) continue;
-		const p = normalizeStatusPath(line.slice(3));
-		if (p) out.push(p);
-	}
-	return out;
-}
-
-function unique(items: string[]): string[] {
-	return [...new Set(items)];
 }
 
 function isTransientArtifactPath(rel: string): boolean {
@@ -162,7 +119,7 @@ function addViolation(message: string, evidence: string, remediation: string) {
 }
 
 function getChangedFiles(): string[] {
-	const porcelain = git(["status", "--porcelain"]);
+	const porcelain = git(ROOT, ["status", "--porcelain"]);
 	let changed = unique(
 		parseStatusPaths(porcelain).flatMap((relPath) =>
 			collectFilesRecursive(relPath),
@@ -172,8 +129,8 @@ function getChangedFiles(): string[] {
 
 	// CI/worktree-clean fallback: inspect latest commit delta.
 	try {
-		git(["rev-parse", "--verify", "HEAD~1"]);
-		const delta = git(["diff", "--name-only", "HEAD~1..HEAD"]);
+		git(ROOT, ["rev-parse", "--verify", "HEAD~1"]);
+		const delta = git(ROOT, ["diff", "--name-only", "HEAD~1..HEAD"]);
 		changed = unique(
 			delta
 				.split("\n")

@@ -1,7 +1,7 @@
 .PHONY: setup init-feature fmt fmtcheck lint type test ui doclint archlint workflow taskflow pr-ready pr-submit pr-cleanup check
 
 setup:
-	bash ./tools/agent/run_with_cleanup.sh bash ./dev/setup.sh
+	bun run ./tools/checks/cli.ts setup
 
 init-feature:
 	@if [ -z "$(FEATURE)" ]; then \
@@ -11,43 +11,43 @@ init-feature:
 	bash ./tools/agent/init_feature.sh "$(FEATURE)" "$(BASE)" "$(WORKTREE_ROOT)"
 
 fmt:
-	bash ./tools/agent/run_with_cleanup.sh bash ./tools/agent/check.sh fmt
+	bun run ./tools/checks/cli.ts check fmt
 
 fmtcheck:
-	bash ./tools/agent/run_with_cleanup.sh bash ./tools/agent/check.sh fmtcheck
+	bun run ./tools/checks/cli.ts check fmtcheck
 
 lint:
-	bash ./tools/agent/run_with_cleanup.sh bash ./tools/agent/check.sh lint
+	bun run ./tools/checks/cli.ts check lint
 
 type:
-	bash ./tools/agent/run_with_cleanup.sh bash ./tools/agent/check.sh type
+	bun run ./tools/checks/cli.ts check type
 
 test:
-	bash ./tools/agent/run_with_cleanup.sh bash ./tools/agent/check.sh test
+	bun run ./tools/checks/cli.ts check test
 
 ui:
-	bash ./tools/agent/run_with_cleanup.sh bash ./tools/agent/check.sh ui
+	bun run ./tools/checks/cli.ts check ui
 
 doclint:
-	bash ./tools/agent/run_with_cleanup.sh bash ./tools/agent/check.sh doclint
+	bun run ./tools/checks/cli.ts check doclint
 
 archlint:
-	bash ./tools/agent/run_with_cleanup.sh bash ./tools/agent/check.sh archlint
+	bun run ./tools/checks/cli.ts check archlint
 
 workflow:
-	bash ./tools/agent/run_with_cleanup.sh bash ./tools/agent/check.sh workflow
+	bun run ./tools/checks/cli.ts check workflow
 
 taskflow:
-	bash ./tools/agent/run_with_cleanup.sh bash ./tools/agent/check.sh taskflow
+	bun run ./tools/checks/cli.ts check taskflow
 
 pr-ready:
-	bash ./tools/agent/run_with_cleanup.sh bash ./tools/agent/pr_ready.sh
+	bun run ./tools/checks/cli.ts pr-ready
 
 pr-submit:
-	bash ./tools/agent/run_with_cleanup.sh bash ./tools/agent/pr_submit.sh
+	bun run ./tools/checks/cli.ts pr-submit
 
 pr-cleanup:
-	bash ./tools/agent/run_with_cleanup.sh bash ./tools/agent/post_pr_cleanup.sh
+	bun run ./tools/checks/cli.ts pr-cleanup
 
 check:
-	bash ./tools/agent/run_with_cleanup.sh bash ./tools/agent/check.sh all
+	bun run ./tools/checks/cli.ts check all
