@@ -70,23 +70,47 @@ if [ "$ENGINE" != "tsgo" ] && [ "$ENGINE" != "tsc" ]; then
   exit 64
 fi
 
-if ! run_with_engine "backend" "backend/tsconfig.json" run_backend_tsc "$ENGINE"; then
+failures=0
+failed_components=()
+TMP_DIR="$(mktemp -d "${ROOT_DIR}/.tmp-type.XXXXXX")"
+trap 'rm -rf "$TMP_DIR"' EXIT
+
+BACKEND_LOG="$TMP_DIR/backend.log"
+if ! run_with_engine "backend" "backend/tsconfig.json" run_backend_tsc "$ENGINE" >"$BACKEND_LOG" 2>&1; then
+  failures=$((failures + 1))
+  failed_components+=("backend")
   echo "[TYPE] FAIL: backend type-check failed." >&2
+  echo "[TYPE] --- backend type log tail ---" >&2
+  tail -n 120 "$BACKEND_LOG" >&2 || true
+  echo "[TYPE] --- end backend type log ---" >&2
   echo "[TYPE] Remediation: fix backend TypeScript errors shown above." >&2
-  echo "[TYPE] Protocol: re-run 'make type' until it passes." >&2
-  exit 1
 fi
 
-if ! run_with_engine "extension" "extension/tsconfig.json" run_extension_tsc "$ENGINE"; then
+EXTENSION_LOG="$TMP_DIR/extension.log"
+if ! run_with_engine "extension" "extension/tsconfig.json" run_extension_tsc "$ENGINE" >"$EXTENSION_LOG" 2>&1; then
+  failures=$((failures + 1))
+  failed_components+=("extension")
   echo "[TYPE] FAIL: extension type-check failed." >&2
+  echo "[TYPE] --- extension type log tail ---" >&2
+  tail -n 120 "$EXTENSION_LOG" >&2 || true
+  echo "[TYPE] --- end extension type log ---" >&2
   echo "[TYPE] Remediation: fix extension TypeScript errors shown above." >&2
-  echo "[TYPE] Protocol: re-run 'make type' until it passes." >&2
-  exit 1
 fi
 
-if ! (cd frontend && bun run build); then
+FRONTEND_LOG="$TMP_DIR/frontend.log"
+if ! (cd frontend && bun run build) >"$FRONTEND_LOG" 2>&1; then
+  failures=$((failures + 1))
+  failed_components+=("frontend")
   echo "[TYPE] FAIL: frontend build/type validation failed." >&2
+  echo "[TYPE] --- frontend type log tail ---" >&2
+  tail -n 120 "$FRONTEND_LOG" >&2 || true
+  echo "[TYPE] --- end frontend type log ---" >&2
   echo "[TYPE] Remediation: fix frontend build/type issues shown above." >&2
+fi
+
+if [ "$failures" -gt 0 ]; then
+  echo "[TYPE] Failed components: ${failed_components[*]}" >&2
+  echo "[TYPE] FAIL: ${failures} type/build gate(s) failed." >&2
   echo "[TYPE] Protocol: re-run 'make type' until it passes." >&2
   exit 1
 fi

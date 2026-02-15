@@ -10,8 +10,6 @@
 1) `docs/index.md`
 2) `ARCHITECTURE.md`
 3) `docs/core-beliefs.md`
-4) `docs/product-specs/index.md`
-5) `docs/exec-plans/active/`
 
 ## Task-to-Spec Mapping
 - Map every task to at least one spec from `docs/product-specs/index.md`.
@@ -21,35 +19,28 @@
 
 ## Commands
 - `make setup`   # install dependencies and local tooling
-- `make init-feature FEATURE=<task-slug>` # sync base, create linked worktree+branch, seed plan, bootstrap env/setup
+- `make init-feature FEATURE=<task-slug>` # start a new feature task workspace
 - `make fmt`     # apply formatting fixes
 - `make check`   # canonical non-mutating quality gate
 - `make ui`      # UI gate only
 - `make test`    # tests only
-- `make workflow` # linked-worktree + branch + plan workflow gate
-- `make taskflow` # execution-plan lifecycle + loop evidence gate
+- `make workflow` # workflow-compliance gate
+- `make taskflow` # plan-lifecycle gate
 - `make pr-ready` # required PR readiness gate before submission
-- `make pr-submit` # submit command: push + PR create/reuse + cleanup scheduling
+- `make pr-submit` # submit command: push + PR create/reuse + verified local cleanup
 - `make pr-cleanup` # manual local linked-worktree cleanup helper
 
 ## Golden Path (Default)
-- Run `make init-feature FEATURE=<task-slug>` from the primary checkout.
-- Fill the generated plan before code edits and map governing specs.
-- Iterate `(edit -> make check -> review notes)` until clean.
-- Finalize the plan lifecycle, then run `make pr-ready` and `make pr-submit` back-to-back.
 - Canonical flow + variants: `docs/runbooks/golden-paths.md`.
+- Plan lifecycle, completion protocol, and blocker format: `docs/exec-plans/README.md`.
 
 ## Completion Criteria (Definition of Done)
-- Task completion requires all of the following:
-  - Governing specs/runbooks/docs are updated for the delivered behavior.
-  - Verification evidence in the task plan is current and command-specific.
-  - `make check` passes from repository root.
-  - PR is created or reused via `make pr-ready` + `make pr-submit`, unless an active-plan blocker note records required human input.
+- Source of truth: `docs/exec-plans/README.md#definition-of-done`.
+- Enforce via `make check`, `make pr-ready`, and `make pr-submit`.
 
 ## Plan/Task Lifecycle
 - Follow `docs/exec-plans/README.md` for lifecycle details and blocker exception format.
-- Keep exactly one active plan, keep evidence current, and move it to `completed/` only when done.
-- Blocker policy source of truth: `docs/exec-plans/README.md#environment-blocker-exception-format`.
+- Keep exactly one active plan and keep evidence current throughout execution.
 
 ## Keeping Docs Fresh
 - Follow `docs/runbooks/docs-freshness.md` on every meaningful change.

@@ -8,12 +8,18 @@ if [ "$#" -eq 0 ]; then
   exit 64
 fi
 
-bash "$ROOT_DIR/tools/agent/cleanup_tmp_artifacts.sh"
+if [ -f "$ROOT_DIR/tools/agent/cleanup_tmp_artifacts.sh" ]; then
+  bash "$ROOT_DIR/tools/agent/cleanup_tmp_artifacts.sh"
+fi
 
 set +e
 (cd "$ROOT_DIR" && "$@")
 status=$?
 set -e
 
-bash "$ROOT_DIR/tools/agent/cleanup_tmp_artifacts.sh"
+if [ -f "$ROOT_DIR/tools/agent/cleanup_tmp_artifacts.sh" ]; then
+  bash "$ROOT_DIR/tools/agent/cleanup_tmp_artifacts.sh"
+else
+  echo "[CLEANUP] INFO: skipped post-command temp cleanup because worktree is no longer available." >&2
+fi
 exit "$status"
