@@ -6,6 +6,13 @@ import path from "node:path";
 const ROOT = process.cwd();
 const PLAN_PATH_RE = /^docs\/exec-plans\/(active|completed)\/[^/]+\.md$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const TRANSIENT_ARTIFACT_RE = [
+	/^\.tmp-check\.[^/]+(?:\/.*)?$/,
+	/^\.tmp-check-ui\.[^/]+(?:\/.*)?$/,
+	/^\.tmp-setup\.[^/]+(?:\/.*)?$/,
+	/^test-results(?:\/.*)?$/,
+	/^playwright-report(?:\/.*)?$/,
+];
 
 type Violation = {
 	message: string;
@@ -73,6 +80,10 @@ function unique(items: string[]): string[] {
 	return [...new Set(items)];
 }
 
+function isTransientArtifactPath(rel: string): boolean {
+	return TRANSIENT_ARTIFACT_RE.some((re) => re.test(rel));
+}
+
 function collectFilesRecursive(relDir: string): string[] {
 	const absDir = path.join(ROOT, relDir);
 	if (!existsSync(absDir)) return [];
@@ -115,7 +126,7 @@ function getChangedFiles(): string[] {
 		parseStatusPaths(porcelain).flatMap((relPath) =>
 			collectFilesRecursive(relPath),
 		),
-	);
+	).filter((relPath) => !isTransientArtifactPath(relPath));
 	if (changed.length > 0) return changed;
 
 	// CI/worktree-clean fallback: inspect latest commit delta.
@@ -126,7 +137,8 @@ function getChangedFiles(): string[] {
 			delta
 				.split("\n")
 				.map((line) => line.trim())
-				.filter((line) => line.length > 0),
+				.filter((line) => line.length > 0)
+				.filter((line) => !isTransientArtifactPath(line)),
 		);
 	} catch {
 		return [];
