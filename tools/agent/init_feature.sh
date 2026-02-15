@@ -8,11 +8,57 @@ WORKTREE_ROOT="${3:-${WORKTREE_ROOT:-/tmp/unslop-worktrees}}"
 BRANCH_PREFIX="${BRANCH_PREFIX:-feat}"
 AUTO_SETUP="${AUTO_SETUP:-1}"
 BOOTSTRAP_ENV="${BOOTSTRAP_ENV:-1}"
+AUTO_SYNC_BASE="${AUTO_SYNC_BASE:-1}"
+BASE_REF=""
 
 usage() {
   cat <<USAGE >&2
-Usage: make init-feature FEATURE=<slug> [BASE=<main|master>] [WORKTREE_ROOT=/tmp/unslop-worktrees] [BRANCH_PREFIX=feat] [AUTO_SETUP=1] [BOOTSTRAP_ENV=1]
+Usage: make init-feature FEATURE=<slug> [BASE=<main|master>] [WORKTREE_ROOT=/tmp/unslop-worktrees] [BRANCH_PREFIX=feat] [AUTO_SETUP=1] [BOOTSTRAP_ENV=1] [AUTO_SYNC_BASE=1]
 USAGE
+}
+
+resolve_base_ref() {
+  local remote_ref="refs/remotes/origin/${BASE_BRANCH}"
+
+  if [ "$AUTO_SYNC_BASE" != "1" ]; then
+    if git -C "$ROOT_DIR" show-ref --verify --quiet "$remote_ref"; then
+      BASE_REF="origin/${BASE_BRANCH}"
+      return
+    fi
+    if git -C "$ROOT_DIR" show-ref --verify --quiet "refs/heads/${BASE_BRANCH}"; then
+      BASE_REF="${BASE_BRANCH}"
+      return
+    fi
+    echo "[INIT] FAIL: BASE branch not found locally or on origin: ${BASE_BRANCH}" >&2
+    exit 1
+  fi
+
+  if ! git -C "$ROOT_DIR" remote get-url origin >/dev/null 2>&1; then
+    echo "[INIT] FAIL: git remote 'origin' is required for base sync." >&2
+    echo "[INIT] Remediation: add origin remote or re-run with AUTO_SYNC_BASE=0 and explicit BASE=<local-branch>." >&2
+    exit 1
+  fi
+
+  echo "[INIT] Syncing latest base from origin/${BASE_BRANCH}..."
+  if ! git -C "$ROOT_DIR" fetch origin "${BASE_BRANCH}"; then
+    echo "[INIT] FAIL: unable to fetch latest base branch from origin/${BASE_BRANCH}." >&2
+    echo "[INIT] Remediation: verify network/auth and rerun init." >&2
+    exit 1
+  fi
+
+  if git -C "$ROOT_DIR" show-ref --verify --quiet "$remote_ref"; then
+    BASE_REF="origin/${BASE_BRANCH}"
+    return
+  fi
+
+  if git -C "$ROOT_DIR" show-ref --verify --quiet "refs/heads/${BASE_BRANCH}"; then
+    BASE_REF="${BASE_BRANCH}"
+    echo "[INIT] WARN: remote ref origin/${BASE_BRANCH} unavailable; falling back to local ${BASE_BRANCH}." >&2
+    return
+  fi
+
+  echo "[INIT] FAIL: BASE branch not found after sync: ${BASE_BRANCH}" >&2
+  exit 1
 }
 
 bootstrap_env_file() {
@@ -85,17 +131,10 @@ if [ -e "$WORKTREE_PATH" ]; then
   exit 1
 fi
 
-if ! git -C "$ROOT_DIR" show-ref --verify --quiet "refs/heads/${BASE_BRANCH}"; then
-  if git -C "$ROOT_DIR" show-ref --verify --quiet "refs/remotes/origin/${BASE_BRANCH}"; then
-    git -C "$ROOT_DIR" fetch origin "${BASE_BRANCH}:${BASE_BRANCH}"
-  else
-    echo "[INIT] FAIL: BASE branch not found locally or on origin: ${BASE_BRANCH}" >&2
-    exit 1
-  fi
-fi
+resolve_base_ref
 
 mkdir -p "$WORKTREE_ROOT"
-git -C "$ROOT_DIR" worktree add -b "$BRANCH_NAME" "$WORKTREE_PATH" "$BASE_BRANCH"
+git -C "$ROOT_DIR" worktree add -b "$BRANCH_NAME" "$WORKTREE_PATH" "$BASE_REF"
 
 TODAY="$(date +%F)"
 PLAN_REL="docs/exec-plans/active/${TODAY}-${FEATURE_SLUG}.md"
@@ -153,6 +192,7 @@ cat > "$MARKER_PATH" <<MARKER
   "worktree_path": "${WORKTREE_PATH}",
   "plan_path": "${PLAN_REL}",
   "base_branch": "${BASE_BRANCH}",
+  "base_ref": "${BASE_REF}",
   "initialized_at": "${TODAY}"
 }
 MARKER
@@ -173,6 +213,7 @@ fi
 echo "[INIT] PASS: created worktree workflow for '${FEATURE_SLUG}'."
 echo "[INIT] Worktree: ${WORKTREE_PATH}"
 echo "[INIT] Branch:   ${BRANCH_NAME}"
+echo "[INIT] Base Ref: ${BASE_REF}"
 echo "[INIT] Plan:     ${PLAN_REL}"
 echo "[INIT]"
 if [ "$AUTO_SETUP" = "1" ]; then

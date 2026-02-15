@@ -10,7 +10,7 @@ This repository is agent-first. `AGENTS.md` is the map; `docs/` is the system of
 5. `docs/exec-plans/active/`
 
 ## Quick Start For A New Task
-1. Run `make init-feature FEATURE=<task-slug>` from the primary checkout (creates worktree, bootstraps env, runs setup).
+1. Run `make init-feature FEATURE=<task-slug>` from the primary checkout (syncs base from origin, creates worktree, bootstraps env, runs setup).
 2. Fill the generated active plan template before any code edits.
 3. Map the task to one or more specs in `docs/product-specs/index.md`.
 4. Implement minimal scoped changes from the created linked worktree.

@@ -11,7 +11,7 @@ Update trigger: changes to default delivery workflow, planning workflow, or qual
 
 ## Steps
 ### Golden Path: Feature or Refactor
-1. Run `make init-feature FEATURE=<task-slug>` from the primary checkout (worktree + setup + env bootstrap).
+1. Run `make init-feature FEATURE=<task-slug>` from the primary checkout (sync base from origin, then worktree + setup + env bootstrap).
 2. Fill the generated active plan (`docs/exec-plans/active/<yyyy-mm-dd>-<task-slug>.md`) before coding.
 3. Map the request to governing specs in `docs/product-specs/index.md`.
 4. Read constraints in `ARCHITECTURE.md`, `backend/AGENTS.md`, and/or `extension/AGENTS.md` as needed.
