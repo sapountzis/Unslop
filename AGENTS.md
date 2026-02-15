@@ -20,7 +20,7 @@
 
 ## Commands
 - `make setup`   # install dependencies and local tooling
-- `make init-feature FEATURE=<task-slug>` # create linked worktree + branch + active plan template
+- `make init-feature FEATURE=<task-slug>` # create linked worktree + branch + active plan template + setup/env bootstrap
 - `make fmt`     # apply formatting fixes
 - `make check`   # non-mutating gate: workflow + fmtcheck + lint + type + test + ui + doclint + archlint + taskflow
 - `make ui`      # UI gate only
@@ -28,7 +28,8 @@
 - `make workflow` # linked-worktree + branch + plan workflow gate
 - `make taskflow` # execution-plan lifecycle + loop evidence gate
 - `make pr-ready` # PR readiness gate (clean tree + completed plan + full check)
-- `make pr-submit` # create PR through `gh` after readiness validation
+- `make pr-submit` # create PR through `gh` after readiness validation and schedule local worktree cleanup
+- `make pr-cleanup` # manual local linked-worktree cleanup helper
 
 ## Golden Path (Default)
 1) Run `make init-feature FEATURE=<task-slug>` from the primary checkout.

@@ -1,4 +1,4 @@
-.PHONY: setup init-feature fmt fmtcheck lint type test ui doclint archlint workflow taskflow pr-ready pr-submit check
+.PHONY: setup init-feature fmt fmtcheck lint type test ui doclint archlint workflow taskflow pr-ready pr-submit pr-cleanup check
 
 setup:
 	bash ./tools/agent/run_with_cleanup.sh bash ./dev/setup.sh
@@ -45,6 +45,9 @@ pr-ready:
 
 pr-submit:
 	bash ./tools/agent/run_with_cleanup.sh bash ./tools/agent/pr_submit.sh
+
+pr-cleanup:
+	bash ./tools/agent/run_with_cleanup.sh bash ./tools/agent/post_pr_cleanup.sh
 
 check:
 	bash ./tools/agent/run_with_cleanup.sh bash ./tools/agent/check.sh all

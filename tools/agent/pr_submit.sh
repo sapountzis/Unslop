@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 BASE_BRANCH="${BASE:-main}"
+AUTO_CLEANUP="${AUTO_CLEANUP:-1}"
 
 bash "$ROOT_DIR/tools/agent/pr_ready.sh"
 
@@ -22,6 +23,9 @@ BRANCH="$(git -C "$ROOT_DIR" rev-parse --abbrev-ref HEAD)"
 if gh pr view --json url >/tmp/unslop-pr-view.json 2>/dev/null; then
   URL="$(sed -n 's/.*"url":"\([^"]*\)".*/\1/p' /tmp/unslop-pr-view.json | head -n 1)"
   echo "[PR-SUBMIT] PASS: PR already exists for branch '$BRANCH': ${URL:-unknown}" >&2
+  if [ "$AUTO_CLEANUP" = "1" ]; then
+    bash "$ROOT_DIR/tools/agent/post_pr_cleanup.sh"
+  fi
   exit 0
 fi
 
@@ -51,3 +55,7 @@ trap 'rm -f "$BODY_FILE" /tmp/unslop-pr-view.json' EXIT
 URL="$(gh pr create --base "$BASE_BRANCH" --head "$BRANCH" --title "$TITLE" --body-file "$BODY_FILE")"
 
 echo "[PR-SUBMIT] PASS: PR created: $URL"
+
+if [ "$AUTO_CLEANUP" = "1" ]; then
+  bash "$ROOT_DIR/tools/agent/post_pr_cleanup.sh"
+fi

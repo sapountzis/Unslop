@@ -6,11 +6,42 @@ FEATURE_SLUG="${1:-${FEATURE:-}}"
 BASE_BRANCH="${2:-${BASE:-}}"
 WORKTREE_ROOT="${3:-${WORKTREE_ROOT:-/tmp/unslop-worktrees}}"
 BRANCH_PREFIX="${BRANCH_PREFIX:-feat}"
+AUTO_SETUP="${AUTO_SETUP:-1}"
+BOOTSTRAP_ENV="${BOOTSTRAP_ENV:-1}"
 
 usage() {
   cat <<USAGE >&2
-Usage: make init-feature FEATURE=<slug> [BASE=<main|master>] [WORKTREE_ROOT=/tmp/unslop-worktrees] [BRANCH_PREFIX=feat]
+Usage: make init-feature FEATURE=<slug> [BASE=<main|master>] [WORKTREE_ROOT=/tmp/unslop-worktrees] [BRANCH_PREFIX=feat] [AUTO_SETUP=1] [BOOTSTRAP_ENV=1]
 USAGE
+}
+
+bootstrap_env_file() {
+  local rel_path="$1"
+  local source_env="$ROOT_DIR/$rel_path"
+  local target_env="$WORKTREE_PATH/$rel_path"
+  local source_example="${source_env}.example"
+  local target_example="${target_env}.example"
+
+  if [ -f "$target_env" ]; then
+    return
+  fi
+
+  if [ -f "$source_env" ]; then
+    cp "$source_env" "$target_env"
+    echo "[INIT] Bootstrapped env file from primary checkout: $rel_path"
+    return
+  fi
+
+  if [ -f "$target_example" ]; then
+    cp "$target_example" "$target_env"
+    echo "[INIT] Bootstrapped env file from template: ${rel_path}.example -> ${rel_path}"
+    return
+  fi
+
+  if [ -f "$source_example" ]; then
+    cp "$source_example" "$target_env"
+    echo "[INIT] Bootstrapped env file from primary template: ${rel_path}.example -> ${rel_path}"
+  fi
 }
 
 if [ -z "$FEATURE_SLUG" ]; then
@@ -126,11 +157,29 @@ cat > "$MARKER_PATH" <<MARKER
 }
 MARKER
 
+if [ "$BOOTSTRAP_ENV" = "1" ]; then
+  bootstrap_env_file "backend/.env"
+fi
+
+if [ "$AUTO_SETUP" = "1" ]; then
+  echo "[INIT] Running make setup in linked worktree..."
+  if ! make -C "$WORKTREE_PATH" setup; then
+    echo "[INIT] FAIL: setup failed in worktree: $WORKTREE_PATH" >&2
+    echo "[INIT] Remediation: run 'make -C \"$WORKTREE_PATH\" setup' and resolve setup errors before development." >&2
+    exit 1
+  fi
+fi
+
 echo "[INIT] PASS: created worktree workflow for '${FEATURE_SLUG}'."
 echo "[INIT] Worktree: ${WORKTREE_PATH}"
 echo "[INIT] Branch:   ${BRANCH_NAME}"
 echo "[INIT] Plan:     ${PLAN_REL}"
 echo "[INIT]"
+if [ "$AUTO_SETUP" = "1" ]; then
+  echo "[INIT] Setup:    complete (make setup)"
+else
+  echo "[INIT] Setup:    skipped (AUTO_SETUP=${AUTO_SETUP})"
+fi
 echo "[INIT] REQUIRED NEXT STEP: fill task details in '${PLAN_REL}' before any code changes."
 echo "[INIT] Stop now, edit the plan placeholders, then continue with context gathering and implementation."
 echo "[INIT] Suggested commands:"
