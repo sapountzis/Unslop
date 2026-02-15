@@ -62,6 +62,11 @@ Avoid:
 - `validators/*`: policy validators used by doc/workflow/taskflow/arch checks.
 - `commands/*`: `setup`, `pr-ready`, `pr-submit`, `pr-cleanup` command logic.
 
+Tooling ownership rule:
+- The SDK orchestrates checks.
+- Package toolchains stay package-local (`backend`, `extension`, `frontend`).
+- Checkers should call package scripts (`check:*`) instead of hardcoding root binary paths.
+
 ## Adding or Modifying a Checker
 
 1. Implement checker logic in `tools/checks/checkers/<id>.ts` using `defineChecker`.
@@ -72,6 +77,14 @@ Avoid:
 6. Run:
    - `bun test tools/checks/tests`
    - `make check`
+
+Script contract guidance:
+- Prefer per-package scripts:
+  - `check:fmt`
+  - `check:fmt:verify`
+  - `check:lint`
+  - `check:type`
+- Keep checker messages stable and actionable; avoid leaking SDK internals.
 
 ## Performance Guidelines
 

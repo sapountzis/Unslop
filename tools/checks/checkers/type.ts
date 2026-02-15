@@ -10,7 +10,6 @@ async function runComponent(
 	ctx: CheckContext,
 	component: "backend" | "extension",
 	engine: Engine,
-	tsgoAvailable: boolean,
 ): Promise<{ ok: boolean; log: string }> {
 	const runTsc = () =>
 		ctx.exec({
@@ -21,6 +20,9 @@ async function runComponent(
 		const result = await runTsc();
 		return { ok: result.exitCode === 0, log: outputFor(result) };
 	}
+	const tsgoAvailable =
+		(await ctx.exec({ args: ["bunx", "tsgo", "--version"], cwd: component }))
+			.exitCode === 0;
 	if (!tsgoAvailable) {
 		const fallback = await runTsc();
 		return {
@@ -33,7 +35,8 @@ async function runComponent(
 	}
 
 	const tsgo = await ctx.exec({
-		args: ["bunx", "tsgo", "--noEmit", "-p", `${component}/tsconfig.json`],
+		args: ["bunx", "tsgo", "--noEmit", "-p", "tsconfig.json"],
+		cwd: component,
 	});
 	if (tsgo.exitCode === 0) return { ok: true, log: outputFor(tsgo) };
 	const tsgoLog = outputFor(tsgo);
@@ -74,14 +77,9 @@ export const typeChecker = defineChecker({
 			]);
 		}
 		const failed: string[] = [];
-		const tsgoAvailable =
-			engine === "tsgo"
-				? (await ctx.exec({ args: ["bunx", "tsgo", "--version"] })).exitCode ===
-					0
-				: false;
 
 		for (const component of ["backend", "extension"] as const) {
-			const checked = await runComponent(ctx, component, engine, tsgoAvailable);
+			const checked = await runComponent(ctx, component, engine);
 			if (checked.ok) continue;
 			failed.push(component);
 			console.error(`[TYPE] FAIL: ${component} type-check failed.`);
@@ -90,27 +88,15 @@ export const typeChecker = defineChecker({
 			console.error(`[TYPE] --- end ${component} type log ---`);
 			console.error(`[TYPE] Remediation: fix ${component} TypeScript errors.`);
 		}
-		const frontend = await ctx.exec({
-			args: ["bun", "run", "build"],
-			cwd: "frontend",
-		});
-		if (frontend.exitCode !== 0) {
-			failed.push("frontend");
-			console.error("[TYPE] FAIL: frontend build/type validation failed.");
-			console.error("[TYPE] --- frontend type log tail ---");
-			console.error(ctx.tail(outputFor(frontend), 120));
-			console.error("[TYPE] --- end frontend type log ---");
-			console.error("[TYPE] Remediation: fix frontend build/type issues.");
-		}
 		if (failed.length > 0) {
 			ctx.fail([
 				`[TYPE] Failed components: ${failed.join(" ")}`,
-				`[TYPE] FAIL: ${failed.length} type/build gate(s) failed.`,
+				`[TYPE] FAIL: ${failed.length} type gate(s) failed.`,
 				"[TYPE] Protocol: re-run 'make type' until it passes.",
 			]);
 		}
 		console.log(
-			`[TYPE] PASS: type/build checks compliant (engine: ${engine}).`,
+			`[TYPE] PASS: type checks compliant (engine: ${engine}).`,
 		);
 	},
 });

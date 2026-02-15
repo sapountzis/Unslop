@@ -206,7 +206,7 @@ import "fullpage.js/dist/fullpage.css";
             </FadeIn>
 
             <div class="mt-10 grid grid-cols-1 gap-6 md:grid-cols-2">
-              <FadeIn client:visible class="h-full">
+              <FadeIn client:visible className="h-full">
                 <article
                   class="flex h-full flex-col justify-between border border-ink/25 bg-paper p-7"
                 >
@@ -237,7 +237,7 @@ import "fullpage.js/dist/fullpage.css";
                 </article>
               </FadeIn>
 
-              <FadeIn client:visible delay={0.08} class="h-full">
+              <FadeIn client:visible delay={0.08} className="h-full">
                 <article
                   class="flex h-full flex-col justify-between border border-ink/25 bg-paper p-7"
                 >
@@ -317,7 +317,7 @@ import "fullpage.js/dist/fullpage.css";
   <script>
     import fullpage from "fullpage.js";
 
-    const fpInstance = new fullpage("#fullpage", {
+    new fullpage("#fullpage", {
       // Navigation
       navigation: false,
       navigationPosition: "right",

@@ -5,6 +5,7 @@
 - Initialize every feature task with `make init-feature FEATURE=<task-slug>` before editing code.
 - Progress autonomously through PR creation with `make pr-ready` then `make pr-submit`, unless blocked or explicit human input is required.
 - If knowledge is missing, update docs under `docs/*` so future agents can discover it.
+- Do not inspect or modify `tools/*` internals unless the user explicitly requests it.
 
 ## Start Here
 1) `docs/index.md`

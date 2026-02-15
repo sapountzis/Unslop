@@ -6,6 +6,10 @@
 		"dev:workers": "wrangler dev",
 		"start": "bun run --env-file .env src/index.ts",
 		"deploy": "wrangler deploy",
+		"check:fmt": "biome format --write .",
+		"check:fmt:verify": "biome format --reporter=summary .",
+		"check:lint": "biome lint --reporter=summary .",
+		"check:type": "bunx tsgo --noEmit -p tsconfig.json",
 		"test": "bun run test:unit",
 		"test:unit": "rg --files src tests | rg '\\.test\\.ts$' | rg -v '\\.(integration|e2e)\\.test\\.ts$' | xargs -r bun test",
 		"test:integration": "rg --files src tests | rg '\\.integration\\.test\\.ts$' | xargs -r bun test",
@@ -28,6 +32,7 @@
 		"zod": "^4.3.6"
 	},
 	"devDependencies": {
+		"@biomejs/biome": "~2.3.15",
 		"@cloudflare/workers-types": "^4.0.0",
 		"@types/async-retry": "^1.4.9",
 		"@types/node": "^22.0.0",

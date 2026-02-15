@@ -10,7 +10,7 @@ Update trigger: UI smoke coverage or frontend runtime behavior changes.
 ## Steps
 1. Start frontend: `cd frontend && bun run dev`.
 2. In another shell, run UI checks: `make ui`.
-3. If smoke fails, run a focused test: `bunx playwright test ui-tests/smoke.spec.ts --headed`.
+3. If smoke fails, run a focused test: `cd frontend && bunx playwright test ui-tests/smoke.spec.ts --headed`.
 4. Fix issue, rerun `make ui`.
 
 ## Expected Results
