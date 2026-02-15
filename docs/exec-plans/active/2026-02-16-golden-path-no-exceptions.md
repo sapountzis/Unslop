@@ -22,7 +22,8 @@ Links:
 
 ## Steps
 1) Add an explicit hard-stop instruction in agent-facing workflow docs: never violate the golden path for any reason.
-2) Run `make check`, then `make pr-ready` and `make pr-submit` (or record blocker evidence if submission is blocked).
+2) Fix workflow/taskflow clean-worktree detection so clean `main` does not inherit prior commit file lists.
+3) Run `make check`, then `make pr-ready` and `make pr-submit` (or record blocker evidence if submission is blocked).
 
 ## Risks
 - Wording could conflict with existing blocker/escalation behavior if not phrased to keep "stop and report blocker" semantics.
@@ -30,10 +31,15 @@ Links:
 ## Iteration Log
 - Iteration 1: context gathered; pending first edit -> make check -> review loop.
 - Iteration 2: edit (`AGENTS.md`, `docs/runbooks/golden-paths.md`) -> make check (pass) -> review (confirmed explicit no-bypass golden-path rule in canonical agent docs and runbook).
+- Iteration 3: edit (`tools/checks/validators/workflow_check.ts`, `tools/checks/validators/taskflow_check.ts`) -> make check (pass) -> review (confirmed clean-main detectors return empty and stop false-positive workflow/taskflow failures).
+- Iteration 4: edit (`tools/checks/validators/workflow_check.ts`) -> make check (pass) -> review (moved dirty-primary-checkout stash guidance from docs into workflow checker remediation output).
 
 ## Verification
 - `make check` (pass)
 - `make pr-ready` (expected fail before commit: working tree has unstaged or staged changes)
+- `cd /home/andreas/projects/Unslop && bun /tmp/unslop-worktrees/golden-path-no-exceptions/tools/checks/validators/workflow_check.ts` (pass: `[WORKFLOW] PASS: no changed files detected.` on clean `main`)
+- `cd /home/andreas/projects/Unslop && bun /tmp/unslop-worktrees/golden-path-no-exceptions/tools/checks/validators/taskflow_check.ts` (pass: `[TASKFLOW] PASS: no changed files detected.` on clean `main`)
+- `cd /home/andreas/projects/Unslop && printf 'const x = 1;\n' > tmp-workflow-remediation-smoke.ts && bun /tmp/unslop-worktrees/golden-path-no-exceptions/tools/checks/validators/workflow_check.ts && rm -f tmp-workflow-remediation-smoke.ts` (expected fail with remediation text that includes stash->init-feature->stash-pop migration guidance; temporary file removed)
 
 ## PR
 - PR: pending (replace with PR URL after `make pr-submit`, or record blocker context)

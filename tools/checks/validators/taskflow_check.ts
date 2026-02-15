@@ -127,6 +127,8 @@ function getChangedFiles(): string[] {
 	).filter((relPath) => !isTransientArtifactPath(relPath));
 	if (changed.length > 0) return changed;
 
+	if (!process.env.CI) return [];
+
 	// CI/worktree-clean fallback: inspect latest commit delta.
 	try {
 		git(ROOT, ["rev-parse", "--verify", "HEAD~1"]);
