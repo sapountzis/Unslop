@@ -43,6 +43,9 @@ Links:
 - Iteration 7: edit (`tools/agent/check.sh`, `tools/agent/workflow.sh`, `tools/agent/taskflow.sh`, `tools/agent/doclint.sh`, `tools/agent/archlint.sh`, `AGENTS.md`) -> make check (pending rerun) -> review (kept `check.sh` thin; moved actionable guidance to gate-specific checks).
 - Iteration 8: edit (`README.md`, `docs/index.md`, `docs/product-specs/agent-workflow.md`, plan evidence) -> make check (pass) -> review (verified top-level docs are pointer-first and workflow spec captures failure-diagnostic requirements).
 - Iteration 9: edit (`tools/agent/doc_lint.ts`, `tools/agent/typecheck.sh`, `tools/agent/test.sh`) -> make check (pass) -> review (doclint now groups per-rule violations; type/test now aggregate per-component failures with specific remediation).
+- Iteration 10: edit (`tools/agent/run_with_cleanup.sh`) -> make check (pending rerun) -> review (prevented false failure when `pr-submit` removes active worktree before wrapper post-cleanup).
+- Iteration 11: edit (`tools/agent/test.sh`, `tools/agent/typecheck.sh`) -> make check (pending rerun) -> review (added per-component log tails so failures cannot be hidden by long later-suite output).
+- Iteration 12: edit (env parity for manual fix worktree: copied `backend/.env`) -> make check (pass) -> review (confirmed backend test failures were environment-related and diagnostics now identify failing suite details directly).
 
 ## Verification
 - `bash ./tools/agent/typecheck.sh` (pass; final line reports `engine: tsgo`)
@@ -51,6 +54,10 @@ Links:
 - `make check` (pass; after plan evidence update and docs pruning)
 - `make check` (pass; after spec + gate-diagnostic updates)
 - `make check` (pass; after multi-use-case diagnostics audit across doclint/type/test)
+- `make pr-submit` (partial success: PR created and cleanup completed, but command exited non-zero because wrapper post-cleanup referenced removed worktree)
+- `make check` (fail in manual fix worktree: workflow marker/setup missing; resolved by restoring marker and running make setup)
+- `make test` (pass after env bootstrap parity via `backend/.env`)
+- `make check` (pass after run_with_cleanup + diagnostics refinements)
 
 ## PR
 - PR: pending (replace with PR URL after `make pr-submit`, or record blocker context)
