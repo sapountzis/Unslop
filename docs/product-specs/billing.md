@@ -1,4 +1,42 @@
+---
+owner: unslop
+status: verified
+last_verified: 2026-02-15
+---
+
 # Billing & Plans (v0.1)
+
+## problem
+The product needs deterministic free/pro entitlement behavior with quota enforcement and reliable subscription lifecycle handling.
+
+## non_goals
+- Multi-plan catalogs, annual plans, add-ons, or metered pricing complexity.
+- Customer portal design or advanced billing operations beyond defined checkout/webhook flows.
+
+## acceptance_criteria
+- AC1: Free and Pro plans, quotas, and quota-exceeded behavior are explicitly defined.
+- AC2: Checkout and webhook contracts are documented with idempotent processing rules.
+- AC3: Plan-status semantics and quota period anchors are deterministic.
+
+## constraints
+- Performance: Quota checks must be fast and atomic on non-cached classification attempts.
+- Security/Privacy: Webhook signature verification and idempotency are mandatory.
+- Compatibility: Provider contract remains aligned with Polar events and payload normalization.
+
+## telemetry
+- Logs: Checkout creation, webhook verification failures, entitlement transitions.
+- Metrics: Quota exceeded rates, webhook retries, active vs inactive plan distribution.
+- Traces: Billing route and webhook processing spans.
+
+## test_plan
+- Unit: Plan status transitions and quota policy decisions.
+- Integration: Checkout route, webhook idempotency, entitlement persistence.
+- E2E: Upgrade flow and entitlement changes reflected in `/v1/me` and quota behavior.
+
+## rollout
+- Flags: No billing feature flags required for v0.1 baseline.
+- Migration: Schema and entitlement changes ship with migration-safe updates.
+- Backout: Disable or revert billing route changes and keep free-tier behavior intact.
 
 ## Provider
 

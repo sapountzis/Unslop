@@ -1,5 +1,5 @@
 // extension/src/popup/index.ts
-import { App } from './App';
+import { App } from "./App";
 
-const app = new App('app');
+const app = new App("app");
 app.render();

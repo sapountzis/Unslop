@@ -1,4 +1,42 @@
+---
+owner: unslop
+status: verified
+last_verified: 2026-02-15
+---
+
 # Chrome Extension Spec (v0.1)
+
+## problem
+Users need a minimal Chrome extension that can classify LinkedIn feed posts and apply decisions without breaking normal browsing.
+
+## non_goals
+- UI complexity beyond toggle/sign-in/status/upgrade.
+- Per-author heuristics, sliders, or non-spec runtime feature expansion.
+
+## acceptance_criteria
+- AC1: Extension runtime extracts canonical post payloads and requests batch classification.
+- AC2: Decisions are applied as `keep|hide` with fail-open behavior.
+- AC3: Auth callback, storage, popup controls, and backend message contracts are defined.
+
+## constraints
+- Performance: Mutation observation and classify batching must not degrade feed interaction.
+- Security/Privacy: JWT handling uses extension storage and auth-domain callback transport only.
+- Compatibility: Must run under Chrome MV3 and current LinkedIn DOM integration points.
+
+## telemetry
+- Logs: Runtime classify request/response outcomes and auth/session edge cases.
+- Metrics: Classification latency/timeout rates and fail-open frequency.
+- Traces: Optional message flow spans across content/background/api boundaries.
+
+## test_plan
+- Unit: Parser, selector, surface, and decision rendering modules.
+- Integration: Background/content message contracts and auth persistence behavior.
+- E2E: Popup auth + feed classification smoke across supported pages.
+
+## rollout
+- Flags: No runtime feature flags required for v0.1 extension baseline.
+- Migration: Manifest/build changes shipped with versioned extension bundles.
+- Backout: Roll back to last known-good extension package if regressions appear.
 
 ## Summary
 

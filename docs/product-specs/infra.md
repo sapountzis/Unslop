@@ -1,4 +1,42 @@
+---
+owner: unslop
+status: verified
+last_verified: 2026-02-15
+---
+
 # Infra & Deployment (v0.2)
+
+## problem
+The system needs clear runtime, deployment, and environment boundaries so backend/extension/frontend ship consistently across dev and production.
+
+## non_goals
+- Multi-cloud abstraction layers or speculative platform migrations.
+- Nonessential infra expansion outside current backend + static site + extension scope.
+
+## acceptance_criteria
+- AC1: Domains, stack versions, and environment boundaries are documented.
+- AC2: Deployment workflows, secrets, and operational dependencies are explicit.
+- AC3: CI/CD expectations map to repo workflows and runtime constraints.
+
+## constraints
+- Performance: Runtime and DB connectivity choices must support low-latency classify flows.
+- Security/Privacy: Secrets must be managed via platform secret stores, not source control.
+- Compatibility: Infrastructure choices must support Cloudflare Workers + Neon + extension/site requirements.
+
+## telemetry
+- Logs: Worker logs and deployment workflow logs are available for diagnosis.
+- Metrics: Service availability, route health, and deploy success/failure signals.
+- Traces: Runtime tracing where supported by platform tooling.
+
+## test_plan
+- Unit: Config parsing and environment validation helpers.
+- Integration: Deployment config and migration execution checks.
+- E2E: Post-deploy smoke for API reachability and site availability.
+
+## rollout
+- Flags: No global infra flags; use staged deploy workflows.
+- Migration: Infrastructure and schema migrations coordinated through CI/CD.
+- Backout: Roll back deployment and revert infra config changes when needed.
 
 ## Domains
 

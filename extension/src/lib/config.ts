@@ -7,7 +7,7 @@
 // For production, use: https://api.getunslop.com
 
 // export const API_BASE_URL = 'http://localhost:3000';
-export const API_BASE_URL = 'https://api.getunslop.com';
+export const API_BASE_URL = "https://api.getunslop.com";
 
 // Cache settings
 export const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -27,5 +27,5 @@ export const DEBUG_CONTENT_RUNTIME = false;
 // Hide rendering mode:
 // - 'collapse': fully remove hidden posts from layout (default production behavior)
 // - 'label': keep post visible and show a compact decision pill
-export type HideRenderMode = 'collapse' | 'label';
-export const HIDE_RENDER_MODE: HideRenderMode = 'collapse';
+export type HideRenderMode = "collapse" | "label";
+export const HIDE_RENDER_MODE: HideRenderMode = "collapse";

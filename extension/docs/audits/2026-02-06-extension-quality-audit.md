@@ -48,7 +48,7 @@ All tests/build passed. Dead-reference sweep returned no matches.
    - Documented policy in `extension/README.md`.
 
 9. Spec drift from implementation.
-   - Updated `spec/extension.md` for batch classify flow, pre-hide behavior, timeout fail-open behavior, and hide-without-stub UX.
+   - Updated `docs/product-specs/extension.md` for batch classify flow, pre-hide behavior, timeout fail-open behavior, and hide-without-stub UX.
 
 10. Extension architecture boundaries were undocumented.
     - Added `extension/docs/constitution.md`.

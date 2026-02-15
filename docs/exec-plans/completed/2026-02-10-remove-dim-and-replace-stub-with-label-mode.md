@@ -1,4 +1,39 @@
-# Remove `dim` Decision And Replace Stub With Label Mode Implementation Plan
+---
+owner: agent
+status: completed
+created: 2026-02-10
+completed: 2026-02-10
+---
+
+# Plan: Remove `dim` Decision And Replace Stub With Label Mode
+
+## Context
+Links:
+- Spec: docs/product-specs/spec.md
+- Spec: docs/product-specs/api.md
+- Spec: docs/product-specs/data_model.md
+- Spec: docs/product-specs/extension.md
+- Spec: docs/product-specs/ml.md
+- Architecture: ARCHITECTURE.md
+
+Goal:
+- Remove `dim` from the backend and extension decision domain.
+- Replace extension `stub` hide rendering with non-destructive `label` mode.
+
+## Steps
+1) Update shared decision domain constants and types to `keep|hide`.
+2) Migrate decision storage and behavior from `dim` to `hide`.
+3) Update scoring, stats, route contracts, rendering, and docs to match.
+4) Re-run targeted tests and then full quality gates.
+
+## Risks
+- Schema migration risk for historical rows containing `dim`.
+- Contract drift risk across backend route tests, extension rendering behavior, and docs.
+
+## Verification
+- See command and test blocks in the historical task breakdown below.
+
+## Historical Task Breakdown
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
@@ -62,7 +97,7 @@ git commit -m "refactor: shrink decision domain to keep/hide"
 **Files:**
 - Modify/Create: `backend/drizzle/*` migration files (new migration folder)
 - Modify: `backend/src/db/schema.ts`
-- Modify: `spec/data_model.md`
+- Modify: `docs/product-specs/data_model.md`
 - Modify: `backend/docs/DATABASE.md`
 
 **Step 1: Write failing integration tests around enum values and stats counts**
@@ -97,7 +132,7 @@ Expected: PASS for migration-aware tests.
 **Step 6: Commit**
 
 ```bash
-git add backend/drizzle backend/src/db/schema.ts spec/data_model.md backend/docs/DATABASE.md
+git add backend/drizzle backend/src/db/schema.ts docs/product-specs/data_model.md backend/docs/DATABASE.md
 git commit -m "feat: migrate decision enum from keep-dim-hide to keep-hide"
 ```
 
@@ -264,10 +299,10 @@ git commit -m "refactor: remove extension dim paths and dead rendering selectors
 ### Task 7: Update Backend/Extension/Public Docs To Match New Behavior
 
 **Files:**
-- Modify: `spec/spec.md`
-- Modify: `spec/api.md`
-- Modify: `spec/extension.md`
-- Modify: `spec/ml.md`
+- Modify: `docs/product-specs/spec.md`
+- Modify: `docs/product-specs/api.md`
+- Modify: `docs/product-specs/extension.md`
+- Modify: `docs/product-specs/ml.md`
 - Modify: `backend/AGENTS.md`
 - Modify: `backend/README.md`
 - Modify: `extension/AGENTS.md`

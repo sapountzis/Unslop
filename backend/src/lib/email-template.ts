@@ -1,41 +1,43 @@
 export interface MagicLinkEmailContent {
-  subject: string;
-  text: string;
-  html: string;
+	subject: string;
+	text: string;
+	html: string;
 }
 
 export interface BuildMagicLinkEmailContentInput {
-  link: string;
-  appName?: string;
-  expiresInMinutes?: number;
+	link: string;
+	appName?: string;
+	expiresInMinutes?: number;
 }
 
 function escapeHtml(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
+	return value
+		.replaceAll("&", "&amp;")
+		.replaceAll("<", "&lt;")
+		.replaceAll(">", "&gt;")
+		.replaceAll('"', "&quot;")
+		.replaceAll("'", "&#39;");
 }
 
-export function buildMagicLinkEmailContent(input: BuildMagicLinkEmailContentInput): MagicLinkEmailContent {
-  const appName = input.appName ?? 'Unslop';
-  const expiresInMinutes = input.expiresInMinutes ?? 15;
-  const safeLink = escapeHtml(input.link);
-  const subject = `Sign in to ${appName}`;
+export function buildMagicLinkEmailContent(
+	input: BuildMagicLinkEmailContentInput,
+): MagicLinkEmailContent {
+	const appName = input.appName ?? "Unslop";
+	const expiresInMinutes = input.expiresInMinutes ?? 15;
+	const safeLink = escapeHtml(input.link);
+	const subject = `Sign in to ${appName}`;
 
-  const text = [
-    `Sign in to ${appName}`,
-    '',
-    'You requested a secure sign-in link.',
-    `Use this link within ${expiresInMinutes} minutes:`,
-    input.link,
-    '',
-    "If you didn't request this, you can ignore this email.",
-  ].join('\n');
+	const text = [
+		`Sign in to ${appName}`,
+		"",
+		"You requested a secure sign-in link.",
+		`Use this link within ${expiresInMinutes} minutes:`,
+		input.link,
+		"",
+		"If you didn't request this, you can ignore this email.",
+	].join("\n");
 
-  const html = `<!DOCTYPE html>
+	const html = `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="utf-8">
@@ -85,9 +87,9 @@ export function buildMagicLinkEmailContent(input: BuildMagicLinkEmailContentInpu
   </body>
 </html>`;
 
-  return {
-    subject,
-    text,
-    html,
-  };
+	return {
+		subject,
+		text,
+		html,
+	};
 }
