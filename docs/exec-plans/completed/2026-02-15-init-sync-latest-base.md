@@ -37,7 +37,7 @@ Links:
 - `AUTO_SETUP=0 make init-feature FEATURE=sync-latest-smoke WORKTREE_ROOT=/tmp/unslop-worktrees-smoke2 BASE=main` (pass; confirmed `Syncing latest base from origin/main...` and `Base Ref: origin/main`)
 
 ## PR
-- PR: pending
+- PR: https://github.com/sapountzis/Unslop/pull/4
 
 ## Blockers (optional)
 - Environment note: cleanup of smoke worktree/branch was blocked by this environment policy for `git worktree remove`/branch deletion commands; no impact on delivered behavior.
