@@ -18,7 +18,7 @@ Update trigger: changes to default delivery workflow, planning workflow, or qual
 5. Implement minimal scoped changes.
 6. Repeat `(edit -> make check -> review update in plan)` until all required gates pass.
 7. Update specs/runbooks/quality docs touched by the change.
-8. Capture verification in the plan, finalize plan status/move per `docs/exec-plans/README.md`, then run `make pr-ready` before PR submission (`make pr-submit` also schedules local worktree cleanup).
+8. Capture verification in the plan, finalize plan status/move per `docs/exec-plans/README.md`, then run `make pr-ready` before PR submission (`make pr-submit` syncs the branch to origin and schedules local worktree cleanup).
 
 ### Golden Path: Bug Fix
 1. Reproduce the issue and record minimal repro steps in the active plan.

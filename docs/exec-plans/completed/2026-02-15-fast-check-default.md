@@ -26,6 +26,8 @@ Links:
 3) Completed: updated docs/spec references while removing low-level implementation details from agent-facing docs.
 4) Completed: ran verification gates and captured evidence.
 5) Completed: finalized lifecycle and prepared branch for `make pr-submit`.
+6) Completed: updated `make pr-submit` behavior to encapsulate branch publish-to-origin before PR creation.
+7) Completed: audited agent-facing docs and removed unnecessary dev/agent tool implementation exposure.
 
 ## Risks
 - Type-check engine parity gaps could create false negatives/positives for some projects.
@@ -36,11 +38,13 @@ Links:
 - Iteration 2: audited docs for unnecessary implementation detail exposure, simplified docs, ran `make type`, reviewed output.
 - Iteration 3: ran `make check`, reviewed failing type-log race caused by concurrent verification invocation, re-ran verification sequentially.
 - Iteration 4: re-ran `make type` and `make check` sequentially (pass), reviewed final diffs for scope and policy alignment.
+- Iteration 5: implemented `pr-submit` auto-push behavior, expanded doc simplification audit, and re-ran `make check` to confirm workflow/taskflow compliance.
 
 ## Verification
 - `make setup` (pass)
 - `make type` (pass)
 - `make check` (pass)
+- `make check` after `pr-submit` auto-push + doc audit updates (pass)
 
 ## PR
 - PR: pending
