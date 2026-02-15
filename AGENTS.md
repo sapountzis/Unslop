@@ -20,9 +20,10 @@
 ## Commands
 - `make setup`   # install dependencies and local tooling
 - `make fmt`     # apply formatting fixes
-- `make check`   # non-mutating gate: fmtcheck + lint + type + test + ui + doclint + archlint
+- `make check`   # non-mutating gate: fmtcheck + lint + type + test + ui + doclint + archlint + taskflow
 - `make ui`      # UI gate only
 - `make test`    # tests only
+- `make taskflow` # execution-plan lifecycle gate only
 
 ## Golden Path (Default)
 1) Choose the governing spec from `docs/product-specs/index.md`.

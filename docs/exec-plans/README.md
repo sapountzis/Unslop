@@ -33,7 +33,13 @@ Execution plans link product specs to implementation steps.
 2. Keep steps, risks, and verification evidence current as work progresses.
 3. Before completion, confirm Definition of Done and capture final verification evidence.
 4. Finalize by setting frontmatter to `status: completed`, adding `completed: <YYYY-MM-DD>`, then moving the file to `completed/`.
-5. If a blocker remains, keep the plan in `active/` and add a blocker exception note.
+5. If a blocker remains, keep the plan in `active/` and add a blocker exception note with `Human input needed: <exact question>`.
+
+## Taskflow Gate Rules
+- `make taskflow` runs automatically inside `make check` for code changes.
+- Code changes must touch exactly one plan file under `docs/exec-plans/active/` or `docs/exec-plans/completed/`.
+- A plan that remains in `active/` must include `Human input needed: <exact question>`.
+- A plan in `completed/` must include frontmatter `status: completed` and `completed: <YYYY-MM-DD>`.
 
 ## Environment Blocker Exception Format
 Use this format when a check fails due to environment constraints and not product behavior:
@@ -45,6 +51,7 @@ Use this format when a check fails due to environment constraints and not produc
 - Environment: `<local/sandbox/CI + relevant constraint>`
 - Failure Summary: `<short reason>`
 - Evidence: `<key error line(s)>`
+- Human input needed: `<exact question for a human>`
 - Owner Action: `<what must happen next and who owns it>`
 - Task Status Impact: `<why plan remains active or why completion is still valid>`
 ```

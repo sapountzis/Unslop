@@ -1,31 +1,34 @@
-.PHONY: setup fmt fmtcheck lint type test ui doclint archlint check
+.PHONY: setup fmt fmtcheck lint type test ui doclint archlint taskflow check
 
 setup:
-	./dev/setup.sh
+	bash ./tools/agent/run_with_cleanup.sh bash ./dev/setup.sh
 
 fmt:
-	./tools/agent/check.sh fmt
+	bash ./tools/agent/run_with_cleanup.sh bash ./tools/agent/check.sh fmt
 
 fmtcheck:
-	./tools/agent/check.sh fmtcheck
+	bash ./tools/agent/run_with_cleanup.sh bash ./tools/agent/check.sh fmtcheck
 
 lint:
-	./tools/agent/check.sh lint
+	bash ./tools/agent/run_with_cleanup.sh bash ./tools/agent/check.sh lint
 
 type:
-	./tools/agent/check.sh type
+	bash ./tools/agent/run_with_cleanup.sh bash ./tools/agent/check.sh type
 
 test:
-	./tools/agent/check.sh test
+	bash ./tools/agent/run_with_cleanup.sh bash ./tools/agent/check.sh test
 
 ui:
-	./tools/agent/check.sh ui
+	bash ./tools/agent/run_with_cleanup.sh bash ./tools/agent/check.sh ui
 
 doclint:
-	./tools/agent/check.sh doclint
+	bash ./tools/agent/run_with_cleanup.sh bash ./tools/agent/check.sh doclint
 
 archlint:
-	./tools/agent/check.sh archlint
+	bash ./tools/agent/run_with_cleanup.sh bash ./tools/agent/check.sh archlint
+
+taskflow:
+	bash ./tools/agent/run_with_cleanup.sh bash ./tools/agent/check.sh taskflow
 
 check:
-	./tools/agent/check.sh all
+	bash ./tools/agent/run_with_cleanup.sh bash ./tools/agent/check.sh all

@@ -31,6 +31,7 @@ case "$CMD" in
   test) run_gate "test" "make test" bash ./tools/agent/test.sh ;;
   doclint) run_gate "doclint" "make doclint" bash ./tools/agent/doclint.sh ;;
   archlint) run_gate "archlint" "make archlint" bash ./tools/agent/archlint.sh ;;
+  taskflow) run_gate "taskflow" "make taskflow" bash ./tools/agent/taskflow.sh ;;
   ui) run_gate "ui" "make ui" bash ./tools/agent/ui_check.sh ;;
   all)
     run_gate "fmtcheck" "make check" bash ./tools/agent/format_check.sh
@@ -40,11 +41,12 @@ case "$CMD" in
     run_gate "ui" "make check" bash ./tools/agent/ui_check.sh
     run_gate "doclint" "make check" bash ./tools/agent/doclint.sh
     run_gate "archlint" "make check" bash ./tools/agent/archlint.sh
+    run_gate "taskflow" "make check" bash ./tools/agent/taskflow.sh
     echo "[CHECK] PASS: all gates succeeded."
     ;;
   *)
     echo "Unknown check target: $CMD" >&2
-    echo "Usage: ./tools/agent/check.sh [fmt|fmtcheck|lint|type|test|doclint|archlint|ui|all]" >&2
+    echo "Usage: ./tools/agent/check.sh [fmt|fmtcheck|lint|type|test|ui|doclint|archlint|taskflow|all]" >&2
     exit 64
     ;;
 esac

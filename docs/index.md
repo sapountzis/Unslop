@@ -35,6 +35,7 @@ Use `docs/runbooks/quality-review.md` to keep `docs/quality/*` aligned with real
 ## Agent Harness
 - `AGENTS.md` defines the high-level workflow.
 - `Makefile` defines `make check` as canonical validation.
-- `tools/agent/*` implements doc and architecture lint.
+- `tools/agent/*` implements doc, architecture, and taskflow lifecycle lint.
+- `tools/agent/run_with_cleanup.sh` runs deterministic pre/post cleanup for `make` targets and removes `.tmp-*` harness artifacts plus UI test output directories.
 - CI runs `make check` on push and pull request.
 - `dev/observability-compose.yml` and `dev/obs.sh` provide opt-in observability scaffolding.
