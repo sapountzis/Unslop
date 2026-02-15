@@ -29,7 +29,7 @@
 - `make workflow` # linked-worktree + branch + plan workflow gate
 - `make taskflow` # execution-plan lifecycle + loop evidence gate
 - `make pr-ready` # required PR readiness gate before submission
-- `make pr-submit` # submit command: push + PR create/reuse + cleanup scheduling
+- `make pr-submit` # submit command: push + PR create/reuse + verified local cleanup
 - `make pr-cleanup` # manual local linked-worktree cleanup helper
 
 ## Golden Path (Default)

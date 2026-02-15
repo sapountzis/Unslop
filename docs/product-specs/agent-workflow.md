@@ -19,7 +19,7 @@ Agent-driven delivery must follow a deterministic path from feature request to P
 - AC3: Harness checks fail when code changes are made outside the required worktree + branch flow.
 - AC4: Taskflow checks require execution-plan evidence of iterative edit/check/review loops.
 - AC5: PR submission tooling validates readiness and preserves links to governing specs and execution plans.
-- AC6: PR submission tooling schedules local linked-worktree cleanup after successful submission.
+- AC6: PR submission tooling performs verified local linked-worktree cleanup after successful submission.
 - AC7: Default agent behavior continues autonomously through `make pr-ready` and `make pr-submit`; agents pause only for explicit blockers or required human input.
 
 ## constraints
