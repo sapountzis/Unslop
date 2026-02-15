@@ -162,6 +162,7 @@ Links:
 - Branch: \`${BRANCH_NAME}\`
 - Active Plan: \`${PLAN_REL}\`
 - Status: <fill-current-phase>
+- Autonomy: Continue through \`make pr-ready\` then \`make pr-submit\` unless blocked or human input is required.
 
 ## Steps
 1) <fill-step-1>
@@ -177,7 +178,7 @@ Links:
 - <fill-verification-command-and-outcome>
 
 ## PR
-- PR: <fill-pr-link-or-pending>
+- PR: pending (replace with PR URL after \`make pr-submit\`, or record blocker context)
 
 ## Blockers (optional)
 - Use docs/exec-plans/README.md blocker exception format when blocked.
@@ -223,6 +224,7 @@ else
 fi
 echo "[INIT] REQUIRED NEXT STEP: fill task details in '${PLAN_REL}' before any code changes."
 echo "[INIT] Stop now, edit the plan placeholders, then continue with context gathering and implementation."
+echo "[INIT] Default completion path: run 'make pr-ready' then 'make pr-submit' without waiting for confirmation unless blocked."
 echo "[INIT] Suggested commands:"
 echo "  cd ${WORKTREE_PATH}"
 echo "  sed -n '1,220p' ${PLAN_REL}"

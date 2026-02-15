@@ -3,7 +3,7 @@
 ## Prime Directive
 - Implement changes that satisfy acceptance criteria in `docs/product-specs/*`.
 - Initialize every feature task with `make init-feature FEATURE=<task-slug>` before editing code.
-- Always run `make check` before opening a PR.
+- Progress autonomously through PR creation with `make pr-ready` then `make pr-submit`, unless blocked or explicit human input is required.
 - If knowledge is missing, update docs under `docs/*` so future agents can discover it.
 
 ## Start Here
@@ -14,58 +14,42 @@
 5) `docs/exec-plans/active/`
 
 ## Task-to-Spec Mapping
-- Start from `docs/product-specs/index.md` and map the incoming task to at least one spec.
-- If no spec applies, create or update a spec in `docs/product-specs/` before implementation.
-- Use `last_verified` as a freshness signal. If stale or unclear, refresh the spec in the same change.
+- Map every task to at least one spec from `docs/product-specs/index.md`.
+- If no spec fits, create/update the spec first.
+- Refresh stale or unclear specs (`last_verified`) in the same change.
+- Detailed mapping/freshness rules: `docs/product-specs/index.md`, `docs/runbooks/docs-freshness.md`.
 
 ## Commands
 - `make setup`   # install dependencies and local tooling
-- `make init-feature FEATURE=<task-slug>` # sync base from origin, create linked worktree + branch + active plan template + setup/env bootstrap
+- `make init-feature FEATURE=<task-slug>` # sync base, create linked worktree+branch, seed plan, bootstrap env/setup
 - `make fmt`     # apply formatting fixes
-- `make check`   # non-mutating gate: workflow + fmtcheck + lint + type + test + ui + doclint + archlint + taskflow
+- `make check`   # canonical non-mutating quality gate
 - `make ui`      # UI gate only
 - `make test`    # tests only
 - `make workflow` # linked-worktree + branch + plan workflow gate
 - `make taskflow` # execution-plan lifecycle + loop evidence gate
-- `make pr-ready` # PR readiness gate (clean tree + completed plan + full check)
-- `make pr-submit` # push branch to origin, create PR through `gh` after readiness validation, and schedule local worktree cleanup
+- `make pr-ready` # required PR readiness gate before submission
+- `make pr-submit` # submit command: push + PR create/reuse + cleanup scheduling
 - `make pr-cleanup` # manual local linked-worktree cleanup helper
 
 ## Golden Path (Default)
-1) Run `make init-feature FEATURE=<task-slug>` from the primary checkout (syncs latest base from origin first).
-2) Fill the generated active plan template before any code edits.
-3) Choose the governing spec from `docs/product-specs/index.md`.
-4) Read related architecture and runbooks from `ARCHITECTURE.md` and `docs/runbooks/`.
-5) Implement minimal scoped changes.
-6) Execute `(edit -> make check -> review notes)` loops until clean.
-7) Update specs/runbooks/quality docs before marking complete.
-8) Finalize plan lifecycle, then run `make pr-ready` and `make pr-submit`.
-
-Canonical variants live in `docs/runbooks/golden-paths.md`.
-
-## Workflow
-1) Start with `make init-feature FEATURE=<task-slug>` to sync base and create a linked worktree with seeded active plan.
-2) Fill task details in the generated plan file before implementation.
-3) Read relevant product specs in `docs/product-specs/`.
-4) Implement changes in small commits.
-5) Run `make check` and capture review evidence in the plan after each loop.
-6) Update docs/specs/decisions when behavior changes.
-7) Finalize the plan lifecycle, then open a focused PR with links to spec and plan.
+- Run `make init-feature FEATURE=<task-slug>` from the primary checkout.
+- Fill the generated plan before code edits and map governing specs.
+- Iterate `(edit -> make check -> review notes)` until clean.
+- Finalize the plan lifecycle, then run `make pr-ready` and `make pr-submit` back-to-back.
+- Canonical flow + variants: `docs/runbooks/golden-paths.md`.
 
 ## Completion Criteria (Definition of Done)
 - Task completion requires all of the following:
   - Governing specs/runbooks/docs are updated for the delivered behavior.
   - Verification evidence in the task plan is current and command-specific.
   - `make check` passes from repository root.
+  - PR is created or reused via `make pr-ready` + `make pr-submit`, unless an active-plan blocker note records required human input.
 
 ## Plan/Task Lifecycle
-1) Start: create or update one plan in `docs/exec-plans/active/` with `status: active`.
-2) During execution: keep steps, risks, and verification evidence current after each material change.
-3) Finalize:
-   - confirm completion criteria are satisfied;
-   - set plan frontmatter to `status: completed` and add `completed: <YYYY-MM-DD>`;
-   - move the plan file to `docs/exec-plans/completed/`.
-4) If blocked: keep the plan in `active/`, capture the blocker + owner action in the standard exception format, and do not mark completed.
+- Follow `docs/exec-plans/README.md` for lifecycle details and blocker exception format.
+- Keep exactly one active plan, keep evidence current, and move it to `completed/` only when done.
+- Blocker policy source of truth: `docs/exec-plans/README.md#environment-blocker-exception-format`.
 
 ## Keeping Docs Fresh
 - Follow `docs/runbooks/docs-freshness.md` on every meaningful change.

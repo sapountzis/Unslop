@@ -24,6 +24,7 @@ Execution plans link product specs to implementation steps.
 - Steps reflect current implementation state.
 - Risks and verification are updated after each material milestone.
 - Iteration Log includes explicit `edit -> make check -> review` loop evidence.
+- PR status is current (`pending`, submitted URL, or blocker-linked exception state).
 - Completion evidence is captured before moving to `completed/`.
 
 ## Definition of Done
@@ -32,13 +33,15 @@ Execution plans link product specs to implementation steps.
   - `make check` passes from repository root.
   - Plan verification evidence lists the exact commands run and outcomes.
   - Plan includes PR tracking under `## PR` and no unresolved `<fill-...>` placeholders.
+  - `make pr-ready` and `make pr-submit` have been executed, unless the active plan records a blocker with explicit `Human input needed: ...`.
 
 ## Plan Lifecycle Protocol
 1. Start work by creating/updating one `active/` plan with `status: active`.
 2. Keep steps, risks, and verification evidence current as work progresses.
 3. Before completion, confirm Definition of Done and capture final verification evidence.
 4. Finalize by setting frontmatter to `status: completed`, adding `completed: <YYYY-MM-DD>`, then moving the file to `completed/`.
-5. If a blocker remains, keep the plan in `active/` and add a blocker exception note with `Human input needed: <exact question>`.
+5. Run `make pr-ready`, then immediately run `make pr-submit`.
+6. If a blocker remains, keep the plan in `active/` and add a blocker exception note with `Human input needed: <exact question>`.
 
 ## Taskflow Gate Rules
 - `make taskflow` runs automatically inside `make check` for code changes.
@@ -101,7 +104,7 @@ Links:
 - <fill-verification-command-and-outcome>
 
 ## PR
-- PR: <fill-pr-link-or-pending>
+- PR: pending (replace with PR URL after `make pr-submit`, or record blocker context)
 
 ## Blockers (optional)
 - Use the Environment Blocker Exception Format above when relevant.

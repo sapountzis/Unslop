@@ -20,6 +20,7 @@ Agent-driven delivery must follow a deterministic path from feature request to P
 - AC4: Taskflow checks require execution-plan evidence of iterative edit/check/review loops.
 - AC5: PR submission tooling validates readiness and preserves links to governing specs and execution plans.
 - AC6: PR submission tooling schedules local linked-worktree cleanup after successful submission.
+- AC7: Default agent behavior continues autonomously through `make pr-ready` and `make pr-submit`; agents pause only for explicit blockers or required human input.
 
 ## constraints
 - Local workflows must remain deterministic and produce actionable failure diagnostics.
@@ -28,13 +29,13 @@ Agent-driven delivery must follow a deterministic path from feature request to P
 
 ## telemetry
 - Logs: Harness emits explicit workflow, taskflow, and readiness gate errors.
-- Metrics: Check/ready command success-failure outcomes observable in CI logs.
+- Metrics: Check/ready/submit command success-failure outcomes observable in CI logs.
 - Traces: N/A.
 
 ## test_plan
 - Unit: script-level validation for branch/worktree markers and plan-content checks.
 - Integration: `make check` includes workflow and taskflow gates for code-change diffs.
-- E2E: init command -> edit/check/review loop -> PR-ready validation.
+- E2E: init command -> edit/check/review loop -> `make pr-ready` -> `make pr-submit`.
 
 ## rollout
 - Flags: No runtime flags.

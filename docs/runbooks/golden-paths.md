@@ -18,7 +18,7 @@ Update trigger: changes to default delivery workflow, planning workflow, or qual
 5. Implement minimal scoped changes.
 6. Repeat `(edit -> make check -> review update in plan)` until all required gates pass.
 7. Update specs/runbooks/quality docs touched by the change.
-8. Capture verification in the plan, finalize plan status/move per `docs/exec-plans/README.md`, then run `make pr-ready` before PR submission (`make pr-submit` syncs the branch to origin and schedules local worktree cleanup).
+8. Capture verification in the plan, finalize plan status/move per `docs/exec-plans/README.md`, then run `make pr-ready` and immediately run `make pr-submit`.
 
 ### Golden Path: Bug Fix
 1. Reproduce the issue and record minimal repro steps in the active plan.
@@ -42,14 +42,16 @@ Update trigger: changes to default delivery workflow, planning workflow, or qual
 ## Expected Results
 - Every task follows one of the canonical paths without skipping required docs/check steps.
 - Active plans contain current verification evidence and linked governing specs.
+- Autonomous execution reaches PR creation by default (`make pr-ready` -> `make pr-submit`) unless blockers require human input.
 - Quality/debt updates remain evidence-based and non-duplicative.
 
 ## Completion Protocol
 1. Confirm `docs/exec-plans/README.md` Definition of Done is satisfied.
 2. If no blockers remain:
    - set plan frontmatter to `status: completed` and add `completed: <YYYY-MM-DD>`;
-   - move plan from `docs/exec-plans/active/` to `docs/exec-plans/completed/`.
-3. If environment blockers remain, keep plan in `active/` and record the standard blocker exception note with owner action.
+   - move plan from `docs/exec-plans/active/` to `docs/exec-plans/completed/`;
+   - run `make pr-ready` and then `make pr-submit`.
+3. If environment blockers or required human decisions remain, keep plan in `active/` and record the standard blocker exception note with owner action.
 
 ## Recovery
 - If no path cleanly fits, start from Feature/Refactor path and document deviations.
