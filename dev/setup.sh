@@ -23,13 +23,15 @@ if [ ! -f "package.json" ]; then
   "name": "unslop-root",
   "private": true,
   "scripts": {
-    "agent:format": "bash ./tools/agent/format_fix.sh",
-    "agent:format:check": "bash ./tools/agent/format_check.sh",
-    "agent:lint": "bash ./tools/agent/lint.sh",
-    "agent:type": "bash ./tools/agent/typecheck.sh",
-    "agent:test": "bash ./tools/agent/test.sh",
-    "agent:doclint": "bash ./tools/agent/doclint.sh",
-    "agent:archlint": "bash ./tools/agent/archlint.sh"
+    "agent:format": "bun run ./tools/checks/cli.ts check fmt",
+    "agent:format:check": "bun run ./tools/checks/cli.ts check fmtcheck",
+    "agent:lint": "bun run ./tools/checks/cli.ts check lint",
+    "agent:type": "bun run ./tools/checks/cli.ts check type",
+    "agent:test": "bun run ./tools/checks/cli.ts check test",
+    "agent:doclint": "bun run ./tools/checks/cli.ts check doclint",
+    "agent:archlint": "bun run ./tools/checks/cli.ts check archlint",
+    "agent:workflow": "bun run ./tools/checks/cli.ts check workflow",
+    "agent:taskflow": "bun run ./tools/checks/cli.ts check taskflow"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.15",

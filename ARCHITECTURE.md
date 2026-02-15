@@ -1,7 +1,7 @@
 # ARCHITECTURE
 
 ## Purpose
-This file defines the top-level architecture and dependency direction rules enforced by `tools/agent/arch_lint.ts`.
+This file defines the top-level architecture and dependency direction rules enforced by `tools/checks/validators/arch_lint.ts`.
 
 ## System Packages
 - `backend/`: API, auth, billing, quota, classification orchestration.
