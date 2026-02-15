@@ -34,6 +34,7 @@ if [ ! -f "package.json" ]; then
   "devDependencies": {
     "@biomejs/biome": "^2.3.15",
     "@playwright/test": "^1.58.2",
+    "@typescript/native-preview": "7.0.0-dev.20260215.1",
     "@types/bun": "^1.3.8"
   }
 }
@@ -42,6 +43,14 @@ fi
 
 log "install root dependencies"
 bun install
+
+log "verify tsgo availability"
+if ! bunx tsgo --version >/dev/null 2>&1; then
+  echo "[SETUP] ERROR: tsgo is required but unavailable after root dependency install." >&2
+  echo "[SETUP] Remediation: ensure '@typescript/native-preview' is present in root devDependencies and rerun setup." >&2
+  echo "[SETUP] Protocol: re-run 'make setup' until it passes." >&2
+  exit 1
+fi
 
 log "install Playwright Chromium browser"
 bunx playwright install chromium

@@ -17,7 +17,7 @@ This repository is agent-first. `AGENTS.md` is the map; `docs/` is the system of
 5. Repeat `(edit -> make check -> review update in plan)` until gates pass.
 6. Refresh docs/quality/debt artifacts touched by the change.
 7. Finalize the plan lifecycle per `docs/exec-plans/README.md` (status update + move to `completed/` when done, or blocker note if not done).
-8. Run `make pr-ready` before creating the PR (`make pr-submit` also schedules local linked-worktree cleanup).
+8. Run `make pr-ready` before creating the PR (`make pr-submit` also syncs branch-to-origin and schedules local linked-worktree cleanup).
 
 ## Documentation Areas
 - `docs/product-specs/index.md` and `docs/product-specs/README.md`: authoritative behavior and acceptance criteria.
@@ -36,7 +36,7 @@ Use `docs/runbooks/quality-review.md` to keep `docs/quality/*` aligned with real
 ## Agent Harness
 - `AGENTS.md` defines the high-level workflow.
 - `Makefile` defines `make check` as canonical validation plus workflow/PR commands.
-- `tools/agent/*` implements workflow, doc, architecture, and taskflow lifecycle lint.
-- `tools/agent/run_with_cleanup.sh` runs deterministic pre/post cleanup for `make` targets and removes `.tmp-*` harness artifacts plus UI test output directories.
+- Use `make` targets as the interface; follow command output and remediation text to iterate toward green gates.
+- Harness commands are expected to provide actionable failure diagnostics and clear retry protocol.
 - CI runs `make check` on push and pull request.
 - `dev/observability-compose.yml` and `dev/obs.sh` provide opt-in observability scaffolding.

@@ -20,6 +20,13 @@ fi
 
 BRANCH="$(git -C "$ROOT_DIR" rev-parse --abbrev-ref HEAD)"
 
+echo "[PR-SUBMIT] syncing branch '$BRANCH' to origin..."
+if ! git -C "$ROOT_DIR" push -u origin "$BRANCH"; then
+  echo "[PR-SUBMIT] FAIL: unable to push branch '$BRANCH' to origin." >&2
+  echo "[PR-SUBMIT] Remediation: resolve git push errors, then re-run 'make pr-submit'." >&2
+  exit 1
+fi
+
 if gh pr view --json url >/tmp/unslop-pr-view.json 2>/dev/null; then
   URL="$(sed -n 's/.*"url":"\([^"]*\)".*/\1/p' /tmp/unslop-pr-view.json | head -n 1)"
   echo "[PR-SUBMIT] PASS: PR already exists for branch '$BRANCH': ${URL:-unknown}" >&2

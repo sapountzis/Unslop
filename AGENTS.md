@@ -28,7 +28,7 @@
 - `make workflow` # linked-worktree + branch + plan workflow gate
 - `make taskflow` # execution-plan lifecycle + loop evidence gate
 - `make pr-ready` # PR readiness gate (clean tree + completed plan + full check)
-- `make pr-submit` # create PR through `gh` after readiness validation and schedule local worktree cleanup
+- `make pr-submit` # push branch to origin, create PR through `gh` after readiness validation, and schedule local worktree cleanup
 - `make pr-cleanup` # manual local linked-worktree cleanup helper
 
 ## Golden Path (Default)
