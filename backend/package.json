@@ -10,7 +10,7 @@
 		"test:unit": "rg --files src tests | rg '\\.test\\.ts$' | rg -v '\\.(integration|e2e)\\.test\\.ts$' | xargs -r bun test",
 		"test:integration": "rg --files src tests | rg '\\.integration\\.test\\.ts$' | xargs -r bun test",
 		"test:e2e": "rg --files src tests | rg '\\.e2e\\.test\\.ts$' | xargs -r bun test",
-		"type-check": "tsc --noEmit",
+		"type-check": "bunx tsgo --noEmit -p tsconfig.json",
 		"migrate": "drizzle-kit migrate",
 		"migrate:generate": "drizzle-kit generate",
 		"migrate:push": "bun run src/db/migrate.ts"
@@ -32,6 +32,7 @@
 		"@types/async-retry": "^1.4.9",
 		"@types/node": "^22.0.0",
 		"@types/pg": "^8.16.0",
+		"@typescript/native-preview": "7.0.0-dev.20260215.1",
 		"bun-types": "^1.2.2",
 		"drizzle-kit": "^1.0.0-beta.15-859cf75",
 		"typescript": "^5.9.0",
