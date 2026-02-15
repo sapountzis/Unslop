@@ -3,7 +3,7 @@
 Execution plans link product specs to implementation steps.
 
 ## Before You Start
-1. Run `make init-feature FEATURE=<task-slug>` from the primary checkout (creates worktree, seeds plan template, bootstraps env, runs setup).
+1. Run `make init-feature FEATURE=<task-slug>` from the primary checkout (syncs base from origin, creates worktree, seeds plan template, bootstraps env, runs setup).
 2. Fill the generated active plan template before editing code.
 3. Select the governing spec(s) in `docs/product-specs/index.md`.
 4. Review architecture constraints in `ARCHITECTURE.md`.

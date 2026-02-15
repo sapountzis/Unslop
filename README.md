@@ -8,7 +8,7 @@ If you are working as an autonomous coding agent, start here before editing code
 
 1. Read `AGENTS.md`.
 2. Read `docs/index.md`.
-3. Run `make init-feature FEATURE=<task-slug>` from the primary checkout (this also runs setup + env bootstrap in the new worktree).
+3. Run `make init-feature FEATURE=<task-slug>` from the primary checkout (this first syncs the base from origin, then runs setup + env bootstrap in the new worktree).
 4. Fill the generated active plan in `docs/exec-plans/active/`.
 5. Map the task to governing specs in `docs/product-specs/index.md`.
 6. Repeat `(edit -> make check -> review)` until clean.

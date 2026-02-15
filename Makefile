@@ -5,7 +5,7 @@ setup:
 
 init-feature:
 	@if [ -z "$(FEATURE)" ]; then \
-		echo "Usage: make init-feature FEATURE=<slug> [BASE=<branch>] [WORKTREE_ROOT=/tmp/unslop-worktrees] [BRANCH_PREFIX=feat]" >&2; \
+		echo "Usage: make init-feature FEATURE=<slug> [BASE=<branch>] [WORKTREE_ROOT=/tmp/unslop-worktrees] [BRANCH_PREFIX=feat] [AUTO_SYNC_BASE=1]" >&2; \
 		exit 64; \
 	fi
 	bash ./tools/agent/init_feature.sh "$(FEATURE)" "$(BASE)" "$(WORKTREE_ROOT)"

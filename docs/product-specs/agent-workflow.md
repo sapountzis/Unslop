@@ -15,7 +15,7 @@ Agent-driven delivery must follow a deterministic path from feature request to P
 
 ## acceptance_criteria
 - AC1: Feature implementation starts from an explicit initialization command that creates a linked worktree and feature branch.
-- AC2: Initialization seeds an active execution plan template, bootstraps required env files, runs setup, and requires task details to be filled before coding.
+- AC2: Initialization syncs the selected base from `origin`, seeds an active execution plan template, bootstraps required env files, runs setup, and requires task details to be filled before coding.
 - AC3: Harness checks fail when code changes are made outside the required worktree + branch flow.
 - AC4: Taskflow checks require execution-plan evidence of iterative edit/check/review loops.
 - AC5: PR submission tooling validates readiness and preserves links to governing specs and execution plans.

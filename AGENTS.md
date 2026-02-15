@@ -20,7 +20,7 @@
 
 ## Commands
 - `make setup`   # install dependencies and local tooling
-- `make init-feature FEATURE=<task-slug>` # create linked worktree + branch + active plan template + setup/env bootstrap
+- `make init-feature FEATURE=<task-slug>` # sync base from origin, create linked worktree + branch + active plan template + setup/env bootstrap
 - `make fmt`     # apply formatting fixes
 - `make check`   # non-mutating gate: workflow + fmtcheck + lint + type + test + ui + doclint + archlint + taskflow
 - `make ui`      # UI gate only
@@ -32,7 +32,7 @@
 - `make pr-cleanup` # manual local linked-worktree cleanup helper
 
 ## Golden Path (Default)
-1) Run `make init-feature FEATURE=<task-slug>` from the primary checkout.
+1) Run `make init-feature FEATURE=<task-slug>` from the primary checkout (syncs latest base from origin first).
 2) Fill the generated active plan template before any code edits.
 3) Choose the governing spec from `docs/product-specs/index.md`.
 4) Read related architecture and runbooks from `ARCHITECTURE.md` and `docs/runbooks/`.
@@ -44,7 +44,7 @@
 Canonical variants live in `docs/runbooks/golden-paths.md`.
 
 ## Workflow
-1) Start with `make init-feature FEATURE=<task-slug>` to create a linked worktree and seeded active plan.
+1) Start with `make init-feature FEATURE=<task-slug>` to sync base and create a linked worktree with seeded active plan.
 2) Fill task details in the generated plan file before implementation.
 3) Read relevant product specs in `docs/product-specs/`.
 4) Implement changes in small commits.
