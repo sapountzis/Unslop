@@ -137,6 +137,26 @@ function isPlanPath(rel: string): boolean {
 	return PLAN_PATH_RE.test(rel);
 }
 
+function formatFileList(files: string[], max = 10): string {
+	if (files.length === 0) return "(none)";
+	const shown = files.slice(0, max).join(", ");
+	if (files.length <= max) return shown;
+	return `${shown}, ... (+${files.length - max} more)`;
+}
+
+function isLockfilePath(rel: string): boolean {
+	return (
+		rel === "bun.lock" ||
+		rel.endsWith("/bun.lock") ||
+		rel === "package-lock.json" ||
+		rel.endsWith("/package-lock.json") ||
+		rel === "pnpm-lock.yaml" ||
+		rel.endsWith("/pnpm-lock.yaml") ||
+		rel === "yarn.lock" ||
+		rel.endsWith("/yarn.lock")
+	);
+}
+
 function addViolation(message: string, evidence: string, remediation: string) {
 	violations.push({ message, evidence, remediation });
 }
@@ -280,11 +300,32 @@ if (changedCodeFiles.length === 0) {
 }
 
 if (touchedPlans.length !== 1) {
-	addViolation(
-		"code changes require exactly one touched execution plan file",
-		`code files: ${changedCodeFiles.join(", ")}; plan files: ${touchedPlans.length > 0 ? touchedPlans.join(", ") : "(none)"}`,
-		"update exactly one plan under docs/exec-plans/active/ or docs/exec-plans/completed/",
+	const lockfileMutations = changedCodeFiles.filter(isLockfilePath);
+	const nonLockfileMutations = changedCodeFiles.filter(
+		(file) => !isLockfilePath(file),
 	);
+
+	if (touchedPlans.length === 0) {
+		addViolation(
+			`detected ${changedCodeFiles.length} non-doc file mutation(s) without a governing execution plan mutation`,
+			`non-doc files (${changedCodeFiles.length}): ${formatFileList(changedCodeFiles)}; plan files (0): (none)`,
+			"touch exactly one plan file under docs/exec-plans/active/ or docs/exec-plans/completed/ that governs these mutations",
+		);
+
+		if (lockfileMutations.length > 0) {
+			addViolation(
+				`detected ${lockfileMutations.length} lockfile mutation(s) in the working tree`,
+				`lockfile files: ${formatFileList(lockfileMutations)}; other non-doc files: ${formatFileList(nonLockfileMutations)}`,
+				"if dependency manifests changed, regenerate + commit lockfiles and include one governing plan file; if manifests did not change, restore lockfiles and rerun checks",
+			);
+		}
+	} else {
+		addViolation(
+			`detected ${changedCodeFiles.length} non-doc file mutation(s) with ${touchedPlans.length} execution plan mutation(s); exactly one plan is required`,
+			`non-doc files (${changedCodeFiles.length}): ${formatFileList(changedCodeFiles)}; plan files (${touchedPlans.length}): ${formatFileList(touchedPlans)}`,
+			"keep exactly one governing plan file touched and revert unrelated plan mutations",
+		);
+	}
 } else {
 	await validatePlan(touchedPlans[0]);
 }

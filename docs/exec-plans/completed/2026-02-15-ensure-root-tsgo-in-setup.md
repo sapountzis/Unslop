@@ -46,6 +46,7 @@ Links:
 - Iteration 10: edit (`tools/agent/run_with_cleanup.sh`) -> make check (pending rerun) -> review (prevented false failure when `pr-submit` removes active worktree before wrapper post-cleanup).
 - Iteration 11: edit (`tools/agent/test.sh`, `tools/agent/typecheck.sh`) -> make check (pending rerun) -> review (added per-component log tails so failures cannot be hidden by long later-suite output).
 - Iteration 12: edit (env parity for manual fix worktree: copied `backend/.env`) -> make check (pass) -> review (confirmed backend test failures were environment-related and diagnostics now identify failing suite details directly).
+- Iteration 13: edit (`tools/agent/taskflow_check.ts`) -> make check (pending rerun) -> review (made taskflow failure diagnostics adaptive with mutation counts, categorized file lists, and condition-specific remediation).
 
 ## Verification
 - `bash ./tools/agent/typecheck.sh` (pass; final line reports `engine: tsgo`)
@@ -58,6 +59,7 @@ Links:
 - `make check` (fail in manual fix worktree: workflow marker/setup missing; resolved by restoring marker and running make setup)
 - `make test` (pass after env bootstrap parity via `backend/.env`)
 - `make check` (pass after run_with_cleanup + diagnostics refinements)
+- `make taskflow` (pass after adaptive diagnostics update + plan touch)
 
 ## PR
 - PR: https://github.com/sapountzis/Unslop/pull/8
