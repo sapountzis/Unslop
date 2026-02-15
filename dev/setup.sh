@@ -43,6 +43,9 @@ fi
 log "install root dependencies"
 bun install
 
+log "install Playwright Chromium browser"
+bunx playwright install chromium
+
 for dir in backend extension frontend; do
   if [ -f "$dir/package.json" ]; then
     log "install dependencies: $dir"
