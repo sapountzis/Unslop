@@ -60,7 +60,7 @@ Links:
 - `make check` (pass after run_with_cleanup + diagnostics refinements)
 
 ## PR
-- PR: pending (replace with PR URL after `make pr-submit`, or record blocker context)
+- PR: https://github.com/sapountzis/Unslop/pull/8
 
 ## Blockers (optional)
 - Use docs/exec-plans/README.md blocker exception format when blocked.
