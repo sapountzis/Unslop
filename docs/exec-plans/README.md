@@ -3,9 +3,11 @@
 Execution plans link product specs to implementation steps.
 
 ## Before You Start
-1. Select the governing spec(s) in `docs/product-specs/index.md`.
-2. Review architecture constraints in `ARCHITECTURE.md`.
-3. Pull any operational guidance from `docs/runbooks/`.
+1. Run `make init-feature FEATURE=<task-slug>` from the primary checkout (creates worktree, seeds plan template, bootstraps env, runs setup).
+2. Fill the generated active plan template before editing code.
+3. Select the governing spec(s) in `docs/product-specs/index.md`.
+4. Review architecture constraints in `ARCHITECTURE.md`.
+5. Pull any operational guidance from `docs/runbooks/`.
 
 ## Directory Semantics
 - `active/`: current in-flight plans.
@@ -18,8 +20,10 @@ Execution plans link product specs to implementation steps.
 ## Plan Update Checklist
 - Frontmatter is present and current (`owner`, `status`, `created`).
 - Context links point to governing specs and architecture/runbooks.
+- Workflow metadata is present (`Init Command`, `Worktree`, `Branch`, `Active Plan`).
 - Steps reflect current implementation state.
 - Risks and verification are updated after each material milestone.
+- Iteration Log includes explicit `edit -> make check -> review` loop evidence.
 - Completion evidence is captured before moving to `completed/`.
 
 ## Definition of Done
@@ -27,6 +31,7 @@ Execution plans link product specs to implementation steps.
   - Governing specs/runbooks/docs are updated to match delivered behavior.
   - `make check` passes from repository root.
   - Plan verification evidence lists the exact commands run and outcomes.
+  - Plan includes PR tracking under `## PR` and no unresolved `<fill-...>` placeholders.
 
 ## Plan Lifecycle Protocol
 1. Start work by creating/updating one `active/` plan with `status: active`.
@@ -38,7 +43,9 @@ Execution plans link product specs to implementation steps.
 ## Taskflow Gate Rules
 - `make taskflow` runs automatically inside `make check` for code changes.
 - Code changes must touch exactly one plan file under `docs/exec-plans/active/` or `docs/exec-plans/completed/`.
-- A plan that remains in `active/` must include `Human input needed: <exact question>`.
+- Touched plans must include `## Workflow`, `## Iteration Log`, and loop evidence with `make check` + `review`.
+- Touched plans must not include unresolved `<fill-...>` placeholders.
+- Touched plans must include a `## PR` section with `- PR: ...`.
 - A plan in `completed/` must include frontmatter `status: completed` and `completed: <YYYY-MM-DD>`.
 
 ## Environment Blocker Exception Format
@@ -73,16 +80,28 @@ Links:
 - Architecture: ARCHITECTURE.md
 - Runbook: docs/runbooks/<name>.md
 
+## Workflow
+- Init Command: `make init-feature FEATURE=<task-slug>`
+- Worktree: `<fill-worktree-path>`
+- Branch: `<fill-branch-name>`
+- Active Plan: `docs/exec-plans/active/<yyyy-mm-dd>-<task-slug>.md`
+- Status: `<fill-current-phase>`
+
 ## Steps
-1) ...
-2) ...
+1) <fill-step-1>
+2) <fill-step-2>
 
 ## Risks
-- ...
+- <fill-risk-1>
+
+## Iteration Log
+- Iteration 1: context gathered; pending first edit -> make check -> review loop.
 
 ## Verification
-- `make check`
-- extra manual checks (only if needed)
+- <fill-verification-command-and-outcome>
+
+## PR
+- PR: <fill-pr-link-or-pending>
 
 ## Blockers (optional)
 - Use the Environment Blocker Exception Format above when relevant.

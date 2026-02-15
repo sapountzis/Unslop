@@ -6,17 +6,19 @@ Update trigger: changes to default delivery workflow, planning workflow, or qual
 ## Preconditions
 - Task has been mapped to governing specs (or a new spec is created first).
 - Relevant architecture/constitution files have been reviewed.
-- An active execution plan exists for implementation tasks.
+- A linked feature worktree has been initialized via `make init-feature FEATURE=<task-slug>`.
+- The generated active execution plan template is filled before implementation.
 
 ## Steps
 ### Golden Path: Feature or Refactor
-1. Map the request to governing specs in `docs/product-specs/index.md`.
-2. Read constraints in `ARCHITECTURE.md`, `backend/AGENTS.md`, and/or `extension/AGENTS.md` as needed.
-3. Create or update one plan in `docs/exec-plans/active/` using `docs/exec-plans/README.md`.
-4. Implement minimal scoped changes.
-5. Validate with required checks for the scope (`make check` is mandatory).
-6. Update specs/runbooks/quality docs touched by the change.
-7. Capture verification in the plan, apply blocker exception format if needed, then finalize plan status/move per `docs/exec-plans/README.md`.
+1. Run `make init-feature FEATURE=<task-slug>` from the primary checkout (worktree + setup + env bootstrap).
+2. Fill the generated active plan (`docs/exec-plans/active/<yyyy-mm-dd>-<task-slug>.md`) before coding.
+3. Map the request to governing specs in `docs/product-specs/index.md`.
+4. Read constraints in `ARCHITECTURE.md`, `backend/AGENTS.md`, and/or `extension/AGENTS.md` as needed.
+5. Implement minimal scoped changes.
+6. Repeat `(edit -> make check -> review update in plan)` until all required gates pass.
+7. Update specs/runbooks/quality docs touched by the change.
+8. Capture verification in the plan, finalize plan status/move per `docs/exec-plans/README.md`, then run `make pr-ready` before PR submission (`make pr-submit` also schedules local worktree cleanup).
 
 ### Golden Path: Bug Fix
 1. Reproduce the issue and record minimal repro steps in the active plan.

@@ -10,13 +10,14 @@ This repository is agent-first. `AGENTS.md` is the map; `docs/` is the system of
 5. `docs/exec-plans/active/`
 
 ## Quick Start For A New Task
-1. Map the task to one or more specs in `docs/product-specs/index.md`.
-2. Check existing work in `docs/exec-plans/active/` and `docs/exec-plans/completed/`.
-3. If needed, create/update a plan using `docs/exec-plans/README.md`.
-4. Implement minimal scoped changes.
-5. Run required checks before completion (`make check` is the required completion gate).
+1. Run `make init-feature FEATURE=<task-slug>` from the primary checkout (creates worktree, bootstraps env, runs setup).
+2. Fill the generated active plan template before any code edits.
+3. Map the task to one or more specs in `docs/product-specs/index.md`.
+4. Implement minimal scoped changes from the created linked worktree.
+5. Repeat `(edit -> make check -> review update in plan)` until gates pass.
 6. Refresh docs/quality/debt artifacts touched by the change.
 7. Finalize the plan lifecycle per `docs/exec-plans/README.md` (status update + move to `completed/` when done, or blocker note if not done).
+8. Run `make pr-ready` before creating the PR (`make pr-submit` also schedules local linked-worktree cleanup).
 
 ## Documentation Areas
 - `docs/product-specs/index.md` and `docs/product-specs/README.md`: authoritative behavior and acceptance criteria.
@@ -34,8 +35,8 @@ Use `docs/runbooks/quality-review.md` to keep `docs/quality/*` aligned with real
 
 ## Agent Harness
 - `AGENTS.md` defines the high-level workflow.
-- `Makefile` defines `make check` as canonical validation.
-- `tools/agent/*` implements doc, architecture, and taskflow lifecycle lint.
+- `Makefile` defines `make check` as canonical validation plus workflow/PR commands.
+- `tools/agent/*` implements workflow, doc, architecture, and taskflow lifecycle lint.
 - `tools/agent/run_with_cleanup.sh` runs deterministic pre/post cleanup for `make` targets and removes `.tmp-*` harness artifacts plus UI test output directories.
 - CI runs `make check` on push and pull request.
 - `dev/observability-compose.yml` and `dev/obs.sh` provide opt-in observability scaffolding.

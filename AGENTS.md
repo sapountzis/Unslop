@@ -2,6 +2,7 @@
 
 ## Prime Directive
 - Implement changes that satisfy acceptance criteria in `docs/product-specs/*`.
+- Initialize every feature task with `make init-feature FEATURE=<task-slug>` before editing code.
 - Always run `make check` before opening a PR.
 - If knowledge is missing, update docs under `docs/*` so future agents can discover it.
 
@@ -19,29 +20,37 @@
 
 ## Commands
 - `make setup`   # install dependencies and local tooling
+- `make init-feature FEATURE=<task-slug>` # create linked worktree + branch + active plan template + setup/env bootstrap
 - `make fmt`     # apply formatting fixes
-- `make check`   # non-mutating gate: fmtcheck + lint + type + test + ui + doclint + archlint + taskflow
+- `make check`   # non-mutating gate: workflow + fmtcheck + lint + type + test + ui + doclint + archlint + taskflow
 - `make ui`      # UI gate only
 - `make test`    # tests only
-- `make taskflow` # execution-plan lifecycle gate only
+- `make workflow` # linked-worktree + branch + plan workflow gate
+- `make taskflow` # execution-plan lifecycle + loop evidence gate
+- `make pr-ready` # PR readiness gate (clean tree + completed plan + full check)
+- `make pr-submit` # create PR through `gh` after readiness validation and schedule local worktree cleanup
+- `make pr-cleanup` # manual local linked-worktree cleanup helper
 
 ## Golden Path (Default)
-1) Choose the governing spec from `docs/product-specs/index.md`.
-2) Read related architecture and runbooks from `ARCHITECTURE.md` and `docs/runbooks/`.
-3) Create or update one plan in `docs/exec-plans/active/<task>.md` using `docs/exec-plans/README.md`.
-4) Implement minimal scoped changes.
-5) Run required checks and capture results in the plan.
-6) Update specs/runbooks/quality docs before marking complete.
+1) Run `make init-feature FEATURE=<task-slug>` from the primary checkout.
+2) Fill the generated active plan template before any code edits.
+3) Choose the governing spec from `docs/product-specs/index.md`.
+4) Read related architecture and runbooks from `ARCHITECTURE.md` and `docs/runbooks/`.
+5) Implement minimal scoped changes.
+6) Execute `(edit -> make check -> review notes)` loops until clean.
+7) Update specs/runbooks/quality docs before marking complete.
+8) Finalize plan lifecycle, then run `make pr-ready` and `make pr-submit`.
 
 Canonical variants live in `docs/runbooks/golden-paths.md`.
 
 ## Workflow
-1) Read relevant product specs in `docs/product-specs/`.
-2) Create/update an execution plan in `docs/exec-plans/active/<task>.md`.
-3) Implement changes in small commits.
-4) Run `make check` and fix issues until passing.
-5) Update docs/specs/decisions when behavior changes.
-6) Open a focused PR with links to spec and plan.
+1) Start with `make init-feature FEATURE=<task-slug>` to create a linked worktree and seeded active plan.
+2) Fill task details in the generated plan file before implementation.
+3) Read relevant product specs in `docs/product-specs/`.
+4) Implement changes in small commits.
+5) Run `make check` and capture review evidence in the plan after each loop.
+6) Update docs/specs/decisions when behavior changes.
+7) Finalize the plan lifecycle, then open a focused PR with links to spec and plan.
 
 ## Completion Criteria (Definition of Done)
 - Task completion requires all of the following:

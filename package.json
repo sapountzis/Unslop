@@ -8,7 +8,9 @@
 		"agent:type": "bash ./tools/agent/typecheck.sh",
 		"agent:test": "bash ./tools/agent/test.sh",
 		"agent:doclint": "bash ./tools/agent/doclint.sh",
-		"agent:archlint": "bash ./tools/agent/archlint.sh"
+		"agent:archlint": "bash ./tools/agent/archlint.sh",
+		"agent:workflow": "bash ./tools/agent/workflow.sh",
+		"agent:taskflow": "bash ./tools/agent/taskflow.sh"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.3.15",
