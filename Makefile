@@ -1,7 +1,14 @@
-.PHONY: setup fmt fmtcheck lint type test ui doclint archlint taskflow check
+.PHONY: setup init-feature fmt fmtcheck lint type test ui doclint archlint workflow taskflow pr-ready pr-submit check
 
 setup:
 	bash ./tools/agent/run_with_cleanup.sh bash ./dev/setup.sh
+
+init-feature:
+	@if [ -z "$(FEATURE)" ]; then \
+		echo "Usage: make init-feature FEATURE=<slug> [BASE=<branch>] [WORKTREE_ROOT=/tmp/unslop-worktrees] [BRANCH_PREFIX=feat]" >&2; \
+		exit 64; \
+	fi
+	bash ./tools/agent/init_feature.sh "$(FEATURE)" "$(BASE)" "$(WORKTREE_ROOT)"
 
 fmt:
 	bash ./tools/agent/run_with_cleanup.sh bash ./tools/agent/check.sh fmt
@@ -27,8 +34,17 @@ doclint:
 archlint:
 	bash ./tools/agent/run_with_cleanup.sh bash ./tools/agent/check.sh archlint
 
+workflow:
+	bash ./tools/agent/run_with_cleanup.sh bash ./tools/agent/check.sh workflow
+
 taskflow:
 	bash ./tools/agent/run_with_cleanup.sh bash ./tools/agent/check.sh taskflow
+
+pr-ready:
+	bash ./tools/agent/run_with_cleanup.sh bash ./tools/agent/pr_ready.sh
+
+pr-submit:
+	bash ./tools/agent/run_with_cleanup.sh bash ./tools/agent/pr_submit.sh
 
 check:
 	bash ./tools/agent/run_with_cleanup.sh bash ./tools/agent/check.sh all

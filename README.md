@@ -8,9 +8,11 @@ If you are working as an autonomous coding agent, start here before editing code
 
 1. Read `AGENTS.md`.
 2. Read `docs/index.md`.
-3. Map the task to governing specs in `docs/product-specs/index.md`.
-4. Create/update a plan in `docs/exec-plans/active/` using `docs/exec-plans/README.md`.
-5. Run `make check` before proposing completion for PR-ready work.
+3. Run `make init-feature FEATURE=<task-slug>` from the primary checkout.
+4. Fill the generated active plan in `docs/exec-plans/active/`.
+5. Map the task to governing specs in `docs/product-specs/index.md`.
+6. Repeat `(edit -> make check -> review)` until clean.
+7. Run `make pr-ready` before proposing PR submission (`make pr-submit` optional wrapper).
 
 Note:
 - `make setup` bootstraps a root `package.json` for shared agent-harness tooling when missing, then installs root + service dependencies.

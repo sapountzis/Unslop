@@ -6,6 +6,7 @@ Update trigger: any change to docs structure, workflow, or quality maintenance p
 ## Preconditions
 - You have the current change diff and understand impacted code/doc domains.
 - Relevant governing specs and active execution plan are identified.
+- Worktree workflow was initialized with `make init-feature FEATURE=<task-slug>`.
 - Required check commands for the scope are known (`make check` or scoped gates).
 
 ## Steps
@@ -13,9 +14,10 @@ Update trigger: any change to docs structure, workflow, or quality maintenance p
 2. Update governing product specs in `docs/product-specs/` and refresh `last_verified`.
 3. Update linked runbooks if operational behavior changed.
 4. Update plan context/verification in `docs/exec-plans/active/`.
-5. Update ADR docs in `docs/decisions/` for major cross-domain decisions.
-6. Update `docs/quality/QUALITY_SCORE.md` and `docs/quality/tech-debt.md` when quality posture changes.
-7. Validate docs consistency with doc-focused checks.
+5. Capture at least one `edit -> make check -> review` loop entry in the plan's Iteration Log.
+6. Update ADR docs in `docs/decisions/` for major cross-domain decisions.
+7. Update `docs/quality/QUALITY_SCORE.md` and `docs/quality/tech-debt.md` when quality posture changes.
+8. Validate docs consistency with doc-focused checks.
 
 ## Expected Results
 - All affected docs are updated in the same change.

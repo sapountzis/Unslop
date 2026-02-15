@@ -12,6 +12,7 @@ Use this file to choose the governing spec(s) for every task.
 | `frontend.md` | Site pages, user-facing copy surfaces, and static frontend behavior. |
 | `infra.md` | Deployment/runtime infrastructure and environment boundaries. |
 | `ml.md` | Classification model usage policy and non-goals. |
+| `agent-workflow.md` | Agent harness lifecycle from feature request through PR submission. |
 
 ## Selection Rules
 - Choose at least one spec before implementation.

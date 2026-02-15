@@ -6,6 +6,27 @@ import path from "node:path";
 const ROOT = process.cwd();
 const PLAN_PATH_RE = /^docs\/exec-plans\/(active|completed)\/[^/]+\.md$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const PLACEHOLDER_RE = /<fill-[^>]+>/;
+const LOOP_EVIDENCE_RE = /^- Iteration \d+:\s*.*make check.*review.*$/im;
+const REQUIRED_WORKFLOW_PATTERNS = [
+	{
+		label: "Init Command line",
+		pattern: /^- Init Command:\s*`make init-feature FEATURE=[^`]+`\s*$/m,
+	},
+	{
+		label: "Worktree line",
+		pattern: /^- Worktree:\s*`?[^`\n]+`?\s*$/m,
+	},
+	{
+		label: "Branch line",
+		pattern:
+			/^- Branch:\s*`?(?:feat|fix|chore|docs|refactor)\/[a-z0-9][a-z0-9-]*`?\s*$/m,
+	},
+	{
+		label: "Active Plan line",
+		pattern: /^- Active Plan:\s*`docs\/exec-plans\/active\/[^`]+\.md`\s*$/m,
+	},
+];
 const TRANSIENT_ARTIFACT_RE = [
 	/^\.tmp-check\.[^/]+(?:\/.*)?$/,
 	/^\.tmp-check-ui\.[^/]+(?:\/.*)?$/,
@@ -163,15 +184,56 @@ async function validatePlan(planRelPath: string) {
 	const isActive = planRelPath.startsWith("docs/exec-plans/active/");
 	const isCompleted = planRelPath.startsWith("docs/exec-plans/completed/");
 
-	if (isActive) {
-		const blocker = raw.match(/^Human input needed:\s*(.+)\s*$/m);
-		if (!blocker || blocker[1].trim().length === 0) {
+	if (!/^## Workflow$/m.test(raw)) {
+		addViolation(
+			"execution plan must include a Workflow section",
+			`missing '## Workflow' in ${planRelPath}`,
+			"add '## Workflow' with Init Command, Worktree, Branch, and Active Plan lines",
+		);
+	}
+
+	for (const req of REQUIRED_WORKFLOW_PATTERNS) {
+		if (!req.pattern.test(raw)) {
 			addViolation(
-				"active plan requires explicit human blocker question",
-				`active plan without 'Human input needed: <question>': ${planRelPath}`,
-				"if work is complete, move plan to docs/exec-plans/completed/ with completed frontmatter; if blocked, add 'Human input needed: <exact question>'",
+				`execution plan missing required workflow evidence: ${req.label}`,
+				`plan path: ${planRelPath}`,
+				"use the docs/exec-plans/README.md template and keep workflow metadata current",
 			);
 		}
+	}
+
+	if (!/^## Iteration Log$/m.test(raw)) {
+		addViolation(
+			"execution plan must include an Iteration Log section",
+			`missing '## Iteration Log' in ${planRelPath}`,
+			"add Iteration Log entries that capture repeated edit -> make check -> review loops",
+		);
+	} else if (!LOOP_EVIDENCE_RE.test(raw)) {
+		addViolation(
+			"iteration log must include at least one edit/check/review loop entry",
+			`plan path: ${planRelPath}`,
+			"add an entry like '- Iteration N: ... make check ... review ...'",
+		);
+	}
+
+	if (PLACEHOLDER_RE.test(raw)) {
+		addViolation(
+			"execution plan contains unresolved template placeholders",
+			`plan path: ${planRelPath}`,
+			"replace all <fill-...> placeholders before code changes are considered complete",
+		);
+	}
+
+	const prLine = raw.match(/^- PR:\s*(.+)\s*$/m);
+	if (!prLine || prLine[1].trim().length === 0) {
+		addViolation(
+			"execution plan must capture PR status/link under a PR section",
+			`missing '- PR: ...' in ${planRelPath}`,
+			"add '## PR' with '- PR: pending' during development and update it with the submitted PR URL when available",
+		);
+	}
+
+	if (isActive) {
 		return;
 	}
 

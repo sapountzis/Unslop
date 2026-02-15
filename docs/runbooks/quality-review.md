@@ -8,12 +8,14 @@ This runbook defines the manual process for keeping `docs/quality/QUALITY_SCORE.
 ## Preconditions
 - Latest branch diff and merged PR context are available.
 - Active execution plan for the current task exists.
+- Worktree workflow was initialized with `make init-feature FEATURE=<task-slug>`.
 - Required check commands for scope can be executed.
 
 ## Steps
 1. Gather baseline evidence.
    - Run required checks for the scope.
    - Record failures and key observations in the active execution plan.
+   - Record Iteration Log entries showing `edit -> make check -> review` loops.
 2. Re-score quality by domain/layer.
    - Update numeric scores in `docs/quality/QUALITY_SCORE.md`.
    - Add or refresh evidence notes for each changed score.
@@ -27,6 +29,7 @@ This runbook defines the manual process for keeping `docs/quality/QUALITY_SCORE.
 5. Run documentation freshness steps.
    - Follow `docs/runbooks/docs-freshness.md` for affected docs.
 6. Re-validate documentation and checks as needed for the scope.
+7. Run `make pr-ready` before final PR submission.
 
 ## Expected Results
 - `QUALITY_SCORE.md` reflects current reality (not optimistic targets).
