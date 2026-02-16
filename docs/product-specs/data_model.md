@@ -1,7 +1,7 @@
 ---
 owner: unslop
 status: verified
-last_verified: 2026-02-15
+last_verified: 2026-02-16
 ---
 
 # Data Model (v0.1)
@@ -74,17 +74,7 @@ Classification cache keyed by deterministic `content_fingerprint` (global, cross
 ```sql
 CREATE TABLE classification_cache (
   content_fingerprint TEXT PRIMARY KEY,
-  post_id TEXT NOT NULL,
-  author_id TEXT NOT NULL,
-  author_name TEXT,
-
-  canonical_content JSONB NOT NULL,
-
   decision TEXT NOT NULL, -- keep | hide
-  source TEXT NOT NULL,
-  model TEXT,
-  scores_json JSONB NOT NULL,
-
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -98,6 +88,7 @@ Cache policy:
 - key = `content_fingerprint` from canonical request payload
 - no `user_id` in cache key
 - fixed TTL is 30 days from `created_at` (non-sliding)
+- cache rows are minimal (`content_fingerprint`, `decision`, timestamps)
 - cache rows are written only after successful LLM outcomes
 
 ## classification_events
@@ -131,8 +122,9 @@ CREATE INDEX idx_classification_events_created_at ON classification_events(creat
 Event policy:
 
 - rows exist only for attempted provider calls (no cache-hit rows)
-- both successful and failed LLM attempts are recorded
-- failed attempts must set `attempt_status='error'` and include provider metadata fields
+- only failed LLM attempts are persisted in normal flow (`attempt_status='error'`)
+- failed attempts include provider metadata fields when available
+- request/response payload columns are intentionally compact placeholders
 - table has no `user_id` column
 
 ## post_feedback
@@ -166,7 +158,7 @@ CREATE TABLE user_usage (
 );
 ```
 
-Consumption is done atomically in DB updates (`tryConsumeQuota`).
+Consumption is accumulated and written with batched `incrementUsageBy` updates.
 
 Period anchor semantics:
 

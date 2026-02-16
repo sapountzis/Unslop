@@ -155,10 +155,9 @@ Classification cache + event policy (applies to `/v1/classify` and `/v1/classify
 - cache key is deterministic `content_fingerprint` from canonical request payload content
 - cache is global (no `user_id` in cache key)
 - cache TTL is fixed at 30 days (non-sliding; cache hits do not extend expiry)
-- cache rows are written only for successful LLM outcomes
-- `classification_events` rows are written only for actual LLM attempts (cache misses), including LLM error attempts
-- every `classification_events` row must include `attempt_status ∈ {'success','error'}`
-- error event rows must include provider error metadata when available (`provider_http_status`, `provider_error_code`, `provider_error_message`)
+- cache rows store minimal data: `content_fingerprint`, `decision`, timestamps
+- cache writes occur only for successful LLM outcomes
+- `classification_events` rows are compact error telemetry only (best-effort), not full request/response payload storage
 
 Behavior:
 
@@ -166,16 +165,19 @@ Behavior:
 2. canonicalize request payload and compute `content_fingerprint`
 3. check fresh global cache by `content_fingerprint` with fixed 30-day TTL
 4. on cache hit: return cached decision, record `user_activity` source `cache`
-5. on cache miss: atomically consume quota (`tryConsumeQuota`)
-6. if quota unavailable: return `429 { "error": "quota_exceeded" }`
-7. call LLM + scoring (actual attempt => write `classification_events` row)
-8. on success, write/update cache row for `content_fingerprint`
-9. for non-error sources, insert `user_activity` row
+5. on cache miss: read one quota snapshot (`getQuotaStatus`)
+6. if no remaining quota: return `429 { "error": "quota_exceeded" }`
+7. call LLM + scoring
+8. flush persistence best-effort after outcome:
+   - cache upsert (success-only)
+   - `user_activity` insert (non-error outcomes)
+   - usage increment by attempted miss count
+   - compact error telemetry rows when source is `error`
 
 Failure handling:
 
 - model/parsing/provider failures return `decision="keep"` with `source="error"`
-- failure path still writes a `classification_events` row with `attempt_status="error"` and provider metadata
+- failure path still streams response; compact telemetry flush is best-effort
 
 ### POST /v1/classify/batch
 
@@ -224,14 +226,14 @@ Behavior:
 
 1. validates payload
 2. canonicalizes each payload item and computes `content_fingerprint` per item
-3. performs per-item cache lookup by `content_fingerprint`
+3. performs one cache lookup for all fingerprints
 4. emits cache hits immediately as NDJSON lines (`source=cache`)
-5. processes cache misses with bounded concurrency (`BATCH_LLM_CONCURRENCY`)
-6. emits each miss outcome immediately when that post finishes (order not guaranteed; no full-batch buffering)
-7. consumes quota atomically per miss; quota failures become per-item errors
-8. writes cache rows only for successful LLM outcomes
-9. writes `classification_events` rows only for actual LLM attempts (both success and error)
-10. inserts `user_activity` for non-error outcomes
+5. reads one quota snapshot at batch start and computes `allowed_misses = remaining + soft_burst`
+6. immediately emits per-item `{ error: "quota_exceeded" }` for misses beyond allowed budget (no LLM call)
+7. processes allowed misses with bounded concurrency (`BATCH_LLM_CONCURRENCY`)
+8. emits each classified miss outcome immediately when that post finishes (order not guaranteed; no full-batch buffering)
+9. flushes persistence once at end (best-effort): bulk cache upsert, bulk activity insert, one usage increment
+10. appends compact error telemetry only for error outcomes
 
 ## Feedback
 

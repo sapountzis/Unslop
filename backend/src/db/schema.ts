@@ -25,7 +25,6 @@ import {
 export const planEnum = pgEnum("plan", PLAN_VALUES);
 export const planStatusEnum = pgEnum("plan_status", PLAN_STATUS_VALUES);
 export const decisionEnum = pgEnum("decision", DECISION_VALUES);
-export const postSourceEnum = pgEnum("post_source", ["llm", "cache", "error"]);
 export const activitySourceEnum = pgEnum("activity_source", ["llm", "cache"]);
 export const feedbackLabelEnum = pgEnum(
 	"feedback_label",
@@ -69,16 +68,7 @@ export const classificationCache = pgTable(
 	"classification_cache",
 	{
 		contentFingerprint: text("content_fingerprint").primaryKey(),
-		postId: text("post_id").notNull(),
-		authorId: text("author_id").notNull(),
-		authorName: text("author_name"),
-		canonicalContent: jsonb("canonical_content").notNull(),
-
 		decision: decisionEnum("decision").notNull(),
-		source: postSourceEnum("source").notNull(),
-		model: text("model"),
-		scoresJson: jsonb("scores_json").notNull(),
-
 		createdAt: timestamp("created_at", { withTimezone: true })
 			.notNull()
 			.defaultNow(),
@@ -89,10 +79,6 @@ export const classificationCache = pgTable(
 	(table) => [
 		index("idx_classification_cache_created_at").on(table.createdAt),
 		index("idx_classification_cache_updated_at").on(table.updatedAt),
-		check(
-			"classification_cache_source_llm_check",
-			sql`${table.source} = 'llm'`,
-		),
 	],
 );
 

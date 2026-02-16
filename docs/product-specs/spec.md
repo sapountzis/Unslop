@@ -53,8 +53,8 @@ Ship the smallest product that:
 4) Supports email magic-link login (JWT).
 5) Supports a subscription (Polar) with Free vs Pro quotas.
 6) Stores minimal data for future improvements:
-   - `content_fingerprint`, `post_id`, `author_id`, canonical content payload, `decision`, timestamps
-   - append-only `classification_events` rows for actual LLM attempts (`status=success|error`, provider error metadata on failures)
+   - `content_fingerprint`, `decision`, timestamps in classification cache
+   - compact error telemetry rows in `classification_events` (provider metadata only; best-effort)
    - user feedback rows (in-scope)
 7) Hosts a minimal public site with install + privacy + support pages.
 
@@ -102,9 +102,9 @@ Cache policy:
 
 If the backend returns a cached decision (fresh `content_fingerprint` row in `classification_cache`), it does **not** count towards quota.
 
-Quota is consumed atomically before each non-cached LLM attempt.
+Quota is evaluated from a snapshot and usage is incremented in batched write-behind updates.
 
-`classification_events` rows are written only for actual LLM attempts (cache misses), including error attempts.
+`classification_events` rows are error-only compact telemetry and are flushed best-effort.
 
 ## Document map
 

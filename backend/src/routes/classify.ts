@@ -290,11 +290,10 @@ export function createClassifyRoutes(deps: ClassifyRoutesDeps): Hono {
 		async (c) => {
 			const user = c.get("user");
 			const payload: ClassifyBatchPayload = c.req.valid("json");
-			if (!(await deps.classificationService.hasAvailableQuota(user.sub))) {
-				return c.json({ error: "quota_exceeded" }, 429);
-			}
 			const encoder = new TextEncoder();
-			const unresolvedPostIds = new Set(payload.posts.map((post) => post.post_id));
+			const unresolvedPostIds = new Set(
+				payload.posts.map((post) => post.post_id),
+			);
 
 			const stream = new ReadableStream({
 				async start(controller) {

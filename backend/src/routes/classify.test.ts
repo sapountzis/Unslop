@@ -13,6 +13,7 @@ import {
 	MULTIMODAL_MAX_NODE_DEPTH,
 	MULTIMODAL_MAX_PDF_EXCERPT_CHARS,
 } from "../lib/policy-constants";
+import type { ClassificationService } from "../services/classification-service";
 
 process.env.TEST_MODE = process.env.TEST_MODE || "true";
 process.env.DATABASE_URL =
@@ -29,6 +30,7 @@ const { ScoringEngine } = await import("../services/scoring");
 const { batchClassifySchema, classifySchema, createClassifyRoutes } =
 	await import("./classify");
 const { createAuthMiddleware } = await import("../middleware/auth");
+type ClassifyBatchStreamFn = ClassificationService["classifyBatchStream"];
 
 class TestQuotaExceededError extends Error {
 	constructor() {
@@ -43,20 +45,14 @@ const classifySingleMock = mock(async () => ({
 	source: "llm" as const,
 }));
 
-const classifyBatchStreamMock = mock(
-	async (
-		_userId: string,
-		_posts: unknown[],
-		onOutcome: (outcome: unknown) => Promise<void> | void,
-	) => {
-		await onOutcome({
-			post_id: "post-1",
-			decision: "hide" as const,
-			source: "cache" as const,
-		});
-		await onOutcome({ post_id: "post-2", error: "quota_exceeded" as const });
-	},
-);
+const classifyBatchStreamMock = mock((async (_userId, _posts, onOutcome) => {
+	await onOutcome({
+		post_id: "post-1",
+		decision: "hide" as const,
+		source: "cache" as const,
+	});
+	await onOutcome({ post_id: "post-2", error: "quota_exceeded" as const });
+}) as ClassifyBatchStreamFn);
 
 const authMiddleware = createAuthMiddleware({ verifySessionToken });
 
@@ -68,7 +64,6 @@ const app = createTestApp((testApp) => {
 			classificationService: {
 				classifySingle: classifySingleMock,
 				classifyBatchStream: classifyBatchStreamMock,
-				hasAvailableQuota: mock(async () => true),
 			},
 		}),
 	);

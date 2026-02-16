@@ -1,7 +1,7 @@
 ---
 owner: unslop
 status: verified
-last_verified: 2026-02-15
+last_verified: 2026-02-16
 ---
 
 # LLM Classification (v0.1)
@@ -103,17 +103,17 @@ If model call fails or response parsing/validation fails:
 
 - classification falls open to decision `keep`
 - response source is `error`
-- `classification_events` still records the attempted provider call with `attempt_status="error"`
-- error attempts always persist error metadata (`provider_error_message` is synthesized when provider fields are absent)
+- compact error telemetry is appended best-effort (`classification_events`)
+- error telemetry includes provider metadata when available (`provider_error_message` synthesized when missing)
 - request handler must not crash
 
 ## Cache + Event Policy
 
 - cache key is deterministic global `content_fingerprint` from canonical request payload content
 - cache TTL is fixed at 30 days (non-sliding)
+- cache stores only `content_fingerprint`, `decision`, timestamps
 - cache writes occur only on successful LLM outcomes
-- `classification_events` rows are written only for actual LLM attempts (cache misses)
-- `classification_events.attempt_status` is required: `success` or `error`
+- `classification_events` persistence is error-only and best-effort
 
 ## Configuration
 
