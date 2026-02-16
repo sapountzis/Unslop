@@ -6,8 +6,8 @@
 // For local development, use: http://localhost:3000
 // For production, use: https://api.getunslop.com
 
-export const API_BASE_URL = "http://localhost:3000";
-// export const API_BASE_URL = "https://api.getunslop.com";
+// export const API_BASE_URL = "http://localhost:3000";
+export const API_BASE_URL = "https://api.getunslop.com";
 
 // Cache settings
 export const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
