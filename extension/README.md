@@ -291,10 +291,12 @@ Enabled-state default:
 
 - `https://www.linkedin.com/*` for feed DOM parsing/rendering.
 - `https://media.licdn.com/*` for background attachment fetches (images/documents).
+- `https://www.reddit.com/*` and `https://old.reddit.com/*` for Reddit feed DOM parsing/rendering.
+- `https://i.redd.it/*`, `https://preview.redd.it/*`, and `https://external-preview.redd.it/*` for Reddit image attachment fetches in background resolution.
 - `https://api.getunslop.com/*` and `http://localhost:3000/*` for backend API and local development.
 
 Rationale:
-- attachment resolution happens in background, not content script; `media.licdn.com` permission is required for that fetch path.
+- attachment resolution happens in background, not content script; media host permissions (for example `media.licdn.com`, `i.redd.it`, `preview.redd.it`) are required for that fetch path.
 - if attachment fetch fails (permissions/network/content-type), classification continues with reduced payload (fail-open).
 
 ## Troubleshooting Playbook
@@ -310,12 +312,13 @@ Rationale:
 ### Symptom: attachment context is missing in backend decisions
 
 1. Confirm `https://media.licdn.com/*` exists in `host_permissions`.
-2. Confirm posts include `attachments[]` refs from `src/content/linkedin-parser.ts`.
-3. Confirm background resolver does not exceed budgets:
+2. For Reddit, confirm `https://i.redd.it/*`, `https://preview.redd.it/*`, and `https://external-preview.redd.it/*` exist in `host_permissions`.
+3. Confirm platform parser output includes `attachments[]` refs.
+4. Confirm background resolver does not exceed budgets:
    - image: `MAX_IMAGE_BYTES`
    - PDF fetch: `MAX_PDF_FETCH_BYTES`
    - PDF excerpt: `MAX_PDF_EXCERPT_CHARS`
-4. On fetch/parse errors, expect fail-open behavior: attachment dropped, post still classified.
+5. On fetch/parse errors, expect fail-open behavior: attachment dropped, post still classified.
 
 ### Symptom: posts hidden but large blank space
 
