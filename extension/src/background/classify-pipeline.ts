@@ -114,9 +114,7 @@ export async function streamClassifyBatch(
 	);
 	const dispatchConcurrency = Math.max(
 		1,
-		Math.floor(
-			dependencies.dispatchConcurrency ?? BATCH_MAX_INFLIGHT_REQUESTS,
-		),
+		Math.floor(dependencies.dispatchConcurrency ?? BATCH_MAX_INFLIGHT_REQUESTS),
 	);
 	const attachmentDeadline = now() + attachmentBudgetMs;
 

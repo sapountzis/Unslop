@@ -1,8 +1,5 @@
 // extension/src/content/batch-queue.ts
-import {
-	BATCH_MAX_ITEMS,
-	BATCH_WINDOW_MS,
-} from "../lib/config";
+import { BATCH_MAX_ITEMS, BATCH_WINDOW_MS } from "../lib/config";
 import { MESSAGE_TYPES } from "../lib/messages";
 import { BatchClassifyResult, Decision, PostData, Source } from "../types";
 

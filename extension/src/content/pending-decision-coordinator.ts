@@ -59,7 +59,9 @@ type PendingDecisionCoordinatorOptions = {
 };
 
 export type PendingDecisionCoordinator = {
-	register: (registration: PendingDecisionRegistration) => PendingDecisionHandle;
+	register: (
+		registration: PendingDecisionRegistration,
+	) => PendingDecisionHandle;
 	clear: () => void;
 	size: () => number;
 };
@@ -70,9 +72,13 @@ function defaultIsInViewport(element: HTMLElement): boolean {
 
 	const rect = element.getBoundingClientRect();
 	const viewportHeight =
-		typeof window !== "undefined" ? window.innerHeight : Number.POSITIVE_INFINITY;
+		typeof window !== "undefined"
+			? window.innerHeight
+			: Number.POSITIVE_INFINITY;
 	const viewportWidth =
-		typeof window !== "undefined" ? window.innerWidth : Number.POSITIVE_INFINITY;
+		typeof window !== "undefined"
+			? window.innerWidth
+			: Number.POSITIVE_INFINITY;
 
 	return (
 		rect.bottom > 0 &&

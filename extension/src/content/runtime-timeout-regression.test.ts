@@ -102,7 +102,8 @@ describe("runtime timeout regressions", () => {
 		const coordinator = createPendingDecisionCoordinator({
 			timeoutMs: 3000,
 			createObserver: observer.createObserver,
-			isInViewport: (element) => (element as { visible?: boolean }).visible === true,
+			isInViewport: (element) =>
+				(element as { visible?: boolean }).visible === true,
 			setTimeout: clock.setTimeout,
 			clearTimeout: clock.clearTimeout,
 		});
