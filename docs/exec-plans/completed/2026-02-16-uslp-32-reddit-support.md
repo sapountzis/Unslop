@@ -1,7 +1,8 @@
 ---
 owner: agent
-status: active
+status: completed
 created: 2026-02-16
+completed: 2026-02-16
 ---
 
 # Plan: uslp_32_reddit_support
@@ -17,8 +18,8 @@ Links:
 - Init Command: `make init-feature FEATURE=uslp-32-reddit-support`
 - Worktree: `/tmp/unslop-worktrees/uslp-32-reddit-support`
 - Branch: `feat/uslp-32-reddit-support`
-- Active Plan: `docs/exec-plans/active/2026-02-16-uslp-32-reddit-support.md`
-- Status: verification
+- Active Plan: `docs/exec-plans/completed/2026-02-16-uslp-32-reddit-support.md`
+- Status: completed
 - Autonomy: Continue through `make pr-ready` then `make pr-submit` unless blocked or human input is required.
 
 ## Steps
