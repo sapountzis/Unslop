@@ -588,9 +588,10 @@ describe("classification service", () => {
 		expect(classifyPost).toHaveBeenCalledTimes(20);
 
 		expect(upsertMany).toHaveBeenCalledTimes(1);
-		const [cacheWrites] = upsertMany.mock.calls[0] as [
-			{ contentFingerprint: string; decision: "keep" | "hide" }[],
-		];
+		const upsertManyCalls = upsertMany.mock.calls as unknown as Array<
+			[{ contentFingerprint: string; decision: "keep" | "hide" }[]]
+		>;
+		const cacheWrites = upsertManyCalls[0]?.[0] ?? [];
 		expect(cacheWrites).toHaveLength(20);
 		expect(cacheWrites).toEqual(
 			expect.arrayContaining(
@@ -601,14 +602,17 @@ describe("classification service", () => {
 			),
 		);
 		expect(insertMany).toHaveBeenCalledTimes(1);
-		const [activityWrites] = insertMany.mock.calls[0] as [
-			{
-				userId: string;
-				postId: string;
-				decision: "keep" | "hide";
-				source: "llm" | "cache";
-			}[],
-		];
+		const insertManyCalls = insertMany.mock.calls as unknown as Array<
+			[
+				{
+					userId: string;
+					postId: string;
+					decision: "keep" | "hide";
+					source: "llm" | "cache";
+				}[],
+			]
+		>;
+		const activityWrites = insertManyCalls[0]?.[0] ?? [];
 		expect(activityWrites).toHaveLength(20);
 		expect(activityWrites).toEqual(
 			expect.arrayContaining(
@@ -772,9 +776,10 @@ describe("classification service", () => {
 		expect(findFreshByFingerprints).toHaveBeenCalledTimes(1);
 		expect(classifyPost).toHaveBeenCalledTimes(2);
 		expect(upsertMany).toHaveBeenCalledTimes(1);
-		const [cacheWrites] = upsertMany.mock.calls[0] as [
-			{ contentFingerprint: string; decision: "keep" | "hide" }[],
-		];
+		const upsertManyCalls = upsertMany.mock.calls as unknown as Array<
+			[{ contentFingerprint: string; decision: "keep" | "hide" }[]]
+		>;
+		const cacheWrites = upsertManyCalls[0]?.[0] ?? [];
 		expect(cacheWrites).toHaveLength(2);
 		expect(cacheWrites).toEqual(
 			expect.arrayContaining([
@@ -789,14 +794,17 @@ describe("classification service", () => {
 			]),
 		);
 		expect(insertMany).toHaveBeenCalledTimes(1);
-		const [activityWrites] = insertMany.mock.calls[0] as [
-			{
-				userId: string;
-				postId: string;
-				decision: "keep" | "hide";
-				source: "llm" | "cache";
-			}[],
-		];
+		const insertManyCalls = insertMany.mock.calls as unknown as Array<
+			[
+				{
+					userId: string;
+					postId: string;
+					decision: "keep" | "hide";
+					source: "llm" | "cache";
+				}[],
+			]
+		>;
+		const activityWrites = insertManyCalls[0]?.[0] ?? [];
 		expect(activityWrites).toHaveLength(4);
 		expect(activityWrites).toEqual(
 			expect.arrayContaining([
