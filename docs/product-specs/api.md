@@ -1,7 +1,7 @@
 ---
 owner: unslop
 status: verified
-last_verified: 2026-02-15
+last_verified: 2026-02-16
 ---
 
 # API Spec (v0.1)
@@ -225,12 +225,13 @@ Behavior:
 1. validates payload
 2. canonicalizes each payload item and computes `content_fingerprint` per item
 3. performs per-item cache lookup by `content_fingerprint`
-4. returns cache hits as `source=cache`
+4. emits cache hits immediately as NDJSON lines (`source=cache`)
 5. processes cache misses with bounded concurrency (`BATCH_LLM_CONCURRENCY`)
-6. consumes quota atomically per miss; quota failures become per-item errors
-7. writes cache rows only for successful LLM outcomes
-8. writes `classification_events` rows only for actual LLM attempts (both success and error)
-9. inserts `user_activity` for non-error outcomes
+6. emits each miss outcome immediately when that post finishes (order not guaranteed; no full-batch buffering)
+7. consumes quota atomically per miss; quota failures become per-item errors
+8. writes cache rows only for successful LLM outcomes
+9. writes `classification_events` rows only for actual LLM attempts (both success and error)
+10. inserts `user_activity` for non-error outcomes
 
 ## Feedback
 

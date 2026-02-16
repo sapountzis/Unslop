@@ -11,7 +11,6 @@ export interface ActivityInsert {
 
 export interface ActivityRepository {
 	insertActivity: (input: ActivityInsert) => Promise<void>;
-	insertActivities: (inputs: ActivityInsert[]) => Promise<void>;
 }
 
 export interface ActivityRepositoryDeps {
@@ -27,16 +26,7 @@ export function createActivityRepository(
 		await db.insert(userActivity).values(input);
 	}
 
-	async function insertActivities(inputs: ActivityInsert[]): Promise<void> {
-		if (inputs.length === 0) {
-			return;
-		}
-
-		await db.insert(userActivity).values(inputs);
-	}
-
 	return {
 		insertActivity,
-		insertActivities,
 	};
 }

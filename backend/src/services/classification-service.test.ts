@@ -9,7 +9,10 @@ import type { ActivityRepository } from "../repositories/activity-repository";
 import type { QuotaService } from "./quota";
 import type { LlmService } from "./llm";
 import type { ScoreResult } from "../types/classification";
-import { createClassificationService } from "./classification-service";
+import {
+	type BatchClassificationResponse,
+	createClassificationService,
+} from "./classification-service";
 
 process.env.TEST_MODE = process.env.TEST_MODE || "true";
 process.env.DATABASE_URL =
@@ -102,7 +105,6 @@ function createActivityRepository(
 ): ActivityRepository {
 	return {
 		insertActivity: mock(async () => undefined),
-		insertActivities: mock(async () => undefined),
 		...overrides,
 	};
 }
@@ -137,6 +139,18 @@ function createLlmService(overrides: Partial<LlmService> = {}): LlmService {
 		})),
 		...overrides,
 	};
+}
+
+async function collectBatchOutcomes(
+	service: ReturnType<typeof createClassificationService>,
+	userId: string,
+	posts: typeof post[],
+): Promise<BatchClassificationResponse[]> {
+	const outcomes: BatchClassificationResponse[] = [];
+	await service.classifyBatchStream(userId, posts, (outcome) => {
+		outcomes.push(outcome);
+	});
+	return outcomes;
 }
 
 describe("classification service policy", () => {
@@ -354,7 +368,90 @@ describe("classification service policy", () => {
 		);
 	});
 
-	it("batch writes events only for LLM attempts and activity only for non-error outcomes", async () => {
+	it("batch stream emits cache hits before slow misses complete", async () => {
+		const postFingerprint = computeContentFingerprint(post);
+		const findFreshByFingerprints = mock(async () => {
+			const hits = new Map<string, ClassificationCacheRow>();
+			hits.set(postFingerprint, {
+				contentFingerprint: postFingerprint,
+				postId: post.post_id,
+				authorId: post.author_id,
+				authorName: post.author_name,
+				canonicalContent: { post_id: post.post_id },
+				decision: "hide" as const,
+				source: "llm" as const,
+				model: "openrouter/mock",
+				scoresJson: { eb: 0.8 },
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			});
+			return hits;
+		});
+		let releaseSlowLlm: (() => void) | null = null;
+		const slowLlmGate = new Promise<void>((resolve) => {
+			releaseSlowLlm = resolve;
+		});
+		const classifyPost = mock(async () => {
+			await slowLlmGate;
+			return {
+				scores: fullScores,
+				source: "llm" as const,
+				model: "openrouter/mock",
+				latency: 4,
+			};
+		});
+
+		const service = createClassificationService({
+			llmService: createLlmService({ classifyPost }),
+			quotaService: createQuotaService(),
+			classificationCacheRepository: createCacheRepository({
+				findFreshByFingerprints,
+			}),
+			classificationEventRepository: createEventRepository(),
+			activityRepository: createActivityRepository(),
+			logger: { info: mock(() => undefined) },
+			batchLlmConcurrency: 2,
+		});
+
+		const outcomes: BatchClassificationResponse[] = [];
+		let firstOutcomeResolve!: () => void;
+		const firstOutcome = new Promise<void>((resolve) => {
+			firstOutcomeResolve = resolve;
+		});
+
+		const streamPromise = service.classifyBatchStream(
+			"user-1",
+			[post, postTwo],
+			(result) => {
+				outcomes.push(result);
+				if (outcomes.length === 1) {
+					firstOutcomeResolve();
+				}
+			},
+		);
+
+		await firstOutcome;
+		expect(outcomes[0]).toEqual({
+			post_id: post.post_id,
+			decision: "hide",
+			source: "cache",
+		});
+
+		if (!releaseSlowLlm) {
+			throw new Error("expected slow llm gate to be initialized");
+		}
+		releaseSlowLlm();
+		await streamPromise;
+
+		expect(outcomes).toHaveLength(2);
+		expect(outcomes[1]).toEqual({
+			post_id: postTwo.post_id,
+			decision: "keep",
+			source: "llm",
+		});
+	});
+
+	it("batch stream writes events only for LLM attempts and activity only for non-error outcomes", async () => {
 		const findFreshByFingerprint = mock(async () => null);
 		const findFreshByFingerprints = mock(async (fingerprints: string[]) => {
 			const hits = new Map<string, ClassificationCacheRow>();
@@ -421,7 +518,7 @@ describe("classification service policy", () => {
 
 		const append = mock(async () => undefined);
 		const upsertSuccess = mock(async () => undefined);
-		const insertActivities = mock(async () => undefined);
+		const insertActivity = mock(async () => undefined);
 
 		const service = createClassificationService({
 			llmService: createLlmService({ classifyPost }),
@@ -432,12 +529,12 @@ describe("classification service policy", () => {
 				upsertSuccess,
 			}),
 			classificationEventRepository: createEventRepository({ append }),
-			activityRepository: createActivityRepository({ insertActivities }),
+			activityRepository: createActivityRepository({ insertActivity }),
 			logger: { info: mock(() => undefined) },
 			batchLlmConcurrency: 2,
 		});
 
-		const outcomes = await service.classifyBatch("user-1", [
+		const outcomes = await collectBatchOutcomes(service, "user-1", [
 			post,
 			postTwo,
 			postThree,
@@ -463,12 +560,12 @@ describe("classification service policy", () => {
 		expect(upsertSuccess).toHaveBeenCalledTimes(1);
 		expect(findFreshByFingerprints).toHaveBeenCalledTimes(1);
 		expect(findFreshByFingerprint).not.toHaveBeenCalled();
-
-		expect(insertActivities).toHaveBeenCalledWith(
-			expect.arrayContaining([
-				expect.objectContaining({ postId: post.post_id, source: "cache" }),
-				expect.objectContaining({ postId: postTwo.post_id, source: "llm" }),
-			]),
+		expect(insertActivity).toHaveBeenCalledTimes(2);
+		expect(insertActivity).toHaveBeenCalledWith(
+			expect.objectContaining({ postId: post.post_id, source: "cache" }),
+		);
+		expect(insertActivity).toHaveBeenCalledWith(
+			expect.objectContaining({ postId: postTwo.post_id, source: "llm" }),
 		);
 
 		const outcomeByPostId = new Map(

@@ -13,7 +13,13 @@ function makeDeps(overrides: AppDependencyOverrides = {}): AppDependencies {
 		decision: "keep" as const,
 		source: "llm" as const,
 	}));
-	const classifyBatch = mock(async () => []);
+	const classifyBatchStream = mock(
+		async (
+			_userId: string,
+			_posts: unknown[],
+			_onOutcome: (outcome: unknown) => Promise<void> | void,
+		) => undefined,
+	);
 	const getStats = mock(async () => ({
 		all_time: { keep: 0, hide: 0, total: 0 },
 		last_30_days: { keep: 0, hide: 0, total: 0 },
@@ -67,22 +73,22 @@ function makeDeps(overrides: AppDependencyOverrides = {}): AppDependencies {
 			});
 			await next();
 		},
-		services: {
-			classification: {
-				classifySingle,
-				classifyBatch,
-				hasAvailableQuota: mock(async () => true),
-			},
-			auth: {
-				startAuth: mock(async () => undefined),
-				completeMagicLink: mock(async () => ({ sessionToken: "token" })),
-				getCurrentUser: mock(async () => ({
-					id: "user-1",
-					email: "user@example.com",
-					plan: "free",
-					planStatus: "inactive",
-				})),
-			},
+			services: {
+				classification: {
+					classifySingle,
+					classifyBatchStream,
+					hasAvailableQuota: mock(async () => true),
+				},
+				auth: {
+					startAuth: mock(async () => undefined),
+					completeMagicLink: mock(async () => ({ sessionToken: "token" })),
+					getCurrentUser: mock(async () => ({
+						id: "user-1",
+						email: "user@example.com",
+						plan: "free",
+						planStatus: "inactive",
+					})),
+				},
 			feedback: {
 				submitFeedback: mock(async () => "ok" as const),
 			},
@@ -192,7 +198,13 @@ describe("app dependency wiring", () => {
 				services: {
 					classification: {
 						classifySingle,
-						classifyBatch: mock(async () => []),
+						classifyBatchStream: mock(
+							async (
+								_userId: string,
+								_posts: unknown[],
+								_onOutcome: (outcome: unknown) => Promise<void> | void,
+							) => undefined,
+						),
 						hasAvailableQuota: mock(async () => true),
 					},
 				} as Partial<AppDependencies["services"]>,

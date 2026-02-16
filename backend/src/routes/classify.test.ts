@@ -43,10 +43,20 @@ const classifySingleMock = mock(async () => ({
 	source: "llm" as const,
 }));
 
-const classifyBatchMock = mock(async () => [
-	{ post_id: "post-1", decision: "hide" as const, source: "cache" as const },
-	{ post_id: "post-2", error: "quota_exceeded" as const },
-]);
+const classifyBatchStreamMock = mock(
+	async (
+		_userId: string,
+		_posts: unknown[],
+		onOutcome: (outcome: unknown) => Promise<void> | void,
+	) => {
+		await onOutcome({
+			post_id: "post-1",
+			decision: "hide" as const,
+			source: "cache" as const,
+		});
+		await onOutcome({ post_id: "post-2", error: "quota_exceeded" as const });
+	},
+);
 
 const authMiddleware = createAuthMiddleware({ verifySessionToken });
 
@@ -57,7 +67,7 @@ const app = createTestApp((testApp) => {
 			authMiddleware,
 			classificationService: {
 				classifySingle: classifySingleMock,
-				classifyBatch: classifyBatchMock,
+				classifyBatchStream: classifyBatchStreamMock,
 				hasAvailableQuota: mock(async () => true),
 			},
 		}),
@@ -108,7 +118,7 @@ describe("Classify Routes (unit)", () => {
 
 	beforeEach(() => {
 		classifySingleMock.mockClear();
-		classifyBatchMock.mockClear();
+		classifyBatchStreamMock.mockClear();
 	});
 
 	it("POST /v1/classify rejects unauthenticated requests", async () => {
@@ -277,8 +287,12 @@ describe("Classify Routes (unit)", () => {
 
 		expect(res.status).toBe(200);
 		expect(res.headers.get("Content-Type")).toContain("application/x-ndjson");
-		expect(classifyBatchMock).toHaveBeenCalledTimes(1);
-		expect(classifyBatchMock).toHaveBeenCalledWith(TEST_USER_ID, payload.posts);
+		expect(classifyBatchStreamMock).toHaveBeenCalledTimes(1);
+		expect(classifyBatchStreamMock).toHaveBeenCalledWith(
+			TEST_USER_ID,
+			payload.posts,
+			expect.any(Function),
+		);
 
 		const lines = (await res.text())
 			.trim()
@@ -288,6 +302,59 @@ describe("Classify Routes (unit)", () => {
 		expect(lines).toEqual([
 			{ post_id: "post-1", decision: "hide", source: "cache" },
 			{ post_id: "post-2", error: "quota_exceeded" },
+		]);
+	});
+
+	it("POST /v1/classify/batch fail-opens unresolved posts when stream crashes", async () => {
+		classifyBatchStreamMock.mockImplementationOnce(
+			async (_userId, _posts, onOutcome) => {
+				await onOutcome({
+					post_id: "post-1",
+					decision: "hide",
+					source: "cache",
+				});
+				throw new Error("stream crash");
+			},
+		);
+
+		const token = await generateSessionToken(TEST_USER_ID, "test@example.com");
+		const payload = {
+			posts: [
+				{
+					...createMultimodalPost(),
+					post_id: "post-1",
+					author_id: "author-1",
+					author_name: "A",
+					nodes: [{ id: "root", parent_id: null, kind: "root", text: "one" }],
+				},
+				{
+					...createMultimodalPost(),
+					post_id: "post-2",
+					author_id: "author-2",
+					author_name: "B",
+					nodes: [{ id: "root", parent_id: null, kind: "root", text: "two" }],
+				},
+			],
+		};
+
+		const res = await app.request("http://localhost/v1/classify/batch", {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				Authorization: `Bearer ${token}`,
+			},
+			body: JSON.stringify(payload),
+		});
+
+		expect(res.status).toBe(200);
+		const lines = (await res.text())
+			.trim()
+			.split("\n")
+			.map((line) => JSON.parse(line));
+
+		expect(lines).toEqual([
+			{ post_id: "post-1", decision: "hide", source: "cache" },
+			{ post_id: "post-2", decision: "keep", source: "error" },
 		]);
 	});
 

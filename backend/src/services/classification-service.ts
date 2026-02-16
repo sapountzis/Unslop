@@ -47,10 +47,11 @@ export interface ClassificationService {
 		userId: string,
 		post: ClassifyInputPost,
 	) => Promise<ClassificationResponse>;
-	classifyBatch: (
+	classifyBatchStream: (
 		userId: string,
 		posts: ClassifyInputPost[],
-	) => Promise<BatchClassificationResponse[]>;
+		onOutcome: (outcome: BatchClassificationResponse) => Promise<void> | void,
+	) => Promise<void>;
 	hasAvailableQuota: (userId: string) => Promise<boolean>;
 }
 
@@ -308,35 +309,34 @@ export function createClassificationService(
 		return missResult;
 	}
 
-	async function classifyBatch(
+	async function classifyBatchStream(
 		userId: string,
 		posts: ClassifyInputPost[],
-	): Promise<BatchClassificationResponse[]> {
+		onOutcome: (outcome: BatchClassificationResponse) => Promise<void> | void,
+	): Promise<void> {
 		const normalizedPosts = posts.map(normalizePost);
-		const cacheExpiry = getCacheExpiry();
 		const cachedByFingerprint =
 			await deps.classificationCacheRepository.findFreshByFingerprints(
-				normalizedPosts.map((post) => post.fingerprint),
-				cacheExpiry,
+				normalizedPosts.map((postItem) => postItem.fingerprint),
+				getCacheExpiry(),
 			);
-		const activities: ActivityInsert[] = [];
-		const outcomes: BatchClassificationResponse[] = [];
-		const misses: typeof normalizedPosts = [];
+		const misses: NormalizedPost[] = [];
 
 		for (const post of normalizedPosts) {
 			const cached = cachedByFingerprint.get(post.fingerprint);
 			if (cached) {
 				logCacheDecision(post.post_id, cached.decision);
-				activities.push(
+				await deps.activityRepository.insertActivity(
 					toActivityInsert(userId, post.post_id, cached.decision, "cache"),
 				);
-				outcomes.push({
+				await onOutcome({
 					post_id: post.post_id,
 					decision: cached.decision,
 					source: "cache",
 				});
 				continue;
 			}
+
 			misses.push(post);
 		}
 
@@ -350,71 +350,22 @@ export function createClassificationService(
 						return;
 					}
 
-					const consumed = await deps.quotaService.tryConsumeQuota(userId);
-					if (!consumed.allowed) {
-						outcomes.push({
-							post_id: next.post_id,
-							error: "quota_exceeded",
-						});
-						continue;
-					}
-
-					const llmInput = toLlmInput(next);
-					let llmResult: LlmResult;
+					let outcome: BatchClassificationResponse;
 					try {
-						llmResult = await deps.llmService.classifyPost(llmInput);
-					} catch (error) {
-						outcomes.push({
+						outcome = await classifyMiss(userId, next);
+					} catch (_error) {
+						outcome = {
 							post_id: next.post_id,
 							decision: "keep",
 							source: "error",
-						});
-						continue;
+						};
 					}
-
-					const scoringEngine = await getScoringEngine();
-					const scored = scoringEngine.score(llmResult.scores);
-
-					await appendClassificationAttempt(
-						next,
-						llmInput,
-						scored.decision,
-						llmResult,
-					);
-
-					if (llmResult.source === "llm") {
-						await deps.classificationCacheRepository.upsertSuccess({
-							contentFingerprint: next.fingerprint,
-							postId: next.post_id,
-							authorId: next.author_id,
-							authorName: next.author_name,
-							canonicalContent: next.canonicalContent,
-							decision: scored.decision,
-							source: "llm",
-							model: llmResult.model,
-							scoresJson: llmResult.scores ?? {},
-						});
-
-						activities.push(
-							toActivityInsert(userId, next.post_id, scored.decision, "llm"),
-						);
-					}
-
-					outcomes.push({
-						post_id: next.post_id,
-						decision: scored.decision,
-						source: llmResult.source,
-					});
+					await onOutcome(outcome);
 				}
 			},
 		);
 
 		await Promise.all(workers);
-		if (activities.length > 0) {
-			await deps.activityRepository.insertActivities(activities);
-		}
-
-		return outcomes;
 	}
 
 	async function hasAvailableQuota(userId: string): Promise<boolean> {
@@ -424,7 +375,7 @@ export function createClassificationService(
 
 	return {
 		classifySingle,
-		classifyBatch,
+		classifyBatchStream,
 		hasAvailableQuota,
 	};
 }
