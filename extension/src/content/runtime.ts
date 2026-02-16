@@ -28,9 +28,9 @@ import {
 	HIDE_RENDER_MODE_STORAGE_KEY,
 	resolveHideRenderMode,
 } from "../lib/hide-render-mode";
-import { createVisibilityIndex } from "./visibility-index";
 import { createRenderCommitPipeline } from "./render-commit-pipeline";
 import { createRuntimeLifecycle } from "./runtime-lifecycle";
+import { createPendingDecisionCoordinator } from "./pending-decision-coordinator";
 
 const ROUTE_POLL_MS = 500;
 const WATCHDOG_POLL_MS = 1000;
@@ -62,9 +62,6 @@ export function createPlatformRuntime(platform: PlatformPlugin): void {
 	let hideRenderMode: HideRenderMode = HIDE_RENDER_MODE;
 	let inFlightProcessCount = 0;
 	let terminalStateByRoot = new WeakMap<HTMLElement, TerminalState>();
-	let renderCommitPipelineRef: ReturnType<
-		typeof createRenderCommitPipeline
-	> | null = null;
 
 	const runtimeCounters = {
 		postsProcessed: 0,
@@ -92,17 +89,10 @@ export function createPlatformRuntime(platform: PlatformPlugin): void {
 		runtimeCounters[key] += 1;
 	}
 
-	const visibilityIndex = createVisibilityIndex({
-		onVisibilityChange: () => {
-			renderCommitPipelineRef?.requestFlush();
-		},
-	});
-
 	const renderCommitPipeline = createRenderCommitPipeline({
 		render: renderDecision,
-		visibility: visibilityIndex,
 	});
-	renderCommitPipelineRef = renderCommitPipeline;
+	const pendingDecisionCoordinator = createPendingDecisionCoordinator();
 
 	const runtimeLifecycle = createRuntimeLifecycle();
 
@@ -186,7 +176,6 @@ export function createPlatformRuntime(platform: PlatformPlugin): void {
 		if (!surface) return;
 
 		syncSurfaceIdentity(surface.renderRoot, surface.identity);
-		visibilityIndex.observe(surface.renderRoot);
 
 		if (shouldSkipSurfaceProcessing(surface.renderRoot, surface.identity)) {
 			return;
@@ -261,7 +250,6 @@ export function createPlatformRuntime(platform: PlatformPlugin): void {
 		if (!surface) return;
 
 		syncSurfaceIdentity(surface.renderRoot, surface.identity);
-		visibilityIndex.observe(surface.renderRoot);
 
 		if (shouldSkipSurfaceProcessing(surface.renderRoot, surface.identity)) {
 			return;
@@ -287,8 +275,6 @@ export function createPlatformRuntime(platform: PlatformPlugin): void {
 			const expectedIdentity = surface.identity;
 			const expectedRenderRoot = surface.renderRoot;
 
-			const { decision } = await classifyPost(postData);
-
 			const canApplyDecisionNow = (): boolean => {
 				if (!runtimeController.isEnabledForProcessing()) return false;
 
@@ -312,7 +298,46 @@ export function createPlatformRuntime(platform: PlatformPlugin): void {
 				return currentIdentity === expectedIdentity;
 			};
 
+			const enqueueDecisionForSurface = (decision: Decision): void => {
+				handedToRenderPipeline = true;
+				renderCommitPipeline.enqueue({
+					renderRoot: expectedRenderRoot,
+					labelRoot: surface.labelRoot,
+					decision,
+					postId: postData.post_id,
+					hideMode: hideRenderMode,
+					isStillValid: () => canApplyDecisionNow(),
+					onFinalized: (status) => {
+						if (status === "applied") {
+							setTerminalState(expectedRenderRoot, expectedIdentity, decision);
+							incrementCounter("postsProcessed");
+							return;
+						}
+
+						expectedRenderRoot.removeAttribute(ATTRIBUTES.processing);
+						if (!runtimeController.isEnabledForProcessing()) return;
+						enqueueCandidate(surface.contentRoot);
+						scheduleBufferFlush();
+					},
+				});
+			};
+
+			const pendingDecision = pendingDecisionCoordinator.register({
+				postId: postData.post_id,
+				identity: expectedIdentity,
+				renderRoot: expectedRenderRoot,
+				classifyPromise: classifyPost(postData),
+				isStillCurrent: () => canApplyDecisionNow(),
+				onLateHide: () => {
+					if (!canApplyDecisionNow()) return;
+					enqueueDecisionForSurface("hide");
+				},
+			});
+
+			const { decision } = await pendingDecision.awaitInitialDecision();
+
 			if (!canApplyDecisionNow()) {
+				pendingDecision.unregister();
 				surface.renderRoot.removeAttribute(ATTRIBUTES.processing);
 				if (runtimeController.isEnabledForProcessing()) {
 					enqueueCandidate(surface.contentRoot);
@@ -321,27 +346,7 @@ export function createPlatformRuntime(platform: PlatformPlugin): void {
 				return;
 			}
 
-			handedToRenderPipeline = true;
-			renderCommitPipeline.enqueue({
-				renderRoot: expectedRenderRoot,
-				labelRoot: surface.labelRoot,
-				decision,
-				postId: postData.post_id,
-				hideMode: hideRenderMode,
-				isStillValid: () => canApplyDecisionNow(),
-				onFinalized: (status) => {
-					if (status === "applied") {
-						setTerminalState(expectedRenderRoot, expectedIdentity, decision);
-						incrementCounter("postsProcessed");
-						return;
-					}
-
-					expectedRenderRoot.removeAttribute(ATTRIBUTES.processing);
-					if (!runtimeController.isEnabledForProcessing()) return;
-					enqueueCandidate(surface.contentRoot);
-					scheduleBufferFlush();
-				},
-			});
+			enqueueDecisionForSurface(decision);
 		} catch (err) {
 			console.error("Error processing post:", err);
 			if (!runtimeController.isEnabledForProcessing()) return;
@@ -480,7 +485,7 @@ export function createPlatformRuntime(platform: PlatformPlugin): void {
 			runtimeLifecycle.registerCleanup(() => {
 				attachmentController.detachAll();
 				stopProcessingLoop();
-				visibilityIndex.clear();
+				pendingDecisionCoordinator.clear();
 				setPreclassifyGate(false);
 				watchdog.reset();
 				clearUnslopStateInDocument(platform.selectors);

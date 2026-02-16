@@ -1,7 +1,6 @@
 // extension/src/content/batch-queue.ts
 import {
 	BATCH_MAX_ITEMS,
-	BATCH_RESULT_TIMEOUT_MS,
 	BATCH_WINDOW_MS,
 } from "../lib/config";
 import { MESSAGE_TYPES } from "../lib/messages";
@@ -10,7 +9,6 @@ import { BatchClassifyResult, Decision, PostData, Source } from "../types";
 type PendingEntry = {
 	promise: Promise<{ decision: Decision; source: Source }>;
 	resolve: (value: { decision: Decision; source: Source }) => void;
-	timer: ReturnType<typeof globalThis.setTimeout>;
 };
 
 const pending = new Map<string, PendingEntry>();
@@ -18,20 +16,9 @@ const queue: PostData[] = [];
 let flushTimer: ReturnType<typeof globalThis.setTimeout> | null = null;
 let flushing = false;
 
-function setTimer(
-	handler: () => void,
-	timeoutMs: number,
-): ReturnType<typeof globalThis.setTimeout> {
-	return globalThis.setTimeout(handler, timeoutMs);
-}
-
-function clearTimer(timer: ReturnType<typeof globalThis.setTimeout>): void {
-	globalThis.clearTimeout(timer);
-}
-
 function scheduleFlush(): void {
 	if (flushTimer !== null) return;
-	flushTimer = setTimer(() => {
+	flushTimer = globalThis.setTimeout(() => {
 		flushTimer = null;
 		flush().catch((err) => console.error("Batch flush failed:", err));
 	}, BATCH_WINDOW_MS);
@@ -41,7 +28,6 @@ function failBatch(posts: PostData[]): void {
 	for (const post of posts) {
 		const entry = pending.get(post.post_id);
 		if (!entry) continue;
-		clearTimer(entry.timer);
 		entry.resolve({ decision: "keep", source: "error" });
 		pending.delete(post.post_id);
 	}
@@ -51,7 +37,7 @@ async function flush(): Promise<void> {
 	if (flushing) return;
 	flushing = true;
 	if (flushTimer !== null) {
-		clearTimer(flushTimer);
+		globalThis.clearTimeout(flushTimer);
 		flushTimer = null;
 	}
 
@@ -85,14 +71,7 @@ export function enqueueBatch(
 		},
 	);
 
-	const timer = setTimer(() => {
-		const entry = pending.get(post.post_id);
-		if (!entry) return;
-		entry.resolve({ decision: "keep", source: "error" });
-		pending.delete(post.post_id);
-	}, BATCH_RESULT_TIMEOUT_MS);
-
-	pending.set(post.post_id, { promise, resolve, timer });
+	pending.set(post.post_id, { promise, resolve });
 	queue.push(post);
 
 	if (queue.length >= BATCH_MAX_ITEMS) {
@@ -107,7 +86,6 @@ export function enqueueBatch(
 export function handleBatchResult(item: BatchClassifyResult): void {
 	const entry = pending.get(item.post_id);
 	if (!entry) return;
-	clearTimer(entry.timer);
 
 	if (item.error === "quota_exceeded" || !item.decision || !item.source) {
 		entry.resolve({ decision: "keep", source: "error" });
@@ -126,5 +104,17 @@ export function getPendingBatchCount(): number {
 export const __testing = {
 	pendingCount(): number {
 		return getPendingBatchCount();
+	},
+	reset(): void {
+		if (flushTimer !== null) {
+			globalThis.clearTimeout(flushTimer);
+			flushTimer = null;
+		}
+		for (const entry of pending.values()) {
+			entry.resolve({ decision: "keep", source: "error" });
+		}
+		pending.clear();
+		queue.length = 0;
+		flushing = false;
 	},
 };

@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { enqueueBatch, __testing, handleBatchResult } from "./batch-queue";
 import { PostData } from "../types";
-import { BATCH_RESULT_TIMEOUT_MS } from "../lib/config";
 import { MESSAGE_TYPES } from "../lib/messages";
 
 const post: PostData = {
@@ -23,13 +22,10 @@ type TestChrome = {
 };
 type TestGlobal = typeof globalThis & {
 	chrome?: TestChrome;
-	setTimeout: typeof globalThis.setTimeout;
 };
 
 const testGlobal = globalThis as TestGlobal;
 const originalChrome = testGlobal.chrome;
-const originalSetTimeout = testGlobal.setTimeout;
-const originalWindowSetTimeout = globalThis.window?.setTimeout;
 let lastMessage: unknown = null;
 
 describe("batch queue resilience", () => {
@@ -43,40 +39,44 @@ describe("batch queue resilience", () => {
 			},
 		};
 		lastMessage = null;
-
-		const fastTimeout = ((handler: TimerHandler, _timeout?: number) =>
-			originalSetTimeout(handler, 1)) as typeof setTimeout;
-		testGlobal.setTimeout = fastTimeout;
-		if (globalThis.window) {
-			globalThis.window.setTimeout = fastTimeout;
-		}
 	});
 
 	afterEach(() => {
+		__testing.reset();
 		testGlobal.chrome = originalChrome;
-		testGlobal.setTimeout = originalSetTimeout;
-		if (globalThis.window && originalWindowSetTimeout) {
-			globalThis.window.setTimeout = originalWindowSetTimeout;
-		}
 	});
 
-	it("resolves pending entries as fail-open when background stream does not deliver results", async () => {
-		const result = await enqueueBatch(post);
-		expect(result).toEqual({ decision: "keep", source: "error" });
-		expect(__testing.pendingCount()).toBe(0);
-	});
-
-	it("uses queue timeout as the single classification timeout authority (3s)", () => {
-		expect(BATCH_RESULT_TIMEOUT_MS).toBe(3000);
-	});
-
-	it("ignores late batch results after timeout resolution", async () => {
-		const result = await enqueueBatch(post);
-		expect(result).toEqual({ decision: "keep", source: "error" });
-		expect(__testing.pendingCount()).toBe(0);
+	it("keeps entries pending until a background result arrives", async () => {
+		const resultPromise = enqueueBatch(post);
+		await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 5));
+		expect(__testing.pendingCount()).toBe(1);
 
 		handleBatchResult({
 			post_id: post.post_id,
+			decision: "hide",
+			source: "llm",
+		});
+
+		const result = await resultPromise;
+		expect(result).toEqual({ decision: "hide", source: "llm" });
+		expect(__testing.pendingCount()).toBe(0);
+	});
+
+	it("fails open for invalid streamed results", async () => {
+		const resultPromise = enqueueBatch(post);
+
+		handleBatchResult({
+			post_id: post.post_id,
+		});
+
+		const result = await resultPromise;
+		expect(result).toEqual({ decision: "keep", source: "error" });
+		expect(__testing.pendingCount()).toBe(0);
+	});
+
+	it("does not throw on unknown result IDs", () => {
+		handleBatchResult({
+			post_id: "unknown",
 			decision: "hide",
 			source: "llm",
 		});
@@ -86,7 +86,7 @@ describe("batch queue resilience", () => {
 
 	it("sends nodes and attachments in CLASSIFY_BATCH payload", async () => {
 		const resultPromise = enqueueBatch(post);
-		await new Promise<void>((resolve) => originalSetTimeout(resolve, 5));
+		await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 90));
 
 		const payload = lastMessage as {
 			type: string;
@@ -98,6 +98,11 @@ describe("batch queue resilience", () => {
 		]);
 		expect(payload.posts[0]?.attachments).toEqual([]);
 
+		handleBatchResult({
+			post_id: post.post_id,
+			decision: "keep",
+			source: "llm",
+		});
 		await resultPromise;
 	});
 });

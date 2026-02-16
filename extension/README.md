@@ -80,7 +80,7 @@ flowchart LR
 7. Mutation buffer batches candidate processing.
 8. Each candidate is parsed into a multimodal payload (`nodes[]` + attachment refs) and sent through `batch-queue` to background.
 9. Background classify pipeline resolves attachments concurrently (bounded) and dispatches classify micro-batches as posts become ready.
-10. Attachment resolution is budgeted so most of the 3s content timeout remains available for LLM classification; unresolved posts fail open to empty attachments and still get classified.
+10. Pending decision coordinator starts the 3s fail-open timer only when a pending post is in viewport; offscreen posts wait for real classify results.
 11. Background streams NDJSON classify results from backend back to content runtime.
 12. Render commit pipeline coalesces decisions by `renderRoot`, sorts in DOM order, and flushes on RAF.
 13. Decision renderer applies visual state on `labelRoot` and marks `renderRoot` as processed.
@@ -197,19 +197,19 @@ Rules:
 - Drained per frame (`PROCESS_PER_FRAME`).
 
 `src/content/batch-queue.ts`
-- Batches classify requests and tracks pending entries.
-- Single timeout authority: `BATCH_RESULT_TIMEOUT_MS` (3s).
+- Batches classify requests and routes classify results back by `post_id`.
+- Transport-only responsibility (no UI timeout policy).
 
-`src/content/visibility-index.ts`
-- Tracks element visibility snapshots via `IntersectionObserver`.
-- Supports hide deferral policy.
+`src/content/pending-decision-coordinator.ts`
+- Owns pending decision state (`post_id`, identity, render root, timer/status).
+- Starts `BATCH_RESULT_TIMEOUT_MS` only when pending posts are visible.
+- Keeps late results routable and applies late `hide` only when identity is still current.
 
 `src/content/render-commit-pipeline.ts`
 - Single commit boundary for all decisions.
 - Coalesces by render root.
 - Flushes by RAF.
-- Defers destructive `hide + collapse` while currently visible.
-- Also defers far-offscreen collapse until the post enters a viewport-adjacent commit band.
+- Applies decisions as soon as they are valid, with no viewport deferral.
 
 `src/content/decision-renderer.ts`
 - Applies `keep | hide`.
@@ -224,7 +224,7 @@ Rules:
 `src/content/starvation-watchdog.ts`
 - Detects stalled processing and triggers reconcile.
 - Pending batch classify work is treated as active progress to avoid false watchdog recover loops during normal API latency.
-- Watchdog stall detection uses actionable backlog, not raw pending commit count, so visibility-deferred collapse entries do not trigger forced reattach loops.
+- Watchdog stall detection uses actionable backlog, not raw pending commit count.
 
 `src/background/index.ts`
 - Message hub and auth/enabled enforcement.
@@ -337,7 +337,7 @@ Rationale:
 
 ### Symptom: white screen/rerender loop while scrolling
 
-1. Confirm watchdog does not force reconcile while classify work is pending or commit backlog is fully deferred (non-actionable).
+1. Confirm watchdog does not force reconcile while classify work is pending.
 2. Confirm preclassify selector excludes aggregate/discovery modules:
    - `:not([data-id^="urn:li:aggregate:"])`
    - `:not(:has(.feed-shared-aggregated-content))`

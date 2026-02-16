@@ -1,6 +1,5 @@
 import { describe, expect, it } from "bun:test";
 import { createRenderCommitPipeline } from "./render-commit-pipeline";
-import { VisibilityIndex } from "./visibility-index";
 
 class MockElement {
 	public isConnected = true;
@@ -19,17 +18,6 @@ class MockElement {
 
 type MockHTMLElement = MockElement & HTMLElement;
 
-function stableVisibility(): VisibilityIndex {
-	return {
-		observe: () => undefined,
-		unobserve: () => undefined,
-		hasSnapshot: () => true,
-		isCurrentlyVisible: () => false,
-		clear: () => undefined,
-		size: () => 0,
-	};
-}
-
 describe("render commit pipeline stability", () => {
 	it("applies decisions in DOM order even when enqueued out of order", () => {
 		const applied: string[] = [];
@@ -40,7 +28,6 @@ describe("render commit pipeline stability", () => {
 			render: (_element, _decision, postId) => {
 				applied.push(postId ?? "missing");
 			},
-			visibility: stableVisibility(),
 			requestAnimationFrame: () => 1,
 			cancelAnimationFrame: () => undefined,
 		});
@@ -70,7 +57,6 @@ describe("render commit pipeline stability", () => {
 			render: (_element, decision) => {
 				applied.push(decision);
 			},
-			visibility: stableVisibility(),
 			requestAnimationFrame: () => 1,
 			cancelAnimationFrame: () => undefined,
 		});
@@ -99,7 +85,6 @@ describe("render commit pipeline stability", () => {
 			render: (_element, decision) => {
 				applied.push(decision);
 			},
-			visibility: stableVisibility(),
 			requestAnimationFrame: () => 1,
 			cancelAnimationFrame: () => undefined,
 		});
@@ -114,19 +99,11 @@ describe("render commit pipeline stability", () => {
 		expect(applied).toEqual([]);
 	});
 
-	it("reports deferred visible collapse entries as non-actionable backlog", () => {
+	it("reports queued entries as actionable backlog", () => {
 		const element = new MockElement(1) as MockHTMLElement;
 
 		const pipeline = createRenderCommitPipeline({
 			render: () => undefined,
-			visibility: {
-				observe: () => undefined,
-				unobserve: () => undefined,
-				hasSnapshot: () => true,
-				isCurrentlyVisible: () => true,
-				clear: () => undefined,
-				size: () => 0,
-			},
 			requestAnimationFrame: () => 1,
 			cancelAnimationFrame: () => undefined,
 		});
@@ -136,9 +113,7 @@ describe("render commit pipeline stability", () => {
 			decision: "hide",
 			hideMode: "collapse",
 		});
-		pipeline.flushNow();
-
 		expect(pipeline.size()).toBe(1);
-		expect(pipeline.actionableSize()).toBe(0);
+		expect(pipeline.actionableSize()).toBe(1);
 	});
 });
