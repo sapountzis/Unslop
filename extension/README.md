@@ -46,9 +46,9 @@ flowchart LR
   CS --> BUFFER[Mutation Buffer]
   CS --> BATCH[Batch Queue]
   BATCH --> BG[Background Worker]
-  BG --> RESOLVE[Attachment Resolver]
-  RESOLVE --> BG
-  BG --> API[/v1/classify/batch]
+  BG --> PIPE[Classify Pipeline]
+  PIPE --> RESOLVE[Attachment Resolver]
+  PIPE --> API[/v1/classify/batch]
   API --> BG
   BG --> BATCH
   CS --> VIS[Visibility Index]
@@ -79,11 +79,12 @@ flowchart LR
    - `identity` (stable post instance key)
 7. Mutation buffer batches candidate processing.
 8. Each candidate is parsed into a multimodal payload (`nodes[]` + attachment refs) and sent through `batch-queue` to background.
-9. Background resolves attachment refs best-effort (image bytes + PDF excerpt) before calling `/v1/classify/batch`.
-10. Background streams NDJSON classify results from backend back to content runtime.
-11. Render commit pipeline coalesces decisions by `renderRoot`, sorts in DOM order, and flushes on RAF.
-12. Decision renderer applies visual state on `labelRoot` and marks `renderRoot` as processed.
-13. Route/toggle off triggers one centralized runtime dispose path.
+9. Background classify pipeline resolves attachments concurrently (bounded) and dispatches classify micro-batches as posts become ready.
+10. Attachment resolution is budgeted so most of the 3s content timeout remains available for LLM classification; unresolved posts fail open to empty attachments and still get classified.
+11. Background streams NDJSON classify results from backend back to content runtime.
+12. Render commit pipeline coalesces decisions by `renderRoot`, sorts in DOM order, and flushes on RAF.
+13. Decision renderer applies visual state on `labelRoot` and marks `renderRoot` as processed.
+14. Route/toggle off triggers one centralized runtime dispose path.
 
 ## Core Concepts
 
@@ -227,12 +228,19 @@ Rules:
 
 `src/background/index.ts`
 - Message hub and auth/enabled enforcement.
-- Handles classify batching, billing, usage, stats, JWT state.
+- Handles classify dispatch, billing, usage, stats, JWT state.
+
+`src/background/classify-pipeline.ts`
+- Staged background orchestrator for classify requests.
+- Resolves attachments with bounded concurrency (`p-limit`) and short deadline budget.
+- Flushes ready posts to classify batches using shared batch constants (`BATCH_MAX_ITEMS`, `BATCH_WINDOW_MS`).
+- Caps concurrent in-flight classify HTTP requests (`BATCH_MAX_INFLIGHT_REQUESTS`, default `2`) to avoid connection-pool saturation.
+- Fail-open behavior: unresolved posts at deadline are sent with `attachments: []`.
 
 `src/background/attachment-resolver.ts`
 - Resolves image refs to `{ sha256, mime_type, base64 }` with byte budget enforcement.
 - Resolves PDF refs to `{ source_url, excerpt_text }` best-effort.
-- Fail-open behavior: broken attachments are dropped; post classification still proceeds.
+- Fail-open behavior: broken attachments are dropped within a post; post classification still proceeds.
 
 `src/popup/App.ts`
 - Sign-in flow, enable toggle, hide mode selector, plan/usage UI.
@@ -273,6 +281,7 @@ Defined in `src/lib/config.ts`:
 - `API_BASE_URL`
 - `BATCH_WINDOW_MS`
 - `BATCH_MAX_ITEMS`
+- `BATCH_MAX_INFLIGHT_REQUESTS`
 - `BATCH_RESULT_TIMEOUT_MS`
 - `CACHE_TTL_MS`
 - `CACHE_MAX_ITEMS`

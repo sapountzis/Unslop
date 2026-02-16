@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import {
-	resolveBatchAttachmentPayload,
+	resolvePostAttachmentPayload,
 	resizeImageIfNeeded,
 } from "./attachment-resolver";
 
@@ -13,25 +13,21 @@ const BASE_POST = {
 	],
 };
 
-describe("resolveBatchAttachmentPayload", () => {
+describe("resolvePostAttachmentPayload", () => {
 	it("resolves image fetch into sha256 hex + base64 + mime_type", async () => {
-		const request = {
-			posts: [
+		const post = {
+			...BASE_POST,
+			attachments: [
 				{
-					...BASE_POST,
-					attachments: [
-						{
-							node_id: "root",
-							kind: "image" as const,
-							source_url: "https://media.licdn.com/dms/image/test-image",
-						},
-					],
+					node_id: "root",
+					kind: "image" as const,
+					source_url: "https://media.licdn.com/dms/image/test-image",
 				},
 			],
 		};
 
 		const responseBytes = new TextEncoder().encode("abc");
-		const resolved = await resolveBatchAttachmentPayload(request, {
+		const resolved = await resolvePostAttachmentPayload(post, {
 			fetch: async () =>
 				new Response(responseBytes, {
 					status: 200,
@@ -39,7 +35,7 @@ describe("resolveBatchAttachmentPayload", () => {
 				}),
 		});
 
-		const image = resolved.posts[0]?.attachments[0];
+		const image = resolved.attachments[0];
 		expect(image).toEqual({
 			node_id: "root",
 			kind: "image",
@@ -51,22 +47,18 @@ describe("resolveBatchAttachmentPayload", () => {
 	});
 
 	it("keeps pdf attachment with empty excerpt when extraction is unavailable", async () => {
-		const request = {
-			posts: [
+		const post = {
+			...BASE_POST,
+			attachments: [
 				{
-					...BASE_POST,
-					attachments: [
-						{
-							node_id: "root",
-							kind: "pdf" as const,
-							source_url: "https://media.licdn.com/dms/document/test.pdf",
-						},
-					],
+					node_id: "root",
+					kind: "pdf" as const,
+					source_url: "https://media.licdn.com/dms/document/test.pdf",
 				},
 			],
 		};
 
-		const resolved = await resolveBatchAttachmentPayload(request, {
+		const resolved = await resolvePostAttachmentPayload(post, {
 			fetch: async () =>
 				new Response(new Uint8Array([0x25, 0x50, 0x44, 0x46]), {
 					status: 200,
@@ -74,7 +66,7 @@ describe("resolveBatchAttachmentPayload", () => {
 				}),
 		});
 
-		expect(resolved.posts[0]?.attachments).toEqual([
+		expect(resolved.attachments).toEqual([
 			{
 				node_id: "root",
 				kind: "pdf",
@@ -85,28 +77,24 @@ describe("resolveBatchAttachmentPayload", () => {
 	});
 
 	it("resolves parser-emitted pdf refs into source_url", async () => {
-		const request = {
-			posts: [
+		const post = {
+			...BASE_POST,
+			attachments: [
 				{
-					...BASE_POST,
-					attachments: [
-						{
-							node_id: "root",
-							kind: "pdf" as const,
-							iframe_src: "https://media.licdn.com/doc/iframe",
-							container_data_url: "https://media.licdn.com/doc/container",
-							source_hint: "https://media.licdn.com/doc/hint",
-						},
-					],
+					node_id: "root",
+					kind: "pdf" as const,
+					iframe_src: "https://media.licdn.com/doc/iframe",
+					container_data_url: "https://media.licdn.com/doc/container",
+					source_hint: "https://media.licdn.com/doc/hint",
 				},
 			],
 		};
 
-		const resolved = await resolveBatchAttachmentPayload(request, {
+		const resolved = await resolvePostAttachmentPayload(post, {
 			fetch: async () => new Response("", { status: 200 }),
 		});
 
-		expect(resolved.posts[0]?.attachments[0]).toEqual(
+		expect(resolved.attachments[0]).toEqual(
 			expect.objectContaining({
 				kind: "pdf",
 				source_url: expect.any(String),
@@ -115,55 +103,47 @@ describe("resolveBatchAttachmentPayload", () => {
 	});
 
 	it("drops parser pdf refs when no valid http source url is present", async () => {
-		const request = {
-			posts: [
+		const post = {
+			...BASE_POST,
+			attachments: [
 				{
-					...BASE_POST,
-					attachments: [
-						{
-							node_id: "root",
-							kind: "pdf" as const,
-							source_hint: "feedshare-document",
-						},
-					],
+					node_id: "root",
+					kind: "pdf" as const,
+					source_hint: "feedshare-document",
 				},
 			],
 		};
 
-		const resolved = await resolveBatchAttachmentPayload(request, {
+		const resolved = await resolvePostAttachmentPayload(post, {
 			fetch: async () => new Response("", { status: 200 }),
 		});
 
-		expect(resolved.posts[0]?.attachments).toEqual([]);
+		expect(resolved.attachments).toEqual([]);
 	});
 
 	it("returns partial payload and never throws when individual attachments fail", async () => {
-		const request = {
-			posts: [
+		const post = {
+			...BASE_POST,
+			attachments: [
 				{
-					...BASE_POST,
-					attachments: [
-						{
-							node_id: "root",
-							kind: "image" as const,
-							source_url: "https://media.licdn.com/dms/image/bad-image",
-						},
-						{
-							node_id: "root",
-							kind: "pdf" as const,
-							source_url: "https://media.licdn.com/dms/document/unreadable.pdf",
-						},
-						{
-							node_id: "root",
-							kind: "image" as const,
-							source_url: "https://media.licdn.com/dms/image/good-image",
-						},
-					],
+					node_id: "root",
+					kind: "image" as const,
+					source_url: "https://media.licdn.com/dms/image/bad-image",
+				},
+				{
+					node_id: "root",
+					kind: "pdf" as const,
+					source_url: "https://media.licdn.com/dms/document/unreadable.pdf",
+				},
+				{
+					node_id: "root",
+					kind: "image" as const,
+					source_url: "https://media.licdn.com/dms/image/good-image",
 				},
 			],
 		};
 
-		const resolved = await resolveBatchAttachmentPayload(request, {
+		const resolved = await resolvePostAttachmentPayload(post, {
 			fetch: async (input: RequestInfo | URL) => {
 				const url =
 					typeof input === "string"
@@ -184,8 +164,7 @@ describe("resolveBatchAttachmentPayload", () => {
 			},
 		});
 
-		expect(resolved.posts).toHaveLength(1);
-		expect(resolved.posts[0]?.attachments).toEqual([
+		expect(resolved.attachments).toEqual([
 			{
 				node_id: "root",
 				kind: "pdf",
@@ -204,17 +183,13 @@ describe("resolveBatchAttachmentPayload", () => {
 	});
 
 	it("uses custom resize function via dependency injection", async () => {
-		const request = {
-			posts: [
+		const post = {
+			...BASE_POST,
+			attachments: [
 				{
-					...BASE_POST,
-					attachments: [
-						{
-							node_id: "root",
-							kind: "image" as const,
-							source_url: "https://example.com/image.png",
-						},
-					],
+					node_id: "root",
+					kind: "image" as const,
+					source_url: "https://example.com/image.png",
 				},
 			],
 		};
@@ -226,7 +201,7 @@ describe("resolveBatchAttachmentPayload", () => {
 			mime: string;
 		} | null = null;
 
-		const resolved = await resolveBatchAttachmentPayload(request, {
+		const resolved = await resolvePostAttachmentPayload(post, {
 			fetch: async () =>
 				new Response(responseBytes, {
 					status: 200,
@@ -247,7 +222,7 @@ describe("resolveBatchAttachmentPayload", () => {
 			maxDim: 512,
 			mime: "image/png",
 		});
-		expect(resolved.posts[0]?.attachments[0]).toEqual({
+		expect(resolved.attachments[0]).toEqual({
 			node_id: "root",
 			kind: "image",
 			sha256:

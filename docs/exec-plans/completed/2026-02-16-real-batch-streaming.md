@@ -1,7 +1,8 @@
 ---
 owner: agent
-status: active
+status: completed
 created: 2026-02-16
+completed: 2026-02-16
 ---
 
 # Plan: real_batch_streaming
@@ -18,8 +19,8 @@ Links:
 - Init Command: `make init-feature FEATURE=real-batch-streaming` (skipped by explicit user instruction; already operating in existing task branch/worktree)
 - Worktree: `/home/andreas/projects/Unslop`
 - Branch: `feat/uslp-32-reddit-support`
-- Active Plan: `docs/exec-plans/active/2026-02-16-real-batch-streaming.md`
-- Status: implementation complete; verification and blocker documentation updated
+- Active Plan: `docs/exec-plans/completed/2026-02-16-real-batch-streaming.md`
+- Status: completed; implementation, targeted verification, and commit/push finished on active branch
 - Autonomy: Continue through implementation and verification, then await user direction for commit/push.
 
 ## Steps
@@ -48,7 +49,7 @@ Links:
 - `make check` (fail: workflow gate requires linked worktree + workflow marker; see blocker details).
 
 ## PR
-- PR: pending (replace with PR URL after `make pr-submit`, or record blocker context)
+- PR: branch push completed (`feat/uslp-32-reddit-support`, commit `28ca8ab462dc2d2cec40b6cb27b32166b60be84d`); PR URL pending user-managed submission
 
 ## Blockers (optional)
 - Command: `make check`
@@ -58,4 +59,4 @@ Links:
 - Evidence: `[WORKFLOW] ERROR: code changes must be validated from a linked worktree, not the primary checkout` and `[WORKFLOW] ERROR: workflow marker is missing`.
 - Human input needed: Do you want me to run `make init-feature FEATURE=real-batch-streaming`, migrate this work into the linked worktree, and rerun `make check`/`make pr-ready` there?
 - Owner Action: Human confirms whether to enforce full workflow migration now or proceed with targeted verification evidence only.
-- Task Status Impact: Implementation is complete and tested for touched backend scope; plan remains active until workflow-gated verification path is explicitly chosen.
+- Task Status Impact: Implementation is complete and tested for touched backend scope; blocker retained as historical evidence after explicit task closure.

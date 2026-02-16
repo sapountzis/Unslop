@@ -1,5 +1,4 @@
 import {
-	BatchClassifyRequest,
 	ResolvedImageAttachment,
 	PdfAttachment,
 	ResolvedPdfAttachment,
@@ -12,12 +11,8 @@ export const MAX_IMAGE_DIMENSION = 1024;
 export const MAX_PDF_FETCH_BYTES = 150_000;
 export const MAX_PDF_EXCERPT_CHARS = 2_000;
 
-type PostDataLike = Omit<PostData, "attachments"> & {
+export type PostDataLike = Omit<PostData, "attachments"> & {
 	attachments?: unknown[];
-};
-
-export type BatchClassifyRequestLike = {
-	posts: PostDataLike[];
 };
 
 export type ResizeImageFn = (
@@ -42,41 +37,35 @@ type AttachmentBudgets = {
 	maxPdfExcerptChars: number;
 };
 
-export async function resolveBatchAttachmentPayload(
-	request: BatchClassifyRequestLike,
+export async function resolvePostAttachmentPayload(
+	post: PostDataLike,
 	dependencies: AttachmentResolverDependencies = {},
-): Promise<BatchClassifyRequest> {
+): Promise<PostData> {
 	const budgets = resolveBudgets(dependencies);
-	const resolvedPosts: PostData[] = [];
+	const resolvedAttachments: PostAttachment[] = [];
 
-	for (const post of request.posts) {
-		const resolvedAttachments: PostAttachment[] = [];
-
-		for (const attachment of post.attachments ?? []) {
-			try {
-				const resolved = await resolveAttachment(
-					attachment,
-					dependencies,
-					budgets,
-				);
-				if (resolved) {
-					resolvedAttachments.push(resolved);
-				}
-			} catch {
-				// Fail-open: skip broken attachments and keep processing the post.
+	for (const attachment of post.attachments ?? []) {
+		try {
+			const resolved = await resolveAttachment(
+				attachment,
+				dependencies,
+				budgets,
+			);
+			if (resolved) {
+				resolvedAttachments.push(resolved);
 			}
+		} catch {
+			// Fail-open: skip broken attachments and keep processing the post.
 		}
-
-		resolvedPosts.push({
-			post_id: post.post_id,
-			author_id: post.author_id,
-			author_name: post.author_name,
-			nodes: post.nodes,
-			attachments: resolvedAttachments,
-		});
 	}
 
-	return { posts: resolvedPosts };
+	return {
+		post_id: post.post_id,
+		author_id: post.author_id,
+		author_name: post.author_name,
+		nodes: post.nodes,
+		attachments: resolvedAttachments,
+	};
 }
 
 function resolveBudgets(

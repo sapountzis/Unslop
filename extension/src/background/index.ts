@@ -1,6 +1,5 @@
 // extension/src/background/index.ts
 import {
-	classifyPostsBatch,
 	getUserInfoWithUsage,
 	createCheckout,
 	startAuthFlow,
@@ -8,7 +7,7 @@ import {
 } from "./api";
 import { MESSAGE_TYPES, type RuntimeRequest } from "../lib/messages";
 import { resolveEnabled, toggleEnabled } from "../lib/enabled-state";
-import { resolveBatchAttachmentPayload } from "./attachment-resolver";
+import { streamClassifyBatch } from "./classify-pipeline";
 
 async function getJwtFromStorage(): Promise<string | null> {
 	const storage = await chrome.storage.sync.get("jwt");
@@ -56,30 +55,14 @@ chrome.runtime.onMessage.addListener(
 							return;
 						}
 
-						const resolvedRequest = await resolveBatchAttachmentPayload(
-							message,
-						).catch((err) => {
-							console.error(
-								"Attachment resolution failed; continuing without attachments:",
-								err,
-							);
-							return {
-								posts: message.posts.map((post) => ({
-									...post,
-									attachments: [],
-								})),
-							};
-						});
-
-						classifyPostsBatch(resolvedRequest, storage.jwt, (item) => {
-							chrome.tabs.sendMessage(tabId, {
+						streamClassifyBatch(message, storage.jwt, (item) => {
+							void chrome.tabs.sendMessage(tabId, {
 								type: MESSAGE_TYPES.CLASSIFY_BATCH_RESULT,
 								item,
 							});
-						}).catch((err) => {
-							console.error("Batch classify failed:", err);
+						}).catch(() => {
 							for (const post of message.posts) {
-								chrome.tabs.sendMessage(tabId, {
+								void chrome.tabs.sendMessage(tabId, {
 									type: MESSAGE_TYPES.CLASSIFY_BATCH_RESULT,
 									item: {
 										post_id: post.post_id,
