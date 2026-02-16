@@ -105,4 +105,26 @@ describe("batch queue resilience", () => {
 		});
 		await resultPromise;
 	});
+
+	it("expires pending entries and allows re-enqueue for the same post", async () => {
+		__testing.setPendingEntryExpiryMs(10);
+		const firstPromise = enqueueBatch(post);
+
+		await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 25));
+
+		expect(await firstPromise).toEqual({ decision: "keep", source: "error" });
+		expect(__testing.pendingCount()).toBe(0);
+
+		__testing.setPendingEntryExpiryMs(500);
+		const secondPromise = enqueueBatch(post);
+
+		handleBatchResult({
+			post_id: post.post_id,
+			decision: "hide",
+			source: "llm",
+		});
+
+		expect(await secondPromise).toEqual({ decision: "hide", source: "llm" });
+		expect(__testing.pendingCount()).toBe(0);
+	});
 });
