@@ -1,6 +1,6 @@
 # Unslop Extension (Chrome MV3)
 
-This extension filters the LinkedIn home feed with one strict loop:
+This extension filters LinkedIn, X, and Reddit feed surfaces with one strict loop:
 
 1. Detect feed post surfaces.
 2. Classify each post as `keep | hide`.
@@ -8,7 +8,7 @@ This extension filters the LinkedIn home feed with one strict loop:
 4. Fail open to `keep` on runtime/network errors.
 
 The implementation prioritizes two outcomes:
-- Stable UX on a highly dynamic LinkedIn DOM.
+- Stable UX on highly dynamic social DOMs.
 - Small, explicit module boundaries for easier debugging.
 
 ## Quick Start (For New Developers)
@@ -62,10 +62,10 @@ flowchart LR
 
 ## End-to-End Flow (What Actually Happens)
 
-1. `src/content/linkedin.ts` is injected on `https://www.linkedin.com/*` at `document_start`.
-2. If URL route matches `/feed/`, it immediately sets:
+1. Platform entry points (`src/platforms/linkedin/index.ts`, `src/platforms/x/index.ts`, `src/platforms/reddit/index.ts`) are injected on supported hosts at `document_start`.
+2. If the current route is eligible for filtering, runtime immediately sets:
    - `html[data-unslop-preclassify="true"]`
-3. CSS preclassify rule cloaks unprocessed feed containers before classification while preserving layout:
+3. LinkedIn preclassify CSS cloaks unprocessed feed containers before classification while preserving layout:
    - `html[data-unslop-preclassify="true"] [data-finite-scroll-hotkey-item]:has(.feed-shared-update-v2[role="article"]):not([data-unslop-processed]):not([data-id^="urn:li:aggregate:"]):not(:has(.feed-shared-aggregated-content)):not(:has(.update-components-feed-discovery-entity)) { opacity: 0 !important; pointer-events: none !important; }`
    - Aggregate/discovery modules (for example "Recommended for you") are excluded and left untouched.
 4. Runtime controller reconciles route + enabled state and starts attachment.
@@ -90,13 +90,13 @@ flowchart LR
 - `Preclassify Gate`
   - Early route-level gate that hides unprocessed posts and prevents flash-then-hide.
 - `contentRoot`
-  - Semantic post node used by parser (`src/content/linkedin-parser.ts`).
+  - Semantic post node used by platform parser (`src/platforms/*/parser.ts`).
 - `renderRoot`
   - Outer post container where hide/collapse classes and markers are applied.
 - `labelRoot`
   - Element where the decision pill is placed in label mode (may differ from renderRoot on platforms with nested wrappers).
 - `Identity`
-  - Post instance key from `data-id` / `data-urn` / nested URN fallback.
+  - Post instance key from platform-native attributes (for example LinkedIn URN, X status URL, Reddit `t3_*` or ad fallback key).
 - `Terminal State`
   - Decision already committed for a specific `renderRoot + identity` (tracked per renderRoot, rendered on labelRoot).
 - `Fail Open`
@@ -105,6 +105,17 @@ flowchart LR
   - Classification input is `{ post_id, author_*, nodes[], attachments[] }`, not text-only.
 - `Attachment Resolution`
   - Content script extracts refs only; background fetches and normalizes attachment payloads.
+
+## Platform Plugins
+
+- `src/platforms/linkedin/*`
+  - LinkedIn selectors/parser/surface/route wiring.
+- `src/platforms/x/*`
+  - X/Twitter selectors/parser/surface/route wiring with quote-scope parsing and hydration-aware media handling.
+- `src/platforms/reddit/*`
+  - Reddit selectors/parser/surface/route wiring for `shreddit-post` and `shreddit-ad-post`.
+  - Reddit parser captures normalized title/body text plus subreddit/post metadata when available.
+  - Reddit parser emits deterministic image attachment refs with deduped source URLs.
 
 ## Selector And Marker Contract
 

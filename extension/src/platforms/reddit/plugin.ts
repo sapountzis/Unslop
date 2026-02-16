@@ -18,7 +18,7 @@ export const redditPlugin: PlatformPlugin = {
 		renderPostRoot: SELECTORS.renderPostRoot,
 	},
 
-	preclassifyCssSelector: `shreddit-post:not([data-unslop-processed]), article[data-testid="post-container"]:not([data-unslop-processed]), .Post:not([data-unslop-processed])`,
+	preclassifyCssSelector: `shreddit-post:not([data-unslop-processed]), shreddit-ad-post:not([data-unslop-processed]), article[data-testid="post-container"]:not([data-unslop-processed]), .Post:not([data-unslop-processed])`,
 
 	shouldFilterRoute,
 	routeKeyFromUrl,

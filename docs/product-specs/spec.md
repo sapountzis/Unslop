@@ -1,13 +1,13 @@
 ---
 owner: unslop
 status: verified
-last_verified: 2026-02-15
+last_verified: 2026-02-16
 ---
 
 # Unslop – Minimal Project Spec (v0.1)
 
 ## problem
-Users need a minimal, fail-open way to filter low-value LinkedIn feed content without introducing brittle UI complexity.
+Users need a minimal, fail-open way to filter low-value social feed content without introducing brittle UI complexity.
 
 ## non_goals
 - Model training, student models, or heuristic classifiers.
@@ -39,7 +39,7 @@ Users need a minimal, fail-open way to filter low-value LinkedIn feed content wi
 - Migration: Data schema evolves through Drizzle migrations.
 - Backout: Revert deployment and rollback migration-compatible changes as needed.
 
-Unslop is a Chrome extension + backend API that filters the LinkedIn feed by **hiding posts** according to a backend decision.
+Unslop is a Chrome extension + backend API that filters supported social feeds (LinkedIn, X, Reddit) by **hiding posts** according to a backend decision.
 
 v0.1 also includes a minimal public website (`getunslop.com`) for trust + policy/support pages.
 
@@ -47,7 +47,7 @@ v0.1 also includes a minimal public website (`getunslop.com`) for trust + policy
 
 Ship the smallest product that:
 
-1) Works on `https://www.linkedin.com/*` and does not break browsing.
+1) Works on `https://www.linkedin.com/*`, `https://x.com/*` (`https://twitter.com/*`), and `https://www.reddit.com/*` (`https://old.reddit.com/*`) without breaking browsing.
 2) Calls a backend API for each new post (or uses cached decisions).
 3) Applies one of two actions: `keep`, `hide`.
 4) Supports email magic-link login (JWT).
