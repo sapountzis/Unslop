@@ -290,32 +290,38 @@ export function createClassifyRoutes(deps: ClassifyRoutesDeps): Hono {
 		async (c) => {
 			const user = c.get("user");
 			const payload: ClassifyBatchPayload = c.req.valid("json");
-			if (!(await deps.classificationService.hasAvailableQuota(user.sub))) {
-				return c.json({ error: "quota_exceeded" }, 429);
-			}
 			const encoder = new TextEncoder();
+			const unresolvedPostIds = new Set(
+				payload.posts.map((post) => post.post_id),
+			);
 
 			const stream = new ReadableStream({
 				async start(controller) {
-					let outcomes: BatchClassificationResponse[];
 					try {
-						outcomes = await deps.classificationService.classifyBatch(
+						await deps.classificationService.classifyBatchStream(
 							user.sub,
 							payload.posts,
+							(outcome) => {
+								unresolvedPostIds.delete(outcome.post_id);
+								controller.enqueue(
+									encoder.encode(`${JSON.stringify(outcome)}\n`),
+								);
+							},
 						);
 					} catch (_error) {
-						outcomes = payload.posts.map((post) => ({
-							post_id: post.post_id,
-							decision: "keep",
-							source: "error",
-						}));
+						for (const postId of unresolvedPostIds) {
+							const fallback: BatchClassificationResponse = {
+								post_id: postId,
+								decision: "keep",
+								source: "error",
+							};
+							controller.enqueue(
+								encoder.encode(`${JSON.stringify(fallback)}\n`),
+							);
+						}
+					} finally {
+						controller.close();
 					}
-
-					for (const outcome of outcomes) {
-						controller.enqueue(encoder.encode(`${JSON.stringify(outcome)}\n`));
-					}
-
-					controller.close();
 				},
 			});
 

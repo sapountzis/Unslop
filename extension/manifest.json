@@ -11,6 +11,9 @@
 		"https://twitter.com/*",
 		"https://www.reddit.com/*",
 		"https://old.reddit.com/*",
+		"https://i.redd.it/*",
+		"https://preview.redd.it/*",
+		"https://external-preview.redd.it/*",
 		"https://api.getunslop.com/*",
 		"http://localhost:3000/*"
 	],

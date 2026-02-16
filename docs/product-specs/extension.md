@@ -1,13 +1,13 @@
 ---
 owner: unslop
 status: verified
-last_verified: 2026-02-15
+last_verified: 2026-02-16
 ---
 
 # Chrome Extension Spec (v0.1)
 
 ## problem
-Users need a minimal Chrome extension that can classify LinkedIn feed posts and apply decisions without breaking normal browsing.
+Users need a minimal Chrome extension that can classify LinkedIn, X, and Reddit feed posts and apply decisions without breaking normal browsing.
 
 ## non_goals
 - UI complexity beyond toggle/sign-in/status/upgrade.
@@ -21,7 +21,7 @@ Users need a minimal Chrome extension that can classify LinkedIn feed posts and 
 ## constraints
 - Performance: Mutation observation and classify batching must not degrade feed interaction.
 - Security/Privacy: JWT handling uses extension storage and auth-domain callback transport only.
-- Compatibility: Must run under Chrome MV3 and current LinkedIn DOM integration points.
+- Compatibility: Must run under Chrome MV3 and current LinkedIn/X/Reddit DOM integration points.
 
 ## telemetry
 - Logs: Runtime classify request/response outcomes and auth/session edge cases.
@@ -40,7 +40,7 @@ Users need a minimal Chrome extension that can classify LinkedIn feed posts and 
 
 ## Summary
 
-The extension filters the LinkedIn feed by requesting a backend decision for each post and applying one of:
+The extension filters supported social feeds by requesting a backend decision for each post and applying one of:
 
 - `keep`
 - `hide`
@@ -49,8 +49,10 @@ The extension must be minimal and must **fail open**.
 
 ## Components
 
-1. **Content Script (LinkedIn)**
-   - Runs on `https://www.linkedin.com/*`.
+1. **Content Scripts (Platform plugins)**
+   - LinkedIn plugin runs on `https://www.linkedin.com/*`.
+   - X plugin runs on `https://x.com/*` and `https://twitter.com/*`.
+   - Reddit plugin runs on `https://www.reddit.com/*` and `https://old.reddit.com/*`.
    - Starts at `document_start` to enable pre-classification hiding.
    - Detects posts using `MutationObserver`.
    - Extracts `post_id`, `author_id`, `author_name`, `nodes`, and `attachments`.
@@ -94,7 +96,7 @@ type Storage = {
 For each feed post element:
 
 - `post_id`:
-  - Use LinkedIn’s stable ID if present, else derive (see below)
+  - Use platform-native stable ID if present, else derive (see below)
 - `author_id`:
   - profile URL or stable author identifier if present
 - `author_name`:
@@ -120,6 +122,12 @@ If no native post id exists:
 - preserve deterministic node and attachment ordering when building request payloads
 - the extension does not compute `content_fingerprint`
 - backend computes global `content_fingerprint` for cache lookups from canonical payload content
+
+### Reddit capture requirements
+
+- Candidate post roots include both `shreddit-post` and `shreddit-ad-post`.
+- Parser includes title/body plus available subreddit and post metadata in normalized node text.
+- Parser emits image attachment refs from Reddit media containers with deterministic ordinals and stable deduping by source URL.
 
 ## Classification flow (required)
 
@@ -155,7 +163,7 @@ The content script uses a fail-open timeout (`3000ms` baseline). If no decision 
 
 - **keep**: no changes
 - **hide**:
-  - keep the LinkedIn post node mounted
+  - keep the platform post node mounted
   - in `collapse` mode: collapse it with CSS (`display: none`, no visible replacement text)
   - in `label` mode: keep post visible and prepend a compact decision pill
   - do not remove/unmount the node to reduce rerender churn
@@ -171,4 +179,4 @@ The content script uses a fail-open timeout (`3000ms` baseline). If no decision 
 
 - If classify fails, returns 429, or returns invalid payload:
   - treat as `decision="keep"`
-- Never throw uncaught errors that break LinkedIn rendering.
+- Never throw uncaught errors that break host-platform rendering.

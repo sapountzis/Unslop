@@ -1,7 +1,7 @@
 ---
 owner: unslop
 status: verified
-last_verified: 2026-02-15
+last_verified: 2026-02-16
 ---
 
 # Billing & Plans (v0.1)
@@ -19,7 +19,7 @@ The product needs deterministic free/pro entitlement behavior with quota enforce
 - AC3: Plan-status semantics and quota period anchors are deterministic.
 
 ## constraints
-- Performance: Quota checks must be fast and atomic on non-cached classification attempts.
+- Performance: Quota checks must be low-overhead, batch-oriented, and avoid per-item hot-path writes.
 - Security/Privacy: Webhook signature verification and idempotency are mandatory.
 - Compatibility: Provider contract remains aligned with Polar events and payload normalization.
 
@@ -65,7 +65,10 @@ Quota exhaustion behavior (both plans):
 Usage unit: one attempted non-cached LLM classification.
 
 - cache hit (`source=cache`) does not consume quota
-- cache miss consumes quota atomically before LLM attempt
+- `/v1/classify` uses one quota snapshot and increments usage after the attempt
+- `/v1/classify/batch` uses one batch-start quota snapshot plus a soft burst budget (`remaining + soft_burst`)
+- `/v1/classify/batch` usage increments once per allowed attempted miss (single post-batch increment)
+- slight overuse under concurrent requests is acceptable by design to reduce DB pressure
 
 ## Checkout Endpoint
 

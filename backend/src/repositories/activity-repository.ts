@@ -10,8 +10,7 @@ export interface ActivityInsert {
 }
 
 export interface ActivityRepository {
-	insertActivity: (input: ActivityInsert) => Promise<void>;
-	insertActivities: (inputs: ActivityInsert[]) => Promise<void>;
+	insertMany: (inputs: ActivityInsert[]) => Promise<void>;
 }
 
 export interface ActivityRepositoryDeps {
@@ -23,11 +22,7 @@ export function createActivityRepository(
 ): ActivityRepository {
 	const { db } = deps;
 
-	async function insertActivity(input: ActivityInsert): Promise<void> {
-		await db.insert(userActivity).values(input);
-	}
-
-	async function insertActivities(inputs: ActivityInsert[]): Promise<void> {
+	async function insertMany(inputs: ActivityInsert[]): Promise<void> {
 		if (inputs.length === 0) {
 			return;
 		}
@@ -36,7 +31,6 @@ export function createActivityRepository(
 	}
 
 	return {
-		insertActivity,
-		insertActivities,
+		insertMany,
 	};
 }

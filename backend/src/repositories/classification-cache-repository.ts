@@ -1,34 +1,18 @@
-import { and, eq, gt, inArray } from "drizzle-orm";
+import { and, eq, gt, inArray, sql } from "drizzle-orm";
 import type { Database } from "../db";
 import { classificationCache } from "../db/schema";
 import type { Decision } from "../types/classification";
 
-type JsonObject = Record<string, unknown>;
-
 export interface ClassificationCacheRow {
 	contentFingerprint: string;
-	postId: string;
-	authorId: string;
-	authorName: string | null;
-	canonicalContent: JsonObject;
 	decision: Decision;
-	source: "llm";
-	model: string | null;
-	scoresJson: JsonObject;
 	createdAt: Date;
 	updatedAt: Date;
 }
 
-export interface UpsertClassificationCacheSuccessInput {
+export interface UpsertClassificationCacheInput {
 	contentFingerprint: string;
-	postId: string;
-	authorId: string;
-	authorName?: string | null;
-	canonicalContent: JsonObject;
 	decision: Decision;
-	source: "llm";
-	model?: string | null;
-	scoresJson: JsonObject;
 }
 
 export interface ClassificationCacheRepository {
@@ -40,9 +24,7 @@ export interface ClassificationCacheRepository {
 		contentFingerprints: string[],
 		freshnessCutoff: Date,
 	) => Promise<Map<string, ClassificationCacheRow>>;
-	upsertSuccess: (
-		input: UpsertClassificationCacheSuccessInput,
-	) => Promise<void>;
+	upsertMany: (inputs: UpsertClassificationCacheInput[]) => Promise<void>;
 }
 
 export interface ClassificationCacheRepositoryDeps {
@@ -61,14 +43,7 @@ export function createClassificationCacheRepository(
 		const rows = await db
 			.select({
 				contentFingerprint: classificationCache.contentFingerprint,
-				postId: classificationCache.postId,
-				authorId: classificationCache.authorId,
-				authorName: classificationCache.authorName,
-				canonicalContent: classificationCache.canonicalContent,
 				decision: classificationCache.decision,
-				source: classificationCache.source,
-				model: classificationCache.model,
-				scoresJson: classificationCache.scoresJson,
 				createdAt: classificationCache.createdAt,
 				updatedAt: classificationCache.updatedAt,
 			})
@@ -87,14 +62,7 @@ export function createClassificationCacheRepository(
 
 		return {
 			contentFingerprint: row.contentFingerprint,
-			postId: row.postId,
-			authorId: row.authorId,
-			authorName: row.authorName,
-			canonicalContent: row.canonicalContent as JsonObject,
 			decision: row.decision as Decision,
-			source: row.source as "llm",
-			model: row.model,
-			scoresJson: row.scoresJson as JsonObject,
 			createdAt: row.createdAt,
 			updatedAt: row.updatedAt,
 		};
@@ -111,14 +79,7 @@ export function createClassificationCacheRepository(
 		const rows = await db
 			.select({
 				contentFingerprint: classificationCache.contentFingerprint,
-				postId: classificationCache.postId,
-				authorId: classificationCache.authorId,
-				authorName: classificationCache.authorName,
-				canonicalContent: classificationCache.canonicalContent,
 				decision: classificationCache.decision,
-				source: classificationCache.source,
-				model: classificationCache.model,
-				scoresJson: classificationCache.scoresJson,
 				createdAt: classificationCache.createdAt,
 				updatedAt: classificationCache.updatedAt,
 			})
@@ -137,14 +98,7 @@ export function createClassificationCacheRepository(
 					row.contentFingerprint,
 					{
 						contentFingerprint: row.contentFingerprint,
-						postId: row.postId,
-						authorId: row.authorId,
-						authorName: row.authorName,
-						canonicalContent: row.canonicalContent as JsonObject,
 						decision: row.decision as Decision,
-						source: row.source as "llm",
-						model: row.model,
-						scoresJson: row.scoresJson as JsonObject,
 						createdAt: row.createdAt,
 						updatedAt: row.updatedAt,
 					},
@@ -152,35 +106,29 @@ export function createClassificationCacheRepository(
 		);
 	}
 
-	async function upsertSuccess(
-		input: UpsertClassificationCacheSuccessInput,
+	async function upsertMany(
+		inputs: UpsertClassificationCacheInput[],
 	): Promise<void> {
+		if (inputs.length === 0) {
+			return;
+		}
+
 		const now = new Date();
 
 		await db
 			.insert(classificationCache)
-			.values({
-				contentFingerprint: input.contentFingerprint,
-				postId: input.postId,
-				authorId: input.authorId,
-				authorName: input.authorName ?? null,
-				canonicalContent: input.canonicalContent,
-				decision: input.decision,
-				source: input.source,
-				model: input.model ?? null,
-				scoresJson: input.scoresJson,
-			})
+			.values(
+				inputs.map((input) => ({
+					contentFingerprint: input.contentFingerprint,
+					decision: input.decision,
+					createdAt: now,
+					updatedAt: now,
+				})),
+			)
 			.onConflictDoUpdate({
 				target: classificationCache.contentFingerprint,
 				set: {
-					postId: input.postId,
-					authorId: input.authorId,
-					authorName: input.authorName ?? null,
-					canonicalContent: input.canonicalContent,
-					decision: input.decision,
-					source: input.source,
-					model: input.model ?? null,
-					scoresJson: input.scoresJson,
+					decision: sql`excluded.decision`,
 					createdAt: now,
 					updatedAt: now,
 				},
@@ -190,6 +138,6 @@ export function createClassificationCacheRepository(
 	return {
 		findFreshByFingerprint,
 		findFreshByFingerprints,
-		upsertSuccess,
+		upsertMany,
 	};
 }

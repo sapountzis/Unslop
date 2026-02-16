@@ -1,14 +1,11 @@
 import { Decision } from "../types";
 import { HideRenderMode } from "../lib/config";
-import { VisibilityIndex } from "./visibility-index";
 
 const POSITION_PRECEDING =
 	typeof Node === "undefined" ? 2 : Node.DOCUMENT_POSITION_PRECEDING;
 const POSITION_FOLLOWING =
 	typeof Node === "undefined" ? 4 : Node.DOCUMENT_POSITION_FOLLOWING;
 const FALLBACK_RAF_INTERVAL_MS = 16;
-const HIDE_DECISION: Decision = "hide";
-const COLLAPSE_HIDE_MODE: HideRenderMode = "collapse";
 
 type RenderFinalizeStatus = "applied" | "discarded";
 const RENDER_FINALIZE_APPLIED: RenderFinalizeStatus = "applied";
@@ -37,13 +34,9 @@ type RenderCommitPipelineOptions = {
 		postId?: string,
 		options?: { hideMode?: HideRenderMode },
 	) => void;
-	visibility: VisibilityIndex;
-	isWithinCommitBand?: (element: HTMLElement) => boolean;
 	requestAnimationFrame?: (cb: FrameRequestCallback) => number;
 	cancelAnimationFrame?: (id: number) => void;
 };
-
-const DEFAULT_COMMIT_BAND_PX = 240;
 
 let fallbackFrameId = 0;
 const fallbackFrameTimers = new Map<
@@ -78,41 +71,6 @@ function compareDomOrder(a: HTMLElement, b: HTMLElement): number {
 	return 0;
 }
 
-function isCollapseHideDecision(
-	entry: Pick<InternalEntry, "decision" | "hideMode">,
-): boolean {
-	return (
-		entry.decision === HIDE_DECISION && entry.hideMode === COLLAPSE_HIDE_MODE
-	);
-}
-
-function shouldDeferDestructiveHide(
-	entry: InternalEntry,
-	visibility: VisibilityIndex,
-): boolean {
-	if (!isCollapseHideDecision(entry)) return false;
-	if (!visibility.hasSnapshot(entry.renderRoot)) return true;
-	return visibility.isCurrentlyVisible(entry.renderRoot);
-}
-
-function defaultIsWithinCommitBand(element: HTMLElement): boolean {
-	if (typeof window === "undefined") return true;
-	if (typeof element.getBoundingClientRect !== "function") return true;
-
-	const rect = element.getBoundingClientRect();
-	const viewportHeight =
-		window.innerHeight ||
-		(typeof document !== "undefined"
-			? (document.documentElement?.clientHeight ?? 0)
-			: 0);
-
-	if (!Number.isFinite(viewportHeight) || viewportHeight <= 0) return true;
-
-	const bandTop = 0 - DEFAULT_COMMIT_BAND_PX;
-	const bandBottom = viewportHeight + DEFAULT_COMMIT_BAND_PX;
-	return rect.bottom >= bandTop && rect.top <= bandBottom;
-}
-
 export function createRenderCommitPipeline(
 	options: RenderCommitPipelineOptions,
 ) {
@@ -126,9 +84,6 @@ export function createRenderCommitPipeline(
 		(typeof window.cancelAnimationFrame === "function"
 			? window.cancelAnimationFrame.bind(window)
 			: fallbackCancelAnimationFrame);
-	const isWithinCommitBand =
-		options.isWithinCommitBand ?? defaultIsWithinCommitBand;
-
 	const pending = new Map<HTMLElement, InternalEntry>();
 	let frameHandle = 0;
 
@@ -155,21 +110,6 @@ export function createRenderCommitPipeline(
 		});
 	}
 
-	function shouldDefer(entry: InternalEntry): boolean {
-		if (shouldDeferDestructiveHide(entry, options.visibility)) {
-			return true;
-		}
-
-		if (
-			isCollapseHideDecision(entry) &&
-			!isWithinCommitBand(entry.renderRoot)
-		) {
-			return true;
-		}
-
-		return false;
-	}
-
 	function flushNow(): void {
 		if (pending.size === 0) return;
 
@@ -181,11 +121,6 @@ export function createRenderCommitPipeline(
 		for (const entry of entries) {
 			if (shouldDiscard(entry)) {
 				finalize(entry, RENDER_FINALIZE_DISCARDED);
-				continue;
-			}
-
-			if (shouldDefer(entry)) {
-				pending.set(entry.renderRoot, entry);
 				continue;
 			}
 
@@ -225,7 +160,6 @@ export function createRenderCommitPipeline(
 			let count = 0;
 			for (const entry of pending.values()) {
 				if (shouldDiscard(entry)) continue;
-				if (shouldDefer(entry)) continue;
 				count += 1;
 			}
 			return count;

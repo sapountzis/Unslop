@@ -1,23 +1,17 @@
 import type { Database } from "../db";
 import { classificationEvents } from "../db/schema";
 
-type JsonObject = Record<string, unknown>;
-
-export interface AppendClassificationEventInput {
+export interface AppendClassificationErrorEventInput {
 	contentFingerprint: string;
 	postId: string;
-	model?: string | null;
-	attemptStatus: "success" | "error";
 	providerHttpStatus?: number;
 	providerErrorCode?: string;
 	providerErrorType?: string;
 	providerErrorMessage?: string;
-	requestPayload: JsonObject;
-	responsePayload: JsonObject;
 }
 
 export interface ClassificationEventRepository {
-	append: (input: AppendClassificationEventInput) => Promise<void>;
+	appendMany: (inputs: AppendClassificationErrorEventInput[]) => Promise<void>;
 }
 
 export interface ClassificationEventRepositoryDeps {
@@ -29,30 +23,53 @@ export function createClassificationEventRepository(
 ): ClassificationEventRepository {
 	const { db } = deps;
 
-	async function append(input: AppendClassificationEventInput): Promise<void> {
-		await db.insert(classificationEvents).values({
-			contentFingerprint: input.contentFingerprint,
-			postId: input.postId,
-			model: input.model ?? null,
-			attemptStatus: input.attemptStatus,
-			...(input.providerHttpStatus !== undefined
-				? { providerHttpStatus: input.providerHttpStatus }
-				: {}),
-			...(input.providerErrorCode !== undefined
-				? { providerErrorCode: input.providerErrorCode }
-				: {}),
-			...(input.providerErrorType !== undefined
-				? { providerErrorType: input.providerErrorType }
-				: {}),
-			...(input.providerErrorMessage !== undefined
-				? { providerErrorMessage: input.providerErrorMessage }
-				: {}),
-			requestPayload: input.requestPayload,
-			responsePayload: input.responsePayload,
-		});
+	async function appendMany(
+		inputs: AppendClassificationErrorEventInput[],
+	): Promise<void> {
+		if (inputs.length === 0) {
+			return;
+		}
+
+		await db.insert(classificationEvents).values(
+			inputs.map((input) => {
+				const providerErrorMessage =
+					input.providerErrorMessage?.trim() || "llm_error:unknown";
+
+				return {
+					contentFingerprint: input.contentFingerprint,
+					postId: input.postId,
+					model: null,
+					attemptStatus: "error" as const,
+					...(input.providerHttpStatus !== undefined
+						? { providerHttpStatus: input.providerHttpStatus }
+						: {}),
+					...(input.providerErrorCode !== undefined
+						? { providerErrorCode: input.providerErrorCode }
+						: {}),
+					...(input.providerErrorType !== undefined
+						? { providerErrorType: input.providerErrorType }
+						: {}),
+					providerErrorMessage,
+					requestPayload: {},
+					responsePayload: {
+						source: "error",
+						...(input.providerHttpStatus !== undefined
+							? { provider_http_status: input.providerHttpStatus }
+							: {}),
+						...(input.providerErrorCode !== undefined
+							? { provider_error_code: input.providerErrorCode }
+							: {}),
+						...(input.providerErrorType !== undefined
+							? { provider_error_type: input.providerErrorType }
+							: {}),
+						provider_error_message: providerErrorMessage,
+					},
+				};
+			}),
+		);
 	}
 
 	return {
-		append,
+		appendMany,
 	};
 }

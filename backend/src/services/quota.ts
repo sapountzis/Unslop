@@ -16,19 +16,9 @@ export interface QuotaStatus extends QuotaCheckResult {
 	isPro: boolean;
 }
 
-export interface QuotaConsumeResult {
-	allowed: boolean;
-	remaining: number;
-	periodStart: string;
-}
-
 export interface QuotaService {
 	getQuotaStatus: (userId: string) => Promise<QuotaStatus>;
 	checkQuota: (userId: string) => Promise<QuotaCheckResult>;
-	tryConsumeQuota: (
-		userId: string,
-		units?: number,
-	) => Promise<QuotaConsumeResult>;
 	incrementUsageBy: (
 		userId: string,
 		count: number,
@@ -94,81 +84,6 @@ export function createQuotaService(deps: QuotaServiceDeps): QuotaService {
 		};
 	}
 
-	async function tryConsumeQuota(
-		userId: string,
-		units = 1,
-	): Promise<QuotaConsumeResult> {
-		if (units <= 0) {
-			const status = await getQuotaStatus(userId);
-			return {
-				allowed: status.allowed,
-				remaining: status.remaining,
-				periodStart: status.periodStart,
-			};
-		}
-
-		const context = await quotaContextService.resolveQuotaContext(userId);
-		if (!context) {
-			return {
-				allowed: false,
-				remaining: 0,
-				periodStart: "",
-			};
-		}
-
-		await db
-			.insert(userUsage)
-			.values({
-				userId,
-				monthStart: context.periodStart,
-				llmCalls: 0,
-			})
-			.onConflictDoNothing({
-				target: [userUsage.userId, userUsage.monthStart],
-			});
-
-		const updated = await db
-			.update(userUsage)
-			.set({
-				llmCalls: sql`${userUsage.llmCalls} + ${units}`,
-			})
-			.where(
-				and(
-					eq(userUsage.userId, userId),
-					eq(userUsage.monthStart, context.periodStart),
-					sql`${userUsage.llmCalls} + ${units} <= ${context.limit}`,
-				),
-			)
-			.returning({ llmCalls: userUsage.llmCalls });
-
-		if (updated.length === 0) {
-			const existing = await db
-				.select({ llmCalls: userUsage.llmCalls })
-				.from(userUsage)
-				.where(
-					and(
-						eq(userUsage.userId, userId),
-						eq(userUsage.monthStart, context.periodStart),
-					),
-				)
-				.limit(1);
-
-			const currentUsage = existing[0]?.llmCalls || 0;
-			return {
-				allowed: false,
-				remaining: Math.max(0, context.limit - currentUsage),
-				periodStart: context.periodStart,
-			};
-		}
-
-		const remaining = Math.max(0, context.limit - updated[0].llmCalls);
-		return {
-			allowed: true,
-			remaining,
-			periodStart: context.periodStart,
-		};
-	}
-
 	async function incrementUsageBy(
 		userId: string,
 		count: number,
@@ -205,7 +120,6 @@ export function createQuotaService(deps: QuotaServiceDeps): QuotaService {
 	return {
 		getQuotaStatus,
 		checkQuota,
-		tryConsumeQuota,
 		incrementUsageBy,
 		incrementUsage,
 	};

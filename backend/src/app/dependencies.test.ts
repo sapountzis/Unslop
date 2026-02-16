@@ -6,6 +6,8 @@ import { createQuotaContextService } from "../services/quota-context";
 type AppDependencyOverrides = Omit<Partial<AppDependencies>, "services"> & {
 	services?: Partial<AppDependencies["services"]>;
 };
+type ClassifyBatchStreamFn =
+	AppDependencies["services"]["classification"]["classifyBatchStream"];
 
 function makeDeps(overrides: AppDependencyOverrides = {}): AppDependencies {
 	const classifySingle = mock(async () => ({
@@ -13,7 +15,9 @@ function makeDeps(overrides: AppDependencyOverrides = {}): AppDependencies {
 		decision: "keep" as const,
 		source: "llm" as const,
 	}));
-	const classifyBatch = mock(async () => []);
+	const classifyBatchStream = mock(
+		(async (_userId, _posts, _onOutcome) => undefined) as ClassifyBatchStreamFn,
+	);
 	const getStats = mock(async () => ({
 		all_time: { keep: 0, hide: 0, total: 0 },
 		last_30_days: { keep: 0, hide: 0, total: 0 },
@@ -70,8 +74,7 @@ function makeDeps(overrides: AppDependencyOverrides = {}): AppDependencies {
 		services: {
 			classification: {
 				classifySingle,
-				classifyBatch,
-				hasAvailableQuota: mock(async () => true),
+				classifyBatchStream,
 			},
 			auth: {
 				startAuth: mock(async () => undefined),
@@ -127,11 +130,6 @@ function makeDeps(overrides: AppDependencyOverrides = {}): AppDependencies {
 					currentUsage: 0,
 					limit: 300,
 					plan: "free",
-				})),
-				tryConsumeQuota: mock(async () => ({
-					allowed: true,
-					remaining: 299,
-					periodStart: "2026-02-01",
 				})),
 				incrementUsageBy: mock(async () => undefined),
 				incrementUsage: mock(async () => undefined),
@@ -192,8 +190,10 @@ describe("app dependency wiring", () => {
 				services: {
 					classification: {
 						classifySingle,
-						classifyBatch: mock(async () => []),
-						hasAvailableQuota: mock(async () => true),
+						classifyBatchStream: mock(
+							(async (_userId, _posts, _onOutcome) =>
+								undefined) as ClassifyBatchStreamFn,
+						),
 					},
 				} as Partial<AppDependencies["services"]>,
 			}),

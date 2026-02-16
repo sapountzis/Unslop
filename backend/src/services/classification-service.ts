@@ -1,31 +1,49 @@
 import {
-	canonicalizeContentFingerprintInput,
 	computeContentFingerprint,
 	type ContentFingerprintInput,
 } from "../lib/content-fingerprint";
-import type { Decision } from "../types/classification";
-import type { LlmService, PostInput as LlmPostInput } from "./llm";
-import type { QuotaService } from "./quota";
-import type { ClassificationCacheRepository } from "../repositories/classification-cache-repository";
-import type { ClassificationEventRepository } from "../repositories/classification-event-repository";
+import type {
+	ClassificationCacheRepository,
+	UpsertClassificationCacheInput,
+} from "../repositories/classification-cache-repository";
 import type {
 	ActivityInsert,
 	ActivityRepository,
 } from "../repositories/activity-repository";
-import type { MultimodalClassifyPost } from "../types/multimodal";
-import type { ScoringEngine as ScoringEngineType } from "./scoring";
+import type {
+	AppendClassificationErrorEventInput,
+	ClassificationEventRepository,
+} from "../repositories/classification-event-repository";
 import type { AppLogger } from "../lib/logger-types";
+import type { MultimodalClassifyPost } from "../types/multimodal";
+import type { Decision } from "../types/classification";
+import type { LlmService, PostInput as LlmPostInput } from "./llm";
+import type { QuotaService, QuotaStatus } from "./quota";
+import type { ScoringEngine as ScoringEngineType } from "./scoring";
 
 const CACHE_LOOKBACK_DAYS = 30;
+const MIN_SOFT_QUOTA_BURST = 1;
 
 type LlmResult = Awaited<ReturnType<LlmService["classifyPost"]>>;
 
-type JsonObject = Record<string, unknown>;
-
 type NormalizedPost = ClassifyInputPost & {
 	fingerprint: string;
-	canonicalContent: JsonObject;
 };
+
+interface ClassificationBuffers {
+	cacheWrites: UpsertClassificationCacheInput[];
+	activityWrites: ActivityInsert[];
+	errorEvents: AppendClassificationErrorEventInput[];
+	usageIncrementCount: number;
+}
+
+interface MissClassificationResult {
+	outcome: ClassificationResponse;
+	cacheWrite?: UpsertClassificationCacheInput;
+	activityWrite?: ActivityInsert;
+	errorEvent?: AppendClassificationErrorEventInput;
+	usageIncrementCount: number;
+}
 
 export type ClassifyInputPost = MultimodalClassifyPost;
 
@@ -47,11 +65,11 @@ export interface ClassificationService {
 		userId: string,
 		post: ClassifyInputPost,
 	) => Promise<ClassificationResponse>;
-	classifyBatch: (
+	classifyBatchStream: (
 		userId: string,
 		posts: ClassifyInputPost[],
-	) => Promise<BatchClassificationResponse[]>;
-	hasAvailableQuota: (userId: string) => Promise<boolean>;
+		onOutcome: (outcome: BatchClassificationResponse) => Promise<void> | void,
+	) => Promise<void>;
 }
 
 export interface ClassificationServiceDeps {
@@ -71,6 +89,27 @@ export class QuotaExceededError extends Error {
 	}
 }
 
+function normalizePost(post: ClassifyInputPost): NormalizedPost {
+	const fingerprintInput: ContentFingerprintInput = {
+		post_id: post.post_id,
+		author_id: post.author_id,
+		author_name: post.author_name,
+		nodes: post.nodes.map((node) => ({ ...node })),
+		attachments: post.attachments.map((attachment) => ({ ...attachment })),
+	};
+
+	return {
+		...post,
+		fingerprint: computeContentFingerprint(fingerprintInput),
+	};
+}
+
+function getCacheExpiry(): Date {
+	const cacheExpiry = new Date();
+	cacheExpiry.setDate(cacheExpiry.getDate() - CACHE_LOOKBACK_DAYS);
+	return cacheExpiry;
+}
+
 function resolveProviderErrorMessage(llmResult: LlmResult): string | undefined {
 	if (
 		llmResult.provider_error_message &&
@@ -86,22 +125,77 @@ function resolveProviderErrorMessage(llmResult: LlmResult): string | undefined {
 	return undefined;
 }
 
-function normalizePost(post: ClassifyInputPost): NormalizedPost {
-	const fingerprintInput: ContentFingerprintInput = {
+function resolveUnexpectedErrorMessage(error: unknown): string {
+	if (error instanceof Error && error.message.trim().length > 0) {
+		return error.message;
+	}
+
+	return "llm_error:unknown";
+}
+
+function toActivityInsert(
+	userId: string,
+	postId: string,
+	decision: Decision,
+	source: "llm" | "cache",
+): ActivityInsert {
+	return {
+		userId,
+		postId,
+		decision,
+		source,
+	};
+}
+
+function toLlmInput(post: NormalizedPost): LlmPostInput {
+	return {
 		post_id: post.post_id,
 		author_id: post.author_id,
 		author_name: post.author_name,
 		nodes: post.nodes.map((node) => ({ ...node })),
 		attachments: post.attachments.map((attachment) => ({ ...attachment })),
 	};
-	const canonicalContent =
-		canonicalizeContentFingerprintInput(fingerprintInput);
+}
 
+function createEmptyBuffers(): ClassificationBuffers {
 	return {
-		...post,
-		fingerprint: computeContentFingerprint(fingerprintInput),
-		canonicalContent,
+		cacheWrites: [],
+		activityWrites: [],
+		errorEvents: [],
+		usageIncrementCount: 0,
 	};
+}
+
+function addMissResultToBuffers(
+	buffers: ClassificationBuffers,
+	result: MissClassificationResult,
+): void {
+	if (result.cacheWrite) {
+		buffers.cacheWrites.push(result.cacheWrite);
+	}
+	if (result.activityWrite) {
+		buffers.activityWrites.push(result.activityWrite);
+	}
+	if (result.errorEvent) {
+		buffers.errorEvents.push(result.errorEvent);
+	}
+	buffers.usageIncrementCount += result.usageIncrementCount;
+}
+
+function buildSoftQuotaBudget(
+	quotaStatus: QuotaStatus,
+	batchLlmConcurrency: number,
+): number {
+	if (quotaStatus.limit <= 0 || quotaStatus.periodStart.length === 0) {
+		return 0;
+	}
+
+	const softBurst = Math.max(
+		MIN_SOFT_QUOTA_BURST,
+		Math.max(1, batchLlmConcurrency),
+	);
+
+	return Math.max(0, quotaStatus.remaining + softBurst);
 }
 
 export function createClassificationService(
@@ -130,151 +224,143 @@ export function createClassificationService(
 		});
 	}
 
-	function getCacheExpiry(): Date {
-		const cacheExpiry = new Date();
-		cacheExpiry.setDate(cacheExpiry.getDate() - CACHE_LOOKBACK_DAYS);
-		return cacheExpiry;
-	}
-
-	function toActivityInsert(
-		userId: string,
-		postId: string,
-		decision: Decision,
-		source: "llm" | "cache",
-	): ActivityInsert {
-		return {
-			userId,
-			postId,
-			decision,
-			source,
-		};
-	}
-
-	function toEventAttemptStatus(source: "llm" | "error"): "success" | "error" {
-		return source === "llm" ? "success" : "error";
-	}
-
-	function toAttemptResponsePayload(
-		decision: Decision,
-		llmResult: LlmResult,
-	): JsonObject {
-		const providerErrorMessage = resolveProviderErrorMessage(llmResult);
-
-		return {
-			source: llmResult.source,
-			decision,
-			scores: llmResult.scores,
-			model: llmResult.model,
-			latency: llmResult.latency,
-			...(llmResult.provider_http_status !== undefined
-				? { provider_http_status: llmResult.provider_http_status }
-				: {}),
-			...(llmResult.provider_error_code !== undefined
-				? { provider_error_code: llmResult.provider_error_code }
-				: {}),
-			...(llmResult.provider_error_type !== undefined
-				? { provider_error_type: llmResult.provider_error_type }
-				: {}),
-			...(providerErrorMessage !== undefined
-				? { provider_error_message: providerErrorMessage }
-				: {}),
-		};
-	}
-
-	function toLlmInput(post: NormalizedPost): LlmPostInput {
-		return {
-			post_id: post.post_id,
-			author_id: post.author_id,
-			author_name: post.author_name,
-			nodes: post.nodes.map((node) => ({ ...node })),
-			attachments: post.attachments.map((attachment) => ({ ...attachment })),
-		};
-	}
-
-	async function appendClassificationAttempt(
-		post: NormalizedPost,
-		llmInput: LlmPostInput,
-		decision: Decision,
-		llmResult: LlmResult,
-	): Promise<void> {
-		const providerErrorMessage = resolveProviderErrorMessage(llmResult);
-
-		await deps.classificationEventRepository.append({
-			contentFingerprint: post.fingerprint,
-			postId: post.post_id,
-			model: llmResult.model,
-			attemptStatus: toEventAttemptStatus(llmResult.source),
-			...(llmResult.provider_http_status !== undefined
-				? { providerHttpStatus: llmResult.provider_http_status }
-				: {}),
-			...(llmResult.provider_error_code !== undefined
-				? { providerErrorCode: llmResult.provider_error_code }
-				: {}),
-			...(llmResult.provider_error_type !== undefined
-				? { providerErrorType: llmResult.provider_error_type }
-				: {}),
-			...(providerErrorMessage !== undefined
-				? { providerErrorMessage: providerErrorMessage }
-				: {}),
-			requestPayload: {
-				post_id: post.post_id,
-				canonical_content: post.canonicalContent,
-				llm_request: llmInput,
-			},
-			responsePayload: toAttemptResponsePayload(decision, llmResult),
-		});
-	}
-
 	async function classifyMiss(
 		userId: string,
 		post: NormalizedPost,
-	): Promise<
-		ClassificationResponse | { post_id: string; error: "quota_exceeded" }
-	> {
-		const consumed = await deps.quotaService.tryConsumeQuota(userId);
-		if (!consumed.allowed) {
+	): Promise<MissClassificationResult> {
+		const llmInput = toLlmInput(post);
+
+		try {
+			const llmResult = await deps.llmService.classifyPost(llmInput);
+			const scoringEngine = await getScoringEngine();
+			const scored = scoringEngine.score(llmResult.scores);
+
+			if (llmResult.source === "llm") {
+				return {
+					outcome: {
+						post_id: post.post_id,
+						decision: scored.decision,
+						source: "llm",
+					},
+					cacheWrite: {
+						contentFingerprint: post.fingerprint,
+						decision: scored.decision,
+					},
+					activityWrite: toActivityInsert(
+						userId,
+						post.post_id,
+						scored.decision,
+						"llm",
+					),
+					usageIncrementCount: 1,
+				};
+			}
+
 			return {
-				post_id: post.post_id,
-				error: "quota_exceeded",
+				outcome: {
+					post_id: post.post_id,
+					decision: scored.decision,
+					source: "error",
+				},
+				errorEvent: {
+					contentFingerprint: post.fingerprint,
+					postId: post.post_id,
+					...(llmResult.provider_http_status !== undefined
+						? { providerHttpStatus: llmResult.provider_http_status }
+						: {}),
+					...(llmResult.provider_error_code !== undefined
+						? { providerErrorCode: llmResult.provider_error_code }
+						: {}),
+					...(llmResult.provider_error_type !== undefined
+						? { providerErrorType: llmResult.provider_error_type }
+						: {}),
+					providerErrorMessage: resolveProviderErrorMessage(llmResult),
+				},
+				usageIncrementCount: 1,
+			};
+		} catch (error) {
+			return {
+				outcome: {
+					post_id: post.post_id,
+					decision: "keep",
+					source: "error",
+				},
+				errorEvent: {
+					contentFingerprint: post.fingerprint,
+					postId: post.post_id,
+					providerErrorMessage: resolveUnexpectedErrorMessage(error),
+				},
+				usageIncrementCount: 1,
 			};
 		}
+	}
 
-		const llmInput = toLlmInput(post);
-		const llmResult = await deps.llmService.classifyPost(llmInput);
-
-		const scoringEngine = await getScoringEngine();
-		const scored = scoringEngine.score(llmResult.scores);
-
-		await appendClassificationAttempt(
-			post,
-			llmInput,
-			scored.decision,
-			llmResult,
-		);
-
-		if (llmResult.source === "llm") {
-			await deps.classificationCacheRepository.upsertSuccess({
-				contentFingerprint: post.fingerprint,
-				postId: post.post_id,
-				authorId: post.author_id,
-				authorName: post.author_name,
-				canonicalContent: post.canonicalContent,
-				decision: scored.decision,
-				source: "llm",
-				model: llmResult.model,
-				scoresJson: llmResult.scores ?? {},
+	async function flushBuffers(
+		userId: string,
+		buffers: ClassificationBuffers,
+		periodStart: string,
+	): Promise<void> {
+		const flushSteps: Array<{ name: string; run: () => Promise<void> }> = [];
+		if (buffers.cacheWrites.length > 0) {
+			flushSteps.push({
+				name: "cache_upsert_many",
+				run: async () => {
+					await deps.classificationCacheRepository.upsertMany(
+						buffers.cacheWrites,
+					);
+				},
 			});
-
-			await deps.activityRepository.insertActivity(
-				toActivityInsert(userId, post.post_id, scored.decision, "llm"),
-			);
+		}
+		if (buffers.activityWrites.length > 0) {
+			flushSteps.push({
+				name: "activity_insert_many",
+				run: async () => {
+					await deps.activityRepository.insertMany(buffers.activityWrites);
+				},
+			});
+		}
+		if (buffers.usageIncrementCount > 0) {
+			flushSteps.push({
+				name: "quota_increment_usage_by",
+				run: async () => {
+					await deps.quotaService.incrementUsageBy(
+						userId,
+						buffers.usageIncrementCount,
+						periodStart,
+					);
+				},
+			});
+		}
+		if (buffers.errorEvents.length > 0) {
+			flushSteps.push({
+				name: "classification_error_events_append_many",
+				run: async () => {
+					await deps.classificationEventRepository.appendMany(
+						buffers.errorEvents,
+					);
+				},
+			});
+		}
+		if (flushSteps.length === 0) {
+			return;
 		}
 
-		return {
-			post_id: post.post_id,
-			decision: scored.decision,
-			source: llmResult.source,
-		};
+		await Promise.all(
+			flushSteps.map(async (step) => {
+				try {
+					await step.run();
+				} catch (error) {
+					deps.logger.info("classification_flush_failed", {
+						step: step.name,
+						error: error instanceof Error ? error.message : String(error),
+						cacheWriteCount: buffers.cacheWrites.length,
+						activityWriteCount: buffers.activityWrites.length,
+						errorEventCount: buffers.errorEvents.length,
+						usageIncrementCount: buffers.usageIncrementCount,
+					});
+				}
+			}),
+		);
 	}
 
 	async function classifySingle(
@@ -287,12 +373,14 @@ export function createClassificationService(
 				normalized.fingerprint,
 				getCacheExpiry(),
 			);
+		const buffers = createEmptyBuffers();
 
 		if (cached) {
 			logCacheDecision(normalized.post_id, cached.decision);
-			await deps.activityRepository.insertActivity(
+			buffers.activityWrites.push(
 				toActivityInsert(userId, normalized.post_id, cached.decision, "cache"),
 			);
+			await flushBuffers(userId, buffers, "");
 			return {
 				post_id: normalized.post_id,
 				decision: cached.decision,
@@ -300,131 +388,93 @@ export function createClassificationService(
 			};
 		}
 
-		const missResult = await classifyMiss(userId, normalized);
-		if ("error" in missResult) {
+		const quotaStatus = await deps.quotaService.getQuotaStatus(userId);
+		if (
+			quotaStatus.limit <= 0 ||
+			quotaStatus.periodStart.length === 0 ||
+			quotaStatus.remaining <= 0
+		) {
 			throw new QuotaExceededError();
 		}
 
-		return missResult;
+		const missResult = await classifyMiss(userId, normalized);
+		addMissResultToBuffers(buffers, missResult);
+		await flushBuffers(userId, buffers, quotaStatus.periodStart);
+		return missResult.outcome;
 	}
 
-	async function classifyBatch(
+	async function classifyBatchStream(
 		userId: string,
 		posts: ClassifyInputPost[],
-	): Promise<BatchClassificationResponse[]> {
+		onOutcome: (outcome: BatchClassificationResponse) => Promise<void> | void,
+	): Promise<void> {
 		const normalizedPosts = posts.map(normalizePost);
-		const cacheExpiry = getCacheExpiry();
-		const cachedByFingerprint =
-			await deps.classificationCacheRepository.findFreshByFingerprints(
-				normalizedPosts.map((post) => post.fingerprint),
-				cacheExpiry,
-			);
-		const activities: ActivityInsert[] = [];
-		const outcomes: BatchClassificationResponse[] = [];
-		const misses: typeof normalizedPosts = [];
+		const [cachedByFingerprint, quotaStatus] = await Promise.all([
+			deps.classificationCacheRepository.findFreshByFingerprints(
+				normalizedPosts.map((postItem) => postItem.fingerprint),
+				getCacheExpiry(),
+			),
+			deps.quotaService.getQuotaStatus(userId),
+		]);
 
-		for (const post of normalizedPosts) {
-			const cached = cachedByFingerprint.get(post.fingerprint);
+		const buffers = createEmptyBuffers();
+		const missesToClassify: NormalizedPost[] = [];
+		let allowedMisses = buildSoftQuotaBudget(
+			quotaStatus,
+			deps.batchLlmConcurrency,
+		);
+
+		for (const postItem of normalizedPosts) {
+			const cached = cachedByFingerprint.get(postItem.fingerprint);
 			if (cached) {
-				logCacheDecision(post.post_id, cached.decision);
-				activities.push(
-					toActivityInsert(userId, post.post_id, cached.decision, "cache"),
+				logCacheDecision(postItem.post_id, cached.decision);
+				buffers.activityWrites.push(
+					toActivityInsert(userId, postItem.post_id, cached.decision, "cache"),
 				);
-				outcomes.push({
-					post_id: post.post_id,
+				await onOutcome({
+					post_id: postItem.post_id,
 					decision: cached.decision,
 					source: "cache",
 				});
 				continue;
 			}
-			misses.push(post);
+
+			if (allowedMisses <= 0) {
+				await onOutcome({
+					post_id: postItem.post_id,
+					error: "quota_exceeded",
+				});
+				continue;
+			}
+
+			allowedMisses -= 1;
+			missesToClassify.push(postItem);
 		}
 
-		const queue = [...misses];
-		const workers = Array.from(
-			{ length: Math.min(deps.batchLlmConcurrency, queue.length) },
-			async () => {
-				while (queue.length > 0) {
-					const next = queue.shift();
-					if (!next) {
-						return;
-					}
-
-					const consumed = await deps.quotaService.tryConsumeQuota(userId);
-					if (!consumed.allowed) {
-						outcomes.push({
-							post_id: next.post_id,
-							error: "quota_exceeded",
-						});
-						continue;
-					}
-
-					const llmInput = toLlmInput(next);
-					let llmResult: LlmResult;
-					try {
-						llmResult = await deps.llmService.classifyPost(llmInput);
-					} catch (error) {
-						outcomes.push({
-							post_id: next.post_id,
-							decision: "keep",
-							source: "error",
-						});
-						continue;
-					}
-
-					const scoringEngine = await getScoringEngine();
-					const scored = scoringEngine.score(llmResult.scores);
-
-					await appendClassificationAttempt(
-						next,
-						llmInput,
-						scored.decision,
-						llmResult,
-					);
-
-					if (llmResult.source === "llm") {
-						await deps.classificationCacheRepository.upsertSuccess({
-							contentFingerprint: next.fingerprint,
-							postId: next.post_id,
-							authorId: next.author_id,
-							authorName: next.author_name,
-							canonicalContent: next.canonicalContent,
-							decision: scored.decision,
-							source: "llm",
-							model: llmResult.model,
-							scoresJson: llmResult.scores ?? {},
-						});
-
-						activities.push(
-							toActivityInsert(userId, next.post_id, scored.decision, "llm"),
-						);
-					}
-
-					outcomes.push({
-						post_id: next.post_id,
-						decision: scored.decision,
-						source: llmResult.source,
-					});
+		const queue = [...missesToClassify];
+		const workerCount =
+			queue.length === 0
+				? 0
+				: Math.max(1, Math.min(deps.batchLlmConcurrency, queue.length));
+		const workers = Array.from({ length: workerCount }, async () => {
+			while (queue.length > 0) {
+				const next = queue.shift();
+				if (!next) {
+					return;
 				}
-			},
-		);
+
+				const missResult = await classifyMiss(userId, next);
+				addMissResultToBuffers(buffers, missResult);
+				await onOutcome(missResult.outcome);
+			}
+		});
 
 		await Promise.all(workers);
-		if (activities.length > 0) {
-			await deps.activityRepository.insertActivities(activities);
-		}
-
-		return outcomes;
-	}
-
-	async function hasAvailableQuota(userId: string): Promise<boolean> {
-		const status = await deps.quotaService.getQuotaStatus(userId);
-		return status.allowed;
+		await flushBuffers(userId, buffers, quotaStatus.periodStart);
 	}
 
 	return {
 		classifySingle,
-		classifyBatch,
-		hasAvailableQuota,
+		classifyBatchStream,
 	};
 }

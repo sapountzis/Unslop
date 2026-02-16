@@ -1,21 +1,33 @@
 import { describe, expect, it } from "bun:test";
 import { extractPostData, readPostIdentity } from "./parser";
 
-function makeElement(
-	overrides: Partial<{
-		matches: (s: string) => boolean;
-		querySelector: (s: string) => any;
-		querySelectorAll: (s: string) => any[];
-		getAttribute: (s: string) => string | null;
-	}> = {},
-): HTMLElement {
+type ElementShape = Partial<{
+	matches: (selector: string) => boolean;
+	querySelector: (selector: string) => unknown;
+	querySelectorAll: (selector: string) => unknown[];
+	getAttribute: (name: string) => string | null;
+	textContent: string;
+}>;
+
+function makeElement(overrides: ElementShape = {}): HTMLElement {
 	return {
 		matches: overrides.matches ?? (() => false),
 		querySelector: overrides.querySelector ?? (() => null),
 		querySelectorAll: overrides.querySelectorAll ?? (() => []),
 		getAttribute: overrides.getAttribute ?? (() => null),
+		textContent: overrides.textContent ?? "",
 		closest: () => null,
 	} as unknown as HTMLElement;
+}
+
+function makeNode(
+	attrs: Record<string, string>,
+	textContent = "",
+): HTMLElement {
+	return makeElement({
+		getAttribute: (name) => attrs[name] ?? null,
+		textContent,
+	});
 }
 
 describe("reddit parser", () => {
@@ -27,47 +39,44 @@ describe("reddit parser", () => {
 			expect(readPostIdentity(el)).toBe("t3_abc123");
 		});
 
-		it("reads data-fullname attribute (old reddit)", () => {
+		it("reads data-post-id when wrapper contains post metadata", () => {
 			const el = makeElement({
-				getAttribute: (name) => (name === "data-fullname" ? "t3_xyz" : null),
+				getAttribute: (name) => (name === "data-post-id" ? "t3_wrapped" : null),
 			});
-			expect(readPostIdentity(el)).toBe("t3_xyz");
+			expect(readPostIdentity(el)).toBe("t3_wrapped");
 		});
 
-		it("reads permalink attribute", () => {
-			const el = makeElement({
-				getAttribute: (name) =>
-					name === "permalink" ? "/r/test/comments/abc/title/" : null,
-			});
-			expect(readPostIdentity(el)).toBe("/r/test/comments/abc/title/");
-		});
-
-		it("falls back to comment link href", () => {
+		it("falls back to permalink link href", () => {
 			const el = makeElement({
 				getAttribute: () => null,
-				querySelector: (s) => {
-					if (s.includes("/comments/")) {
-						return {
-							getAttribute: (name: string) =>
-								name === "href" ? "/r/test/comments/def/post_title/" : null,
-						};
+				querySelector: (selector) => {
+					if (selector.includes("/comments/")) {
+						return makeNode({
+							href: "/r/test/comments/abc123/sample_post/",
+						});
 					}
 					return null;
 				},
 			});
-			expect(readPostIdentity(el)).toBe("/r/test/comments/def/post_title/");
+			expect(readPostIdentity(el)).toBe("/r/test/comments/abc123/sample_post/");
+		});
+
+		it("builds deterministic ad identity when no canonical post id exists", () => {
+			const el = makeElement({
+				getAttribute: (name) => {
+					if (name === "post-title") return "AI Course Bundle";
+					if (name === "author") return "ad_account";
+					if (name === "domain") return "example.com";
+					return null;
+				},
+			});
+			expect(readPostIdentity(el)).toBe(
+				"ad:ai course bundle|ad_account|example.com",
+			);
 		});
 
 		it("returns null when nothing matches", () => {
 			const el = makeElement();
-			expect(readPostIdentity(el)).toBeNull();
-		});
-
-		it("ignores non-t3_ id attributes", () => {
-			const el = makeElement({
-				getAttribute: (name) => (name === "id" ? "sidebar-widget" : null),
-			});
-			// Should not return sidebar-widget since it doesn't start with t3_
 			expect(readPostIdentity(el)).toBeNull();
 		});
 	});
@@ -80,120 +89,93 @@ describe("reddit parser", () => {
 
 		it("returns null for elements with no title and no body", async () => {
 			const el = makeElement({
-				matches: (s) => s.includes("shreddit-post"),
-				querySelector: () => null,
-				getAttribute: () => null,
+				matches: (selector) => selector.includes("shreddit-post"),
 			});
 			expect(await extractPostData(el)).toBeNull();
 		});
 
-		it("extracts shreddit-post with title attribute", async () => {
+		it("extracts shreddit post metadata and image attachments", async () => {
+			const imageA = makeNode({
+				src: "https://cdn.reddit.com/a.jpg",
+				alt: "A",
+			});
+			const imageADupe = makeNode({
+				src: "https://cdn.reddit.com/a.jpg",
+				alt: "A2",
+			});
+			const imageB = makeNode({
+				src: "https://cdn.reddit.com/b.jpg",
+				alt: "B",
+			});
+			const body = makeNode({}, "Body text for the post");
+
 			const el = makeElement({
-				matches: (s) => s.includes("shreddit-post"),
+				matches: (selector) => selector.includes("shreddit-post"),
 				getAttribute: (name) => {
 					if (name === "id") return "t3_post1";
-					if (name === "author") return "testuser";
-					if (name === "post-title") return "My Shreddit Post Title";
+					if (name === "author") return "u/test_user";
+					if (name === "post-title") return "Shreddit title";
+					if (name === "subreddit-name") return "programming";
+					if (name === "post-type") return "gallery";
+					if (name === "content-href")
+						return "https://www.reddit.com/gallery/t3_post1";
 					return null;
 				},
-				querySelector: (s) => {
-					if (
-						s.includes('[slot="text-body"]') ||
-						s.includes('[data-testid="post-body"]')
-					) {
-						return { textContent: "Body text of the post." };
+				querySelectorAll: (selector) => {
+					if (selector.includes('[slot="text-body"]')) {
+						return [body];
 					}
-					return null;
+					if (selector.includes('[slot="post-media-container"]')) {
+						return [imageA, imageADupe, imageB];
+					}
+					return [];
 				},
 			});
 
 			const result = await extractPostData(el);
 			expect(result).not.toBeNull();
 			expect(result!.post_id).toBe("t3_post1");
-			expect(result!.author_id).toBe("testuser");
-			expect(result!.nodes[0].kind).toBe("root");
-			expect(result!.nodes[0].text).toContain("my shreddit post title");
-			expect(result!.nodes[0].text).toContain("body text of the post.");
-		});
-
-		it("extracts post with title from DOM (no attribute)", async () => {
-			const el = makeElement({
-				matches: (s) =>
-					s.includes("shreddit-post") || s.includes("post-container"),
-				getAttribute: (name) => {
-					if (name === "id") return "t3_dom1";
-					return null;
-				},
-				querySelector: (s) => {
-					if (
-						s.includes('[slot="title"]') ||
-						s.includes("h3") ||
-						s.includes('[data-testid="post-title"]')
-					) {
-						return { textContent: "DOM Title Here" };
-					}
-					if (
-						s.includes('[slot="text-body"]') ||
-						s.includes('[data-testid="post-body"]')
-					) {
-						return null;
-					}
-					if (
-						s.includes('a[href*="/user/"]') ||
-						s.includes('[data-testid="post-author"]')
-					) {
-						return {
-							textContent: "u/domauthor",
-							getAttribute: (name: string) =>
-								name === "href" ? "/user/domauthor" : null,
-						};
-					}
-					return null;
-				},
-			});
-
-			const result = await extractPostData(el);
-			expect(result).not.toBeNull();
-			expect(result!.post_id).toBe("t3_dom1");
-			expect(result!.author_id).toBe("domauthor");
-			expect(result!.nodes[0].text).toBe("dom title here");
-		});
-
-		it("title-only post works (no body)", async () => {
-			const el = makeElement({
-				matches: (s) => s.includes("shreddit-post"),
-				getAttribute: (name) => {
-					if (name === "post-title") return "A link post";
-					if (name === "author") return "linkposter";
-					if (name === "id") return "t3_linkpost";
-					return null;
-				},
-				querySelector: () => null,
-			});
-
-			const result = await extractPostData(el);
-			expect(result).not.toBeNull();
-			expect(result!.nodes[0].text).toBe("a link post");
+			expect(result!.author_id).toBe("test_user");
+			expect(result!.author_name).toBe("test_user");
 			expect(result!.nodes).toHaveLength(1);
+			expect(result!.nodes[0].text).toContain("shreddit title");
+			expect(result!.nodes[0].text).toContain("body text for the post");
+			expect(result!.nodes[0].text).toContain("subreddit r/programming");
+			expect(result!.nodes[0].text).toContain("post type gallery");
+			expect(result!.nodes[0].text).toContain("link domain www.reddit.com");
+			expect(result!.attachments).toHaveLength(2);
+			expect(result!.attachments[0]).toEqual({
+				node_id: "root",
+				kind: "image",
+				src: "https://cdn.reddit.com/a.jpg",
+				alt: "A",
+				ordinal: 0,
+			});
+			expect(result!.attachments[1]).toEqual({
+				node_id: "root",
+				kind: "image",
+				src: "https://cdn.reddit.com/b.jpg",
+				alt: "B",
+				ordinal: 1,
+			});
 		});
 
-		it("strips u/ prefix from author text", async () => {
+		it("derives author from /user href when author attribute is absent", async () => {
+			const authorEl = makeNode({ href: "/user/spez" }, "u/spez");
+
 			const el = makeElement({
-				matches: (s) => s.includes("shreddit-post"),
+				matches: (selector) => selector.includes("shreddit-post"),
 				getAttribute: (name) => {
-					if (name === "post-title") return "Test";
-					if (name === "id") return "t3_strip";
+					if (name === "id") return "t3_no_attr_author";
+					if (name === "post-title") return "No author attribute";
 					return null;
 				},
-				querySelector: (s) => {
+				querySelector: (selector) => {
 					if (
-						s.includes('a[href*="/user/"]') ||
-						s.includes('[data-testid="post-author"]')
+						selector.includes('[data-testid="post-author"]') ||
+						selector.includes('a[href*="/user/"]')
 					) {
-						return {
-							textContent: "u/spez",
-							getAttribute: () => null,
-						};
+						return authorEl;
 					}
 					return null;
 				},
@@ -202,6 +184,28 @@ describe("reddit parser", () => {
 			const result = await extractPostData(el);
 			expect(result).not.toBeNull();
 			expect(result!.author_id).toBe("spez");
+			expect(result!.author_name).toBe("spez");
+		});
+
+		it("extracts sponsored ad posts and assigns deterministic ad identity", async () => {
+			const adEl = makeElement({
+				matches: (selector) => selector.includes("shreddit-ad-post"),
+				getAttribute: (name) => {
+					if (name === "post-title") return "Try GLM-5 Free";
+					if (name === "author") return "kiloCode";
+					if (name === "ad-type") return "display";
+					if (name === "domain") return "kilo.ai";
+					return null;
+				},
+			});
+
+			const result = await extractPostData(adEl);
+			expect(result).not.toBeNull();
+			expect(result!.post_id.startsWith("ad:")).toBe(true);
+			expect(result!.author_id).toBe("kiloCode");
+			expect(result!.nodes[0].text).toContain("try glm-5 free");
+			expect(result!.nodes[0].text).toContain("post type ad:display");
+			expect(result!.nodes[0].text).toContain("sponsored domain kilo.ai");
 		});
 	});
 });

@@ -1,6 +1,6 @@
 # Unslop Extension (Chrome MV3)
 
-This extension filters the LinkedIn home feed with one strict loop:
+This extension filters LinkedIn, X, and Reddit feed surfaces with one strict loop:
 
 1. Detect feed post surfaces.
 2. Classify each post as `keep | hide`.
@@ -8,7 +8,7 @@ This extension filters the LinkedIn home feed with one strict loop:
 4. Fail open to `keep` on runtime/network errors.
 
 The implementation prioritizes two outcomes:
-- Stable UX on a highly dynamic LinkedIn DOM.
+- Stable UX on highly dynamic social DOMs.
 - Small, explicit module boundaries for easier debugging.
 
 ## Quick Start (For New Developers)
@@ -46,9 +46,9 @@ flowchart LR
   CS --> BUFFER[Mutation Buffer]
   CS --> BATCH[Batch Queue]
   BATCH --> BG[Background Worker]
-  BG --> RESOLVE[Attachment Resolver]
-  RESOLVE --> BG
-  BG --> API[/v1/classify/batch]
+  BG --> PIPE[Classify Pipeline]
+  PIPE --> RESOLVE[Attachment Resolver]
+  PIPE --> API[/v1/classify/batch]
   API --> BG
   BG --> BATCH
   CS --> VIS[Visibility Index]
@@ -62,10 +62,10 @@ flowchart LR
 
 ## End-to-End Flow (What Actually Happens)
 
-1. `src/content/linkedin.ts` is injected on `https://www.linkedin.com/*` at `document_start`.
-2. If URL route matches `/feed/`, it immediately sets:
+1. Platform entry points (`src/platforms/linkedin/index.ts`, `src/platforms/x/index.ts`, `src/platforms/reddit/index.ts`) are injected on supported hosts at `document_start`.
+2. If the current route is eligible for filtering, runtime immediately sets:
    - `html[data-unslop-preclassify="true"]`
-3. CSS preclassify rule cloaks unprocessed feed containers before classification while preserving layout:
+3. LinkedIn preclassify CSS cloaks unprocessed feed containers before classification while preserving layout:
    - `html[data-unslop-preclassify="true"] [data-finite-scroll-hotkey-item]:has(.feed-shared-update-v2[role="article"]):not([data-unslop-processed]):not([data-id^="urn:li:aggregate:"]):not(:has(.feed-shared-aggregated-content)):not(:has(.update-components-feed-discovery-entity)) { opacity: 0 !important; pointer-events: none !important; }`
    - Aggregate/discovery modules (for example "Recommended for you") are excluded and left untouched.
 4. Runtime controller reconciles route + enabled state and starts attachment.
@@ -79,24 +79,25 @@ flowchart LR
    - `identity` (stable post instance key)
 7. Mutation buffer batches candidate processing.
 8. Each candidate is parsed into a multimodal payload (`nodes[]` + attachment refs) and sent through `batch-queue` to background.
-9. Background resolves attachment refs best-effort (image bytes + PDF excerpt) before calling `/v1/classify/batch`.
-10. Background streams NDJSON classify results from backend back to content runtime.
-11. Render commit pipeline coalesces decisions by `renderRoot`, sorts in DOM order, and flushes on RAF.
-12. Decision renderer applies visual state on `labelRoot` and marks `renderRoot` as processed.
-13. Route/toggle off triggers one centralized runtime dispose path.
+9. Background classify pipeline resolves attachments concurrently (bounded) and dispatches classify micro-batches as posts become ready.
+10. Pending decision coordinator starts the 3s fail-open timer only when a pending post is in viewport; offscreen posts wait for real classify results.
+11. Background streams NDJSON classify results from backend back to content runtime.
+12. Render commit pipeline coalesces decisions by `renderRoot`, sorts in DOM order, and flushes on RAF.
+13. Decision renderer applies visual state on `labelRoot` and marks `renderRoot` as processed.
+14. Route/toggle off triggers one centralized runtime dispose path.
 
 ## Core Concepts
 
 - `Preclassify Gate`
   - Early route-level gate that hides unprocessed posts and prevents flash-then-hide.
 - `contentRoot`
-  - Semantic post node used by parser (`src/content/linkedin-parser.ts`).
+  - Semantic post node used by platform parser (`src/platforms/*/parser.ts`).
 - `renderRoot`
   - Outer post container where hide/collapse classes and markers are applied.
 - `labelRoot`
   - Element where the decision pill is placed in label mode (may differ from renderRoot on platforms with nested wrappers).
 - `Identity`
-  - Post instance key from `data-id` / `data-urn` / nested URN fallback.
+  - Post instance key from platform-native attributes (for example LinkedIn URN, X status URL, Reddit `t3_*` or ad fallback key).
 - `Terminal State`
   - Decision already committed for a specific `renderRoot + identity` (tracked per renderRoot, rendered on labelRoot).
 - `Fail Open`
@@ -105,6 +106,17 @@ flowchart LR
   - Classification input is `{ post_id, author_*, nodes[], attachments[] }`, not text-only.
 - `Attachment Resolution`
   - Content script extracts refs only; background fetches and normalizes attachment payloads.
+
+## Platform Plugins
+
+- `src/platforms/linkedin/*`
+  - LinkedIn selectors/parser/surface/route wiring.
+- `src/platforms/x/*`
+  - X/Twitter selectors/parser/surface/route wiring with quote-scope parsing and hydration-aware media handling.
+- `src/platforms/reddit/*`
+  - Reddit selectors/parser/surface/route wiring for `shreddit-post` and `shreddit-ad-post`.
+  - Reddit parser captures normalized title/body text plus subreddit/post metadata when available.
+  - Reddit parser emits deterministic image attachment refs with deduped source URLs.
 
 ## Selector And Marker Contract
 
@@ -185,19 +197,19 @@ Rules:
 - Drained per frame (`PROCESS_PER_FRAME`).
 
 `src/content/batch-queue.ts`
-- Batches classify requests and tracks pending entries.
-- Single timeout authority: `BATCH_RESULT_TIMEOUT_MS` (3s).
+- Batches classify requests and routes classify results back by `post_id`.
+- Transport-only responsibility (no UI timeout policy).
 
-`src/content/visibility-index.ts`
-- Tracks element visibility snapshots via `IntersectionObserver`.
-- Supports hide deferral policy.
+`src/content/pending-decision-coordinator.ts`
+- Owns pending decision state (`post_id`, identity, render root, timer/status).
+- Starts `BATCH_RESULT_TIMEOUT_MS` only when pending posts are visible.
+- Keeps late results routable and applies late `hide` only when identity is still current.
 
 `src/content/render-commit-pipeline.ts`
 - Single commit boundary for all decisions.
 - Coalesces by render root.
 - Flushes by RAF.
-- Defers destructive `hide + collapse` while currently visible.
-- Also defers far-offscreen collapse until the post enters a viewport-adjacent commit band.
+- Applies decisions as soon as they are valid, with no viewport deferral.
 
 `src/content/decision-renderer.ts`
 - Applies `keep | hide`.
@@ -212,16 +224,23 @@ Rules:
 `src/content/starvation-watchdog.ts`
 - Detects stalled processing and triggers reconcile.
 - Pending batch classify work is treated as active progress to avoid false watchdog recover loops during normal API latency.
-- Watchdog stall detection uses actionable backlog, not raw pending commit count, so visibility-deferred collapse entries do not trigger forced reattach loops.
+- Watchdog stall detection uses actionable backlog, not raw pending commit count.
 
 `src/background/index.ts`
 - Message hub and auth/enabled enforcement.
-- Handles classify batching, billing, usage, stats, JWT state.
+- Handles classify dispatch, billing, usage, stats, JWT state.
+
+`src/background/classify-pipeline.ts`
+- Staged background orchestrator for classify requests.
+- Resolves attachments with bounded concurrency (`p-limit`) and short deadline budget.
+- Flushes ready posts to classify batches using shared batch constants (`BATCH_MAX_ITEMS`, `BATCH_WINDOW_MS`).
+- Caps concurrent in-flight classify HTTP requests (`BATCH_MAX_INFLIGHT_REQUESTS`, default `2`) to avoid connection-pool saturation.
+- Fail-open behavior: unresolved posts at deadline are sent with `attachments: []`.
 
 `src/background/attachment-resolver.ts`
 - Resolves image refs to `{ sha256, mime_type, base64 }` with byte budget enforcement.
 - Resolves PDF refs to `{ source_url, excerpt_text }` best-effort.
-- Fail-open behavior: broken attachments are dropped; post classification still proceeds.
+- Fail-open behavior: broken attachments are dropped within a post; post classification still proceeds.
 
 `src/popup/App.ts`
 - Sign-in flow, enable toggle, hide mode selector, plan/usage UI.
@@ -262,6 +281,7 @@ Defined in `src/lib/config.ts`:
 - `API_BASE_URL`
 - `BATCH_WINDOW_MS`
 - `BATCH_MAX_ITEMS`
+- `BATCH_MAX_INFLIGHT_REQUESTS`
 - `BATCH_RESULT_TIMEOUT_MS`
 - `CACHE_TTL_MS`
 - `CACHE_MAX_ITEMS`
@@ -280,10 +300,12 @@ Enabled-state default:
 
 - `https://www.linkedin.com/*` for feed DOM parsing/rendering.
 - `https://media.licdn.com/*` for background attachment fetches (images/documents).
+- `https://www.reddit.com/*` and `https://old.reddit.com/*` for Reddit feed DOM parsing/rendering.
+- `https://i.redd.it/*`, `https://preview.redd.it/*`, and `https://external-preview.redd.it/*` for Reddit image attachment fetches in background resolution.
 - `https://api.getunslop.com/*` and `http://localhost:3000/*` for backend API and local development.
 
 Rationale:
-- attachment resolution happens in background, not content script; `media.licdn.com` permission is required for that fetch path.
+- attachment resolution happens in background, not content script; media host permissions (for example `media.licdn.com`, `i.redd.it`, `preview.redd.it`) are required for that fetch path.
 - if attachment fetch fails (permissions/network/content-type), classification continues with reduced payload (fail-open).
 
 ## Troubleshooting Playbook
@@ -299,12 +321,13 @@ Rationale:
 ### Symptom: attachment context is missing in backend decisions
 
 1. Confirm `https://media.licdn.com/*` exists in `host_permissions`.
-2. Confirm posts include `attachments[]` refs from `src/content/linkedin-parser.ts`.
-3. Confirm background resolver does not exceed budgets:
+2. For Reddit, confirm `https://i.redd.it/*`, `https://preview.redd.it/*`, and `https://external-preview.redd.it/*` exist in `host_permissions`.
+3. Confirm platform parser output includes `attachments[]` refs.
+4. Confirm background resolver does not exceed budgets:
    - image: `MAX_IMAGE_BYTES`
    - PDF fetch: `MAX_PDF_FETCH_BYTES`
    - PDF excerpt: `MAX_PDF_EXCERPT_CHARS`
-4. On fetch/parse errors, expect fail-open behavior: attachment dropped, post still classified.
+5. On fetch/parse errors, expect fail-open behavior: attachment dropped, post still classified.
 
 ### Symptom: posts hidden but large blank space
 
@@ -314,7 +337,7 @@ Rationale:
 
 ### Symptom: white screen/rerender loop while scrolling
 
-1. Confirm watchdog does not force reconcile while classify work is pending or commit backlog is fully deferred (non-actionable).
+1. Confirm watchdog does not force reconcile while classify work is pending.
 2. Confirm preclassify selector excludes aggregate/discovery modules:
    - `:not([data-id^="urn:li:aggregate:"])`
    - `:not(:has(.feed-shared-aggregated-content))`
