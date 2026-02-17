@@ -188,6 +188,12 @@ button.ghost:hover {
 	color: var(--muted);
 }
 
+button:disabled {
+	opacity: 0.65;
+	cursor: not-allowed;
+	transform: none;
+}
+
 /* Toggle Switch */
 input[type="checkbox"] {
 	display: none;
@@ -264,6 +270,121 @@ input[type="checkbox"]:checked ~ .toggle-text {
 
 .card div:last-child {
 	margin-bottom: 0;
+}
+
+/* Diagnostics */
+.diagnostics-card {
+	padding: 12px;
+}
+
+.diagnostics-head {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	margin-bottom: 8px;
+}
+
+.diagnostics-subtitle {
+	font-size: 11px;
+	color: var(--faint);
+}
+
+.diagnostics-run-btn {
+	margin-bottom: 8px;
+}
+
+.diagnostics-inline-status {
+	margin-bottom: 0;
+}
+
+.diagnostics-summary {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 8px;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	font-size: 11px;
+	color: var(--muted);
+	background: var(--card2);
+	margin-bottom: 8px;
+}
+
+.diagnostics-summary--pass {
+	border-color: color-mix(in srgb, var(--good) 35%, var(--border));
+}
+
+.diagnostics-summary--warn {
+	border-color: color-mix(in srgb, var(--warning) 35%, var(--border));
+}
+
+.diagnostics-summary--fail {
+	border-color: color-mix(in srgb, var(--hide) 55%, var(--border));
+}
+
+.diagnostics-timestamp {
+	color: var(--faint);
+	white-space: nowrap;
+}
+
+.diagnostics-list {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.diagnostics-row {
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	padding: 8px;
+	background: var(--card);
+}
+
+.diagnostics-row--pass {
+	border-color: color-mix(in srgb, var(--good) 38%, var(--border));
+}
+
+.diagnostics-row--warn {
+	border-color: color-mix(in srgb, var(--warning) 42%, var(--border));
+}
+
+.diagnostics-row--fail {
+	border-color: color-mix(in srgb, var(--hide) 55%, var(--border));
+}
+
+.diagnostics-row-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-bottom: 4px;
+}
+
+.diagnostics-status-pill {
+	font-size: 10px;
+	letter-spacing: 0.04em;
+	font-weight: 700;
+	padding: 2px 5px;
+	border-radius: 999px;
+	background: var(--card2);
+	color: var(--muted);
+}
+
+.diagnostics-row-label {
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--text);
+}
+
+.diagnostics-row-evidence {
+	font-size: 11px;
+	color: var(--muted);
+	margin-bottom: 3px;
+}
+
+.diagnostics-row-next {
+	font-size: 11px;
+	color: var(--faint);
 }
 
 /* Utilities */

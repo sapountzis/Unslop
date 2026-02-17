@@ -1,7 +1,7 @@
 ---
 owner: unslop
 status: verified
-last_verified: 2026-02-16
+last_verified: 2026-02-17
 ---
 
 # Chrome Extension Spec (v0.1)
@@ -10,13 +10,13 @@ last_verified: 2026-02-16
 Users need a minimal Chrome extension that can classify LinkedIn, X, and Reddit feed posts and apply decisions without breaking normal browsing.
 
 ## non_goals
-- UI complexity beyond toggle/sign-in/status/upgrade.
+- UI complexity beyond toggle/sign-in/status/upgrade/diagnostics.
 - Per-author heuristics, sliders, or non-spec runtime feature expansion.
 
 ## acceptance_criteria
 - AC1: Extension runtime extracts canonical post payloads and requests batch classification.
 - AC2: Decisions are applied as `keep|hide` with fail-open behavior.
-- AC3: Auth callback, storage, popup controls, and backend message contracts are defined.
+- AC3: Auth callback, storage, popup controls, diagnostics checks, and backend message contracts are defined.
 
 ## constraints
 - Performance: Mutation observation and classify batching must not degrade feed interaction.
@@ -79,6 +79,7 @@ The extension must be minimal and must **fail open**.
      - Sign in (email field + button)
      - Account status (email + plan)
      - Upgrade to Pro (opens checkout URL)
+     - Run Diagnostics (one-click runtime + selector + storage health checks)
 
 No options page is required in v0.1.
 

@@ -4,6 +4,10 @@ import {
 	StatsInfo,
 	UserInfoWithUsage,
 } from "../types";
+import type {
+	ContentDiagnosticsResponse,
+	RuntimeDiagnosticsResponse,
+} from "./diagnostics";
 
 export const MESSAGE_TYPES = {
 	CLASSIFY_BATCH: "CLASSIFY_BATCH",
@@ -16,6 +20,8 @@ export const MESSAGE_TYPES = {
 	TOGGLE_ENABLED: "TOGGLE_ENABLED",
 	RELOAD_ACTIVE_TAB: "RELOAD_ACTIVE_TAB",
 	GET_STATS: "GET_STATS",
+	GET_RUNTIME_DIAGNOSTICS: "GET_RUNTIME_DIAGNOSTICS",
+	GET_CONTENT_DIAGNOSTICS: "GET_CONTENT_DIAGNOSTICS",
 } as const;
 
 export type MessageType = (typeof MESSAGE_TYPES)[keyof typeof MESSAGE_TYPES];
@@ -65,6 +71,14 @@ export type GetStatsMessage = {
 	type: typeof MESSAGE_TYPES.GET_STATS;
 };
 
+export type GetRuntimeDiagnosticsMessage = {
+	type: typeof MESSAGE_TYPES.GET_RUNTIME_DIAGNOSTICS;
+};
+
+export type GetContentDiagnosticsMessage = {
+	type: typeof MESSAGE_TYPES.GET_CONTENT_DIAGNOSTICS;
+};
+
 export type RuntimeRequest =
 	| ClassifyBatchMessage
 	| GetUserInfoMessage
@@ -74,7 +88,9 @@ export type RuntimeRequest =
 	| ClearJwtMessage
 	| ToggleEnabledMessage
 	| ReloadActiveTabMessage
-	| GetStatsMessage;
+	| GetStatsMessage
+	| GetRuntimeDiagnosticsMessage
+	| GetContentDiagnosticsMessage;
 
 export type RuntimeResponseByType = {
 	[MESSAGE_TYPES.CLASSIFY_BATCH]: { status: "ok" | "disabled" | "error" };
@@ -87,6 +103,8 @@ export type RuntimeResponseByType = {
 	[MESSAGE_TYPES.TOGGLE_ENABLED]: { enabled: boolean };
 	[MESSAGE_TYPES.RELOAD_ACTIVE_TAB]: { status: "reloaded" | "ignored" };
 	[MESSAGE_TYPES.GET_STATS]: StatsInfo | null;
+	[MESSAGE_TYPES.GET_RUNTIME_DIAGNOSTICS]: RuntimeDiagnosticsResponse;
+	[MESSAGE_TYPES.GET_CONTENT_DIAGNOSTICS]: ContentDiagnosticsResponse;
 };
 
 export type RuntimeResponse<T extends MessageType> = RuntimeResponseByType[T];

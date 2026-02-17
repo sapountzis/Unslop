@@ -35,11 +35,34 @@ bunx tsc --noEmit --noUnusedLocals --noUnusedParameters -p tsconfig.json
 bun run build
 ```
 
+## Where The Flow Starts
+
+If you want to trace LinkedIn classification from first touch to backend call, read in this order:
+
+1. `extension/manifest.json`
+   - Content script injection entrypoint for LinkedIn (`src/platforms/linkedin/index.ts`).
+2. `src/platforms/linkedin/index.ts`
+   - Calls `createPlatformRuntime(linkedinPlugin)`.
+3. `src/platforms/linkedin/plugin.ts`
+   - Wires LinkedIn selectors, parser, surface resolver, and route detector into the shared runtime contract.
+4. `src/content/runtime.ts`
+   - Core engine: observers, candidate processing, batch enqueue, result handling, render commit.
+5. `src/background/index.ts`
+   - Message hub that enforces auth/enabled gates and dispatches classify work.
+6. `src/background/classify-pipeline.ts`
+   - Resolves attachments and dispatches classify micro-batches.
+7. `src/background/api.ts`
+   - Performs HTTP call to `/v1/classify/batch` and streams NDJSON results back.
+
+If you only need one file to start debugging runtime behavior, start at `src/content/runtime.ts`.
+
 ## System Overview
 
 ```mermaid
 flowchart LR
-  LI[LinkedIn DOM] --> CS[Content Runtime<br/>src/content/linkedin.ts]
+  LI[LinkedIn DOM] --> ENTRY[Platform Entry<br/>src/platforms/linkedin/index.ts]
+  ENTRY --> PLUGIN[LinkedIn Plugin<br/>src/platforms/linkedin/plugin.ts]
+  PLUGIN --> CS[Shared Runtime<br/>src/content/runtime.ts]
   CS --> ATTACH[Attachment Controller]
   CS --> PARSER[LinkedIn Parser<br/>nodes + attachment refs]
   CS --> SURFACE[Post Surface Resolver]
@@ -169,28 +192,24 @@ Rules:
 
 ## Module Boundaries
 
-`src/content/linkedin.ts`
-- Main orchestrator.
-- Owns runtime composition and high-level flow.
+`src/platforms/<platform>/index.ts`
+- Platform content-script entrypoints (`linkedin`, `x`, `reddit`).
+- Start runtime with `createPlatformRuntime(plugin)`.
+
+`src/platforms/<platform>/plugin.ts`
+- Platform adapter boundary for runtime:
+  - route detection
+  - selectors
+  - parser
+  - surface resolution
+
+`src/content/runtime.ts`
+- Platform-agnostic content runtime orchestrator.
+- Owns lifecycle, observers, mutation buffer draining, classify dispatch, and decision commit handoff.
 
 `src/content/attachment-controller.ts`
 - Observer ownership and generation guards.
 - Public surface: `ensureAttached`, `detachAll`, `isLive`.
-
-`src/content/post-surface.ts`
-- Converts arbitrary nodes into canonical `{ contentRoot, renderRoot, labelRoot, identity }`.
-
-`src/content/linkedin-parser.ts`
-- Extracts deterministic `nodes` in DOM order (`root` then `repost-*`).
-- Extracts attachment references (image/pdf metadata only, no binary fetch).
-
-`src/platforms/x/parser.ts`
-- Uses scoped parsing (`root` vs quoted repost) and assigns attachments to the correct node.
-- Uses hydration-aware media waiting before final extraction:
-  - waits for late `tweetPhoto` insertion on newly mounted tweets,
-  - observes `src`/`srcset`/`style` mutations,
-  - exits early for likely text-only tweets with a short no-hint timeout.
-- Resolves image source from `img[src|currentSrc|srcset]` and CSS `background-image` fallbacks to reduce empty-attachment payloads during X lazy render.
 
 `src/content/mutation-buffer.ts`
 - Deduplicated queue of candidate elements.
@@ -209,7 +228,6 @@ Rules:
 - Single commit boundary for all decisions.
 - Coalesces by render root.
 - Flushes by RAF.
-- Applies decisions as soon as they are valid, with no viewport deferral.
 
 `src/content/decision-renderer.ts`
 - Applies `keep | hide`.
@@ -217,25 +235,15 @@ Rules:
   - `collapse` (default): `display: none`.
   - `label`: keeps post visible and prepends a compact Unslop decision pill.
 
-`src/content/runtime-lifecycle.ts`
-- Central cleanup registry.
-- One `dispose()` path for teardown.
-
-`src/content/starvation-watchdog.ts`
-- Detects stalled processing and triggers reconcile.
-- Pending batch classify work is treated as active progress to avoid false watchdog recover loops during normal API latency.
-- Watchdog stall detection uses actionable backlog, not raw pending commit count.
-
 `src/background/index.ts`
 - Message hub and auth/enabled enforcement.
-- Handles classify dispatch, billing, usage, stats, JWT state.
+- Handles classify dispatch, billing, usage, stats, JWT state, and diagnostics.
 
 `src/background/classify-pipeline.ts`
 - Staged background orchestrator for classify requests.
 - Resolves attachments with bounded concurrency (`p-limit`) and short deadline budget.
 - Flushes ready posts to classify batches using shared batch constants (`BATCH_MAX_ITEMS`, `BATCH_WINDOW_MS`).
 - Caps concurrent in-flight classify HTTP requests (`BATCH_MAX_INFLIGHT_REQUESTS`, default `2`) to avoid connection-pool saturation.
-- Fail-open behavior: unresolved posts at deadline are sent with `attachments: []`.
 
 `src/background/attachment-resolver.ts`
 - Resolves image refs to `{ sha256, mime_type, base64 }` with byte budget enforcement.
@@ -244,6 +252,7 @@ Rules:
 
 `src/popup/App.ts`
 - Sign-in flow, enable toggle, hide mode selector, plan/usage UI.
+- One-click diagnostics panel with pass/warn/fail checks and remediation hints.
 - Hide-mode change triggers controlled LinkedIn feed tab reload via background.
 
 `src/stats/index.ts`
@@ -259,9 +268,11 @@ Defined in `src/lib/messages.ts`:
 - Auth/account:
   - `GET_USER_INFO`, `START_AUTH`, `SET_JWT`, `CLEAR_JWT`
 - Product:
-  - `TOGGLE_ENABLED`, `RELOAD_ACTIVE_LINKEDIN_TAB`
+  - `TOGGLE_ENABLED`, `RELOAD_ACTIVE_TAB`
 - Billing/analytics:
-  - `CREATE_CHECKOUT`, `GET_USAGE`, `GET_STATS`
+  - `CREATE_CHECKOUT`, `GET_STATS`
+- Diagnostics:
+  - `GET_RUNTIME_DIAGNOSTICS`, `GET_CONTENT_DIAGNOSTICS`
 
 `CLASSIFY_BATCH` request payload:
 - `posts[]` where each post is:
@@ -312,11 +323,33 @@ Rationale:
 
 ### Symptom: no backend classify calls
 
-1. Confirm current URL is `/feed/` or starts with `/feed/`.
-2. Confirm popup toggle is enabled.
-3. Confirm page has feed root matching `SELECTORS.feed`.
-4. Confirm runtime markers appear on posts (`data-unslop-checking` / `data-unslop-processed`).
-5. Confirm no stale disabled state in `chrome.storage.sync`.
+1. Open popup and click `Run Diagnostics`.
+2. Resolve red checks first (`fail`), then yellow checks (`warn`), then rerun.
+3. Critical checks for classify path:
+   - `storage_enabled`
+   - `storage_jwt_present`
+   - `active_tab_linkedin`
+   - `eligible_feed_route`
+   - `content_ping`
+   - `candidate_posts_found`
+   - `post_identity_ready`
+4. If diagnostics are unavailable, fall back to manual checks:
+   - current URL is `/feed/` or starts with `/feed/`
+   - popup toggle is enabled
+   - feed root matches `SELECTORS.feed`
+   - runtime markers appear on posts (`data-unslop-checking` / `data-unslop-processed`)
+   - no stale disabled state in `chrome.storage.sync`
+
+### Symptom: onboarding on a new machine fails
+
+1. Open `https://www.linkedin.com/feed/` in the same browser profile where the extension is installed.
+2. Run popup `Run Diagnostics`.
+3. Follow the first failing line's `next action`.
+4. Re-run diagnostics until summary shows no failures.
+5. If failures remain with:
+   - `content_script_loaded`: check extension site access for LinkedIn and reload tab.
+   - `candidate_posts_found`: scroll feed, wait for hydration, rerun.
+   - `post_identity_ready`: LinkedIn DOM variant likely changed; compare selectors vs live DOM.
 
 ### Symptom: attachment context is missing in backend decisions
 

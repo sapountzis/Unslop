@@ -2,15 +2,23 @@
 import { UserInfoWithUsage } from "../types";
 import { MESSAGE_TYPES } from "../lib/messages";
 import { resolveEnabled } from "../lib/enabled-state";
+import type {
+	ContentDiagnosticsResponse,
+	DiagnosticsReport,
+	RuntimeDiagnosticsResponse,
+} from "../lib/diagnostics";
 import type { HideRenderMode } from "../lib/config";
 import {
 	HIDE_RENDER_MODE_STORAGE_KEY,
 	resolveHideRenderMode,
 } from "../lib/hide-render-mode";
+import { buildDiagnosticsReport } from "./diagnostics";
 
 export class App {
 	private container: HTMLElement;
 	private readonly logoUrl: string;
+	private diagnosticsReport: DiagnosticsReport | null = null;
+	private diagnosticsRunning = false;
 
 	constructor(containerId: string) {
 		const container = document.getElementById(containerId);
@@ -65,21 +73,24 @@ export class App {
 
 	private renderSignIn(): void {
 		this.container.innerHTML = `
-      <div class="text-center">
-        ${this.renderBrand()}
-        <p>Sign in to filter your LinkedIn feed</p>
-        <form id="signin-form">
-          <input
-            type="email"
-            id="email-input"
-            placeholder="your@email.com"
-            required
-          />
-          <button type="submit" class="primary">Send Sign In Link</button>
-        </form>
-        <p id="status" class="status"></p>
-      </div>
-    `;
+	      <div>
+	        <div class="text-center">
+	          ${this.renderBrand()}
+	          <p>Sign in to filter your LinkedIn feed</p>
+	          <form id="signin-form">
+	            <input
+	              type="email"
+	              id="email-input"
+	              placeholder="your@email.com"
+	              required
+	            />
+	            <button type="submit" class="primary">Send Sign In Link</button>
+	          </form>
+	          <p id="status" class="status"></p>
+	        </div>
+	        ${this.renderDiagnosticsCard()}
+	      </div>
+	    `;
 
 		const form = this.container.querySelector("#signin-form");
 		const emailInput = this.container.querySelector(
@@ -105,6 +116,8 @@ export class App {
 				status.textContent = "Failed to send email. Please try again.";
 			}
 		});
+
+		this.bindDiagnosticsControls();
 	}
 
 	private renderDashboard(
@@ -172,19 +185,20 @@ export class App {
           <div><strong>Plan:</strong> ${isPro ? "Pro" : "Free"}</div>
         </div>
 
-        ${
-					!isPro
-						? `
-          <button id="upgrade-btn" class="primary mb-8">Upgrade to Pro ($5/mo)</button>
-        `
-						: ""
-				}
+	        ${
+						!isPro
+							? `
+	          <button id="upgrade-btn" class="primary mb-8">Upgrade to Pro ($5/mo)</button>
+	        `
+							: ""
+					}
 
-        <button id="stats-btn" class="secondary mb-8">View Statistics</button>
+	        <button id="stats-btn" class="secondary mb-8">View Statistics</button>
+	        ${this.renderDiagnosticsCard()}
 
-        <button id="signout-btn" class="ghost">Sign Out</button>
-      </div>
-    `;
+	        <button id="signout-btn" class="ghost">Sign Out</button>
+	      </div>
+	    `;
 
 		// Event listeners
 		const enabledToggle = this.container.querySelector(
@@ -239,6 +253,185 @@ export class App {
 			await chrome.runtime.sendMessage({ type: MESSAGE_TYPES.CLEAR_JWT });
 			this.render();
 		});
+
+		this.bindDiagnosticsControls();
+	}
+
+	private escapeHtml(value: string): string {
+		return value
+			.replace(/&/g, "&amp;")
+			.replace(/</g, "&lt;")
+			.replace(/>/g, "&gt;")
+			.replace(/"/g, "&quot;")
+			.replace(/'/g, "&#39;");
+	}
+
+	private formatErrorMessage(error: unknown): string {
+		if (error instanceof Error) {
+			return error.message || "Unknown error";
+		}
+		if (typeof error === "string") {
+			return error;
+		}
+		return "Unknown error";
+	}
+
+	private async requestRuntimeDiagnostics(): Promise<
+		RuntimeDiagnosticsResponse["snapshot"]
+	> {
+		const response = (await chrome.runtime.sendMessage({
+			type: MESSAGE_TYPES.GET_RUNTIME_DIAGNOSTICS,
+		})) as RuntimeDiagnosticsResponse | null;
+		if (!response || response.status !== "ok" || !response.snapshot) {
+			throw new Error("Runtime diagnostics response was invalid.");
+		}
+		return response.snapshot;
+	}
+
+	private async requestContentDiagnostics(
+		tabId: number,
+	): Promise<ContentDiagnosticsResponse["snapshot"]> {
+		const response = (await chrome.tabs.sendMessage(tabId, {
+			type: MESSAGE_TYPES.GET_CONTENT_DIAGNOSTICS,
+		})) as ContentDiagnosticsResponse | null;
+
+		if (!response || response.status !== "ok" || !response.snapshot) {
+			throw new Error("Content diagnostics response was invalid.");
+		}
+
+		return response.snapshot;
+	}
+
+	private async runDiagnostics(): Promise<void> {
+		if (this.diagnosticsRunning) return;
+		this.diagnosticsRunning = true;
+		this.updateDiagnosticsUi();
+
+		let backgroundSnapshot: RuntimeDiagnosticsResponse["snapshot"] | null =
+			null;
+		let backgroundError: string | null = null;
+		let contentSnapshot: ContentDiagnosticsResponse["snapshot"] | null = null;
+		let contentError: string | null = null;
+
+		try {
+			backgroundSnapshot = await this.requestRuntimeDiagnostics();
+		} catch (error) {
+			backgroundError = this.formatErrorMessage(error);
+		}
+
+		if (
+			backgroundSnapshot &&
+			typeof backgroundSnapshot.activeTabId === "number"
+		) {
+			try {
+				contentSnapshot = await this.requestContentDiagnostics(
+					backgroundSnapshot.activeTabId,
+				);
+			} catch (error) {
+				contentError = this.formatErrorMessage(error);
+			}
+		} else if (backgroundSnapshot) {
+			contentError = "No active tab found.";
+		}
+
+		this.diagnosticsReport = buildDiagnosticsReport({
+			backgroundSnapshot,
+			backgroundError,
+			contentSnapshot,
+			contentError,
+		});
+		this.diagnosticsRunning = false;
+		this.updateDiagnosticsUi();
+	}
+
+	private renderDiagnosticsCard(): string {
+		return `
+	      <div class="card mb-8 diagnostics-card">
+	        <div class="diagnostics-head">
+	          <strong>Run Diagnostics</strong>
+	          <span class="diagnostics-subtitle">Checks content runtime, selectors, storage, and messaging.</span>
+	        </div>
+	        <button id="run-diagnostics-btn" type="button" class="secondary diagnostics-run-btn">Run Diagnostics</button>
+	        <div id="diagnostics-results" class="diagnostics-results">${this.renderDiagnosticsResults()}</div>
+	      </div>
+	    `;
+	}
+
+	private renderDiagnosticsResults(): string {
+		if (this.diagnosticsRunning && !this.diagnosticsReport) {
+			return `<p class="status diagnostics-inline-status">Running diagnostics...</p>`;
+		}
+
+		if (!this.diagnosticsReport) {
+			return `<p class="status diagnostics-inline-status">Open LinkedIn feed, then click Run Diagnostics.</p>`;
+		}
+
+		const report = this.diagnosticsReport;
+		const generatedAt = new Date(report.generatedAtIso).toLocaleTimeString(
+			"en-US",
+			{
+				hour: "2-digit",
+				minute: "2-digit",
+				second: "2-digit",
+			},
+		);
+		const summary = `${report.summary.pass} passed · ${report.summary.warn} warnings · ${report.summary.fail} failed`;
+		const checksMarkup = report.checks
+			.map((check) => {
+				const label = this.escapeHtml(check.label);
+				const evidence = this.escapeHtml(check.evidence);
+				const nextAction = this.escapeHtml(check.nextAction);
+				return `
+	          <div class="diagnostics-row diagnostics-row--${check.status}">
+	            <div class="diagnostics-row-head">
+	              <span class="diagnostics-status-pill">${check.status.toUpperCase()}</span>
+	              <span class="diagnostics-row-label">${label}</span>
+	            </div>
+	            <div class="diagnostics-row-evidence">${evidence}</div>
+	            <div class="diagnostics-row-next">${nextAction}</div>
+	          </div>
+	        `;
+			})
+			.join("");
+
+		return `
+	      <div class="diagnostics-summary diagnostics-summary--${report.overallStatus}">
+	        <span>${this.escapeHtml(summary)}</span>
+	        <span class="diagnostics-timestamp">${this.escapeHtml(generatedAt)}</span>
+	      </div>
+	      <div class="diagnostics-list">${checksMarkup}</div>
+	    `;
+	}
+
+	private updateDiagnosticsUi(): void {
+		const runButton = this.container.querySelector(
+			"#run-diagnostics-btn",
+		) as HTMLButtonElement | null;
+		if (runButton) {
+			runButton.disabled = this.diagnosticsRunning;
+			runButton.textContent = this.diagnosticsRunning
+				? "Running Diagnostics..."
+				: "Run Diagnostics";
+		}
+
+		const resultsContainer = this.container.querySelector(
+			"#diagnostics-results",
+		);
+		if (resultsContainer) {
+			resultsContainer.innerHTML = this.renderDiagnosticsResults();
+		}
+	}
+
+	private bindDiagnosticsControls(): void {
+		const runButton = this.container.querySelector(
+			"#run-diagnostics-btn",
+		) as HTMLButtonElement | null;
+
+		runButton?.addEventListener("click", () => {
+			void this.runDiagnostics();
+		});
+
+		this.updateDiagnosticsUi();
 	}
 
 	private renderBrand(): string {

@@ -33,6 +33,15 @@ function isSupportedFeedUrl(url: string): boolean {
 	}
 }
 
+function getHostname(url: string | undefined): string | null {
+	if (!url) return null;
+	try {
+		return new URL(url).hostname;
+	} catch {
+		return null;
+	}
+}
+
 // Handle messages from content scripts and popup
 chrome.runtime.onMessage.addListener(
 	(message: RuntimeRequest, sender, sendResponse) => {
@@ -143,6 +152,34 @@ chrome.runtime.onMessage.addListener(
 						} else {
 							sendResponse(null);
 						}
+						return;
+					}
+
+					case MESSAGE_TYPES.GET_RUNTIME_DIAGNOSTICS: {
+						const storage = await chrome.storage.sync.get(["jwt", "enabled"]);
+						const [activeTab] = await chrome.tabs.query({
+							active: true,
+							currentWindow: true,
+						});
+						const activeTabUrl =
+							typeof activeTab?.url === "string" ? activeTab.url : null;
+						const activeTabHost = getHostname(activeTabUrl ?? undefined);
+
+						sendResponse({
+							status: "ok",
+							snapshot: {
+								enabled: resolveEnabled(storage.enabled),
+								hasJwt:
+									typeof storage.jwt === "string" && storage.jwt.length > 0,
+								activeTabId:
+									typeof activeTab?.id === "number" ? activeTab.id : null,
+								activeTabUrl,
+								activeTabHost,
+								activeTabIsLinkedIn: activeTabHost === "www.linkedin.com",
+								activeTabIsSupportedFeedHost:
+									activeTabUrl !== null && isSupportedFeedUrl(activeTabUrl),
+							},
+						});
 						return;
 					}
 
