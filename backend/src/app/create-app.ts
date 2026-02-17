@@ -1,101 +1,104 @@
-import { Hono } from 'hono';
-import { cors } from 'hono/cors';
-import { createAuthRoutes } from '../routes/auth';
-import { createBillingRoutes } from '../routes/billing';
-import { createClassifyRoutes } from '../routes/classify';
-import { createFeedbackRoutes } from '../routes/feedback';
-import { createStatsRoutes } from '../routes/stats';
-import { createRequestLogger } from '../middleware/request-logger';
-import type { AppDependencies } from './dependencies';
+import { Hono } from "hono";
+import { cors } from "hono/cors";
+import { createAuthRoutes } from "../routes/auth";
+import { createBillingRoutes } from "../routes/billing";
+import { createClassifyRoutes } from "../routes/classify";
+import { createFeedbackRoutes } from "../routes/feedback";
+import { createStatsRoutes } from "../routes/stats";
+import { createRequestLogger } from "../middleware/request-logger";
+import type { AppDependencies } from "./dependencies";
 
 export function createApp(deps: AppDependencies): Hono {
-  const app = new Hono();
+	const app = new Hono();
 
-  app.use('*', createRequestLogger({ logger: deps.logger }));
-  const ALLOWED_ORIGINS = new Set([
-    'https://www.linkedin.com',
-    'https://x.com',
-    'https://twitter.com',
-    'https://www.reddit.com',
-    'https://old.reddit.com',
-  ]);
+	app.use("*", createRequestLogger({ logger: deps.logger }));
+	const ALLOWED_ORIGINS = new Set([
+		"https://www.linkedin.com",
+		"https://x.com",
+		"https://twitter.com",
+		"https://www.reddit.com",
+		"https://old.reddit.com",
+	]);
 
-  app.use(
-    '*',
-    cors({
-      origin: (origin) => {
-        if (origin.startsWith('chrome-extension://') || ALLOWED_ORIGINS.has(origin)) {
-          return origin;
-        }
-        return '';
-      },
-      allowHeaders: ['Content-Type', 'Authorization'],
-      allowMethods: ['GET', 'POST', 'OPTIONS'],
-    }),
-  );
+	app.use(
+		"*",
+		cors({
+			origin: (origin) => {
+				if (
+					origin.startsWith("chrome-extension://") ||
+					ALLOWED_ORIGINS.has(origin)
+				) {
+					return origin;
+				}
+				return "";
+			},
+			allowHeaders: ["Content-Type", "Authorization"],
+			allowMethods: ["GET", "POST", "OPTIONS"],
+		}),
+	);
 
-  app.onError((error, c) => {
-    deps.logger.error('unhandled_request_error', error, {
-      method: c.req.method,
-      path: c.req.path,
-    });
-    return c.json({ error: 'internal_error' }, 500);
-  });
+	app.onError((error, c) => {
+		deps.logger.error("unhandled_request_error", error, {
+			method: c.req.method,
+			path: c.req.path,
+		});
+		return c.json({ error: "internal_error" }, 500);
+	});
 
-  app.get('/', (c) => c.json({ status: 'ok' }));
+	app.get("/", (c) => c.json({ status: "ok" }));
 
-  app.get('/health', (c) =>
-    c.json({
-      status: 'ok',
-      timestamp: new Date().toISOString(),
-      version: '0.1.0',
-    }),
-  );
+	app.get("/health", (c) =>
+		c.json({
+			status: "ok",
+			timestamp: new Date().toISOString(),
+			version: "0.1.0",
+		}),
+	);
 
-  app.route(
-    '/',
-    createClassifyRoutes({
-      authMiddleware: deps.authMiddleware,
-      classificationService: deps.services.classification,
-    }),
-  );
+	app.route(
+		"/",
+		createClassifyRoutes({
+			authMiddleware: deps.authMiddleware,
+			classificationService: deps.services.classification,
+		}),
+	);
 
-  app.route(
-    '/',
-    createBillingRoutes({
-      authMiddleware: deps.authMiddleware,
-      polarService: deps.services.polar,
-      logger: deps.logger,
-      polarWebhookSecret: deps.config.billing.polarWebhookSecret,
-    }),
-  );
+	app.route(
+		"/",
+		createBillingRoutes({
+			authMiddleware: deps.authMiddleware,
+			polarService: deps.services.polar,
+			logger: deps.logger,
+			polarWebhookSecret: deps.config.billing.polarWebhookSecret,
+		}),
+	);
 
-  app.route(
-    '/',
-    createAuthRoutes({
-      authMiddleware: deps.authMiddleware,
-      authService: deps.services.auth,
-      statsService: deps.services.stats,
-      logger: deps.logger,
-    }),
-  );
+	app.route(
+		"/",
+		createAuthRoutes({
+			authMiddleware: deps.authMiddleware,
+			authService: deps.services.auth,
+			statsService: deps.services.stats,
+			logger: deps.logger,
+		}),
+	);
 
-  app.route(
-    '/',
-    createFeedbackRoutes({
-      authMiddleware: deps.authMiddleware,
-      feedbackService: deps.services.feedback,
-      logger: deps.logger,
-    }),
-  );
+	app.route(
+		"/",
+		createFeedbackRoutes({
+			authMiddleware: deps.authMiddleware,
+			feedbackService: deps.services.feedback,
+			logger: deps.logger,
+		}),
+	);
 
-  app.route(
-    '/',
-    createStatsRoutes({
-      authMiddleware: deps.authMiddleware,
-      statsService: deps.services.stats,
-    }),
-  );
+	app.route(
+		"/",
+		createStatsRoutes({
+			authMiddleware: deps.authMiddleware,
+			statsService: deps.services.stats,
+		}),
+	);
 
-  return app;
+	return app;
 }

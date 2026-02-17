@@ -14,10 +14,10 @@ Minimal responsibilities:
 - Usage quotas: enforce monthly teacher-call caps by plan.
 
 Refer to:
-- `../spec/api.md`
-- `../spec/data_model.md`
-- `../spec/billing.md`
-- `../spec/ml.md`
+- `../docs/product-specs/api.md`
+- `../docs/product-specs/data_model.md`
+- `../docs/product-specs/billing.md`
+- `../docs/product-specs/ml.md`
 
 ## Backend constitution
 
@@ -70,8 +70,8 @@ A backend change is complete only if all are true:
   - integration tests for DB/billing/webhook/quota changes.
 - New behavior has tests before or alongside implementation (TDD preferred).
 - Docs are updated when contracts/policies/flows change:
-  - billing changes -> `../spec/billing.md` and `../spec/api.md`,
-  - data model changes -> `../spec/data_model.md`,
+  - billing changes -> `../docs/product-specs/billing.md` and `../docs/product-specs/api.md`,
+  - data model changes -> `../docs/product-specs/data_model.md`,
   - backend operational behavior changes -> `backend/docs/*.md` as needed.
 
 ### 6) Allowed / encouraged / prohibited

@@ -2,6 +2,17 @@
 
 This guide covers how to set up and run all Unslop components locally for development.
 
+## Agent Orientation
+
+If you are working as an autonomous coding agent, start here before editing code:
+
+1. Read `AGENTS.md` for repo guardrails and command surface.
+2. Read `docs/index.md` for canonical documentation entry points.
+3. Follow the detailed workflow in:
+   - `docs/runbooks/golden-paths.md`
+   - `docs/exec-plans/README.md`
+   - `docs/product-specs/index.md`
+
 ## Prerequisites
 
 - **Bun** v1.3.8+ - [Install Bun](https://bun.sh)
@@ -269,5 +280,5 @@ Unslop/
 │       ├── content/     # LinkedIn content script
 │       └── popup/       # Extension popup UI
 ├── frontend/          # Static public website
-└── spec/              # Project specifications
+└── docs/product-specs/ # Project specifications
 ```

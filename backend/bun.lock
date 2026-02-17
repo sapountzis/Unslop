@@ -17,10 +17,12 @@
         "zod": "^4.3.6",
       },
       "devDependencies": {
+        "@biomejs/biome": "~2.3.15",
         "@cloudflare/workers-types": "^4.0.0",
         "@types/async-retry": "^1.4.9",
         "@types/node": "^22.0.0",
         "@types/pg": "^8.16.0",
+        "@typescript/native-preview": "latest",
         "bun-types": "^1.2.2",
         "drizzle-kit": "^1.0.0-beta.15-859cf75",
         "typescript": "^5.9.0",
@@ -62,6 +64,24 @@
     "@azure/msal-common": ["@azure/msal-common@15.14.2", "", {}, "sha512-n8RBJEUmd5QotoqbZfd+eGBkzuFI1KX6jw2b3WcpSyGjwmzoeI/Jb99opIBPHpb8y312NB+B6+FGi2ZVSR8yfA=="],
 
     "@azure/msal-node": ["@azure/msal-node@3.8.7", "", { "dependencies": { "@azure/msal-common": "15.14.2", "jsonwebtoken": "^9.0.0", "uuid": "^8.3.0" } }, "sha512-a+Xnrae+uwLnlw68bplS1X4kuJ9F/7K6afuMFyRkNIskhjgDezl5Fhrx+1pmAlDmC0VaaAxjRQMp1OmcqVwkIg=="],
+
+    "@biomejs/biome": ["@biomejs/biome@2.3.15", "", { "optionalDependencies": { "@biomejs/cli-darwin-arm64": "2.3.15", "@biomejs/cli-darwin-x64": "2.3.15", "@biomejs/cli-linux-arm64": "2.3.15", "@biomejs/cli-linux-arm64-musl": "2.3.15", "@biomejs/cli-linux-x64": "2.3.15", "@biomejs/cli-linux-x64-musl": "2.3.15", "@biomejs/cli-win32-arm64": "2.3.15", "@biomejs/cli-win32-x64": "2.3.15" }, "bin": { "biome": "bin/biome" } }, "sha512-u+jlPBAU2B45LDkjjNNYpc1PvqrM/co4loNommS9/sl9oSxsAQKsNZejYuUztvToB5oXi1tN/e62iNd6ESiY3g=="],
+
+    "@biomejs/cli-darwin-arm64": ["@biomejs/cli-darwin-arm64@2.3.15", "", { "os": "darwin", "cpu": "arm64" }, "sha512-SDCdrJ4COim1r8SNHg19oqT50JfkI/xGZHSyC6mGzMfKrpNe/217Eq6y98XhNTc0vGWDjznSDNXdUc6Kg24jbw=="],
+
+    "@biomejs/cli-darwin-x64": ["@biomejs/cli-darwin-x64@2.3.15", "", { "os": "darwin", "cpu": "x64" }, "sha512-RkyeSosBtn3C3Un8zQnl9upX0Qbq4E3QmBa0qjpOh1MebRbHhNlRC16jk8HdTe/9ym5zlfnpbb8cKXzW+vlTxw=="],
+
+    "@biomejs/cli-linux-arm64": ["@biomejs/cli-linux-arm64@2.3.15", "", { "os": "linux", "cpu": "arm64" }, "sha512-FN83KxrdVWANOn5tDmW6UBC0grojchbGmcEz6JkRs2YY6DY63sTZhwkQ56x6YtKhDVV1Unz7FJexy8o7KwuIhg=="],
+
+    "@biomejs/cli-linux-arm64-musl": ["@biomejs/cli-linux-arm64-musl@2.3.15", "", { "os": "linux", "cpu": "arm64" }, "sha512-SSSIj2yMkFdSkXqASzIBdjySBXOe65RJlhKEDlri7MN19RC4cpez+C0kEwPrhXOTgJbwQR9QH1F4+VnHkC35pg=="],
+
+    "@biomejs/cli-linux-x64": ["@biomejs/cli-linux-x64@2.3.15", "", { "os": "linux", "cpu": "x64" }, "sha512-T8n9p8aiIKOrAD7SwC7opiBM1LYGrE5G3OQRXWgbeo/merBk8m+uxJ1nOXMPzfYyFLfPlKF92QS06KN1UW+Zbg=="],
+
+    "@biomejs/cli-linux-x64-musl": ["@biomejs/cli-linux-x64-musl@2.3.15", "", { "os": "linux", "cpu": "x64" }, "sha512-dbjPzTh+ijmmNwojFYbQNMFp332019ZDioBYAMMJj5Ux9d8MkM+u+J68SBJGVwVeSHMYj+T9504CoxEzQxrdNw=="],
+
+    "@biomejs/cli-win32-arm64": ["@biomejs/cli-win32-arm64@2.3.15", "", { "os": "win32", "cpu": "arm64" }, "sha512-puMuenu/2brQdgqtQ7geNwQlNVxiABKEZJhMRX6AGWcmrMO8EObMXniFQywy2b81qmC+q+SDvlOpspNwz0WiOA=="],
+
+    "@biomejs/cli-win32-x64": ["@biomejs/cli-win32-x64@2.3.15", "", { "os": "win32", "cpu": "x64" }, "sha512-kDZr/hgg+igo5Emi0LcjlgfkoGZtgIpJKhnvKTRmMBv6FF/3SDyEV4khBwqNebZIyMZTzvpca9sQNSXJ39pI2A=="],
 
     "@cloudflare/kv-asset-handler": ["@cloudflare/kv-asset-handler@0.4.2", "", {}, "sha512-SIOD2DxrRRwQ+jgzlXCqoEFiKOFqaPjhnNTGKXSRLvp1HiOvapLaFG2kEr9dYQTYe8rKrd9uvDUzmAITeNyaHQ=="],
 
@@ -232,6 +252,22 @@
     "@types/readable-stream": ["@types/readable-stream@4.0.23", "", { "dependencies": { "@types/node": "*" } }, "sha512-wwXrtQvbMHxCbBgjHaMGEmImFTQxxpfMOR/ZoQnXxB1woqkUbdLGFDgauo00Py9IudiaqSeiBiulSV9i6XIPig=="],
 
     "@types/retry": ["@types/retry@0.12.5", "", {}, "sha512-3xSjTp3v03X/lSQLkczaN9UIEwJMoMCA1+Nb5HfbJEQWogdeQIyVtTvxPXDQjZ5zws8rFQfVfRdz03ARihPJgw=="],
+
+    "@typescript/native-preview": ["@typescript/native-preview@7.0.0-dev.20260215.1", "", { "optionalDependencies": { "@typescript/native-preview-darwin-arm64": "7.0.0-dev.20260215.1", "@typescript/native-preview-darwin-x64": "7.0.0-dev.20260215.1", "@typescript/native-preview-linux-arm": "7.0.0-dev.20260215.1", "@typescript/native-preview-linux-arm64": "7.0.0-dev.20260215.1", "@typescript/native-preview-linux-x64": "7.0.0-dev.20260215.1", "@typescript/native-preview-win32-arm64": "7.0.0-dev.20260215.1", "@typescript/native-preview-win32-x64": "7.0.0-dev.20260215.1" }, "bin": { "tsgo": "bin/tsgo.js" } }, "sha512-grs0BbJyPR7VLNerBVteEToPku1InMKVKVKBUTJi19LfK+LU3+pkU6/fsTfZhH3xmIzIxD/sNRQHLt4x/Yb9yg=="],
+
+    "@typescript/native-preview-darwin-arm64": ["@typescript/native-preview-darwin-arm64@7.0.0-dev.20260215.1", "", { "os": "darwin", "cpu": "arm64" }, "sha512-icVO/hEMXjWlKhmpjIpqDyCzPvtHqfrPB+2rkd6M3rz84Bmw+o8Xgd7JvRxryZhR+D0y55me/bKh9xgvsgzuhA=="],
+
+    "@typescript/native-preview-darwin-x64": ["@typescript/native-preview-darwin-x64@7.0.0-dev.20260215.1", "", { "os": "darwin", "cpu": "x64" }, "sha512-Wz73wf1o9+4KwCLg8wnnIZZDAvv2KRZlDyP4X8GfBNzajfIAwYvI0ANWuIDznUUGeDAcqhBJXNe0Bkf4H9y4mg=="],
+
+    "@typescript/native-preview-linux-arm": ["@typescript/native-preview-linux-arm@7.0.0-dev.20260215.1", "", { "os": "linux", "cpu": "arm" }, "sha512-6WVXFVSp3LBBiBgBMtAHQgTDN72mDhgjrmXH7GoABTxR9asK8oPfmy5cwTp1sPD46pYhqjnSHMrARyg2FaNSeA=="],
+
+    "@typescript/native-preview-linux-arm64": ["@typescript/native-preview-linux-arm64@7.0.0-dev.20260215.1", "", { "os": "linux", "cpu": "arm64" }, "sha512-AYyXRxVwLZzfkEYN8FGdV4vqXwbTmv93nAZ6gMLvpDG4ItOybAE1R2obFjlFc+Or/rfQmVvfdkTym3c4bRJ3XQ=="],
+
+    "@typescript/native-preview-linux-x64": ["@typescript/native-preview-linux-x64@7.0.0-dev.20260215.1", "", { "os": "linux", "cpu": "x64" }, "sha512-Ui6qbTO+nE7fwh5OGTGfL4ndaT+SpiUiv0F1m3+nMaiAKysY5GbgXUfzWzkSrOODsT8F/4jZ4wCzEzJordt8sQ=="],
+
+    "@typescript/native-preview-win32-arm64": ["@typescript/native-preview-win32-arm64@7.0.0-dev.20260215.1", "", { "os": "win32", "cpu": "arm64" }, "sha512-dBFyAH9h3bMUaIp/84c3gKwyQ6jQmtzVoIBamSrYNw0xinJ56A/Ln5igdNOYrH8+/Aofmeh7pAWaa8U456XMjw=="],
+
+    "@typescript/native-preview-win32-x64": ["@typescript/native-preview-win32-x64@7.0.0-dev.20260215.1", "", { "os": "win32", "cpu": "x64" }, "sha512-bEMSwX71OGGvfsfHEa/aX7ZUWbPSI2oKEmeWcDQVY8vH1VK1ZwcFzMhKfgVJPt5pKH2bK3EO3xYnAyKkDO/Ung=="],
 
     "@typespec/ts-http-runtime": ["@typespec/ts-http-runtime@0.3.3", "", { "dependencies": { "http-proxy-agent": "^7.0.0", "https-proxy-agent": "^7.0.0", "tslib": "^2.6.2" } }, "sha512-91fp6CAAJSRtH5ja95T1FHSKa8aPW9/Zw6cta81jlZTUw/+Vq8jM/AfF/14h2b71wwR84JUTW/3Y8QPhDAawFA=="],
 

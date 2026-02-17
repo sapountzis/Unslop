@@ -1,39 +1,66 @@
-# AGENTS.md – Unslop (Root)
+# AGENTS.md - Map for Coding Agents
 
-This repo contains **Unslop**, a Chrome extension + backend API that filters social media feeds (LinkedIn, X/Twitter, Reddit) by **dimming or hiding posts based on a backend decision**.
+## Prime Directive
+- Implement changes that satisfy acceptance criteria in `docs/product-specs/*`.
+- Initialize every feature task with `make init-feature FEATURE=<task-slug>` before editing code.
+- Never violate the golden path for any reason; if a required step fails, stop and record a blocker instead of bypassing workflow requirements.
+- Progress autonomously through PR creation with `make pr-ready` then `make pr-submit`, unless blocked or explicit human input is required.
+- If knowledge is missing, update docs under `docs/*` so future agents can discover it.
+- Do not inspect or modify `tools/*` internals unless the user explicitly requests it.
 
-## Project layout
+## Start Here
+1) `docs/index.md`
+2) `ARCHITECTURE.md`
+3) `docs/core-beliefs.md`
 
-- `backend/` – Bun + Hono API, Postgres via Neon, Drizzle ORM.
-- `extension/` – Chrome extension (Manifest V3): content script + background + popup.
-- `frontend/` – Static site for `getunslop.com` (landing + privacy/support pages).
-- `spec/` – Source-of-truth specs.
+## Task-to-Spec Mapping
+- Map every task to at least one spec from `docs/product-specs/index.md`.
+- If no spec fits, create/update the spec first.
+- Refresh stale or unclear specs (`last_verified`) in the same change.
+- Detailed mapping/freshness rules: `docs/product-specs/index.md`, `docs/runbooks/docs-freshness.md`.
 
-## Submodule constitutions
+## Commands
+- `make setup`   # install dependencies and local tooling
+- `make init-feature FEATURE=<task-slug>` # start a new feature task workspace
+- `make fmt`     # apply formatting fixes
+- `make check`   # canonical non-mutating quality gate
+- `make ui`      # UI gate only
+- `make test`    # tests only
+- `make workflow` # workflow-compliance gate
+- `make taskflow` # plan-lifecycle gate
+- `make pr-ready` # required PR readiness gate before submission
+- `make pr-submit` # submit command: push + PR create/reuse + verified local cleanup
+- `make pr-cleanup` # manual local linked-worktree cleanup helper
 
-- For any change under `backend/`, `backend/AGENTS.md` is binding and must be treated as the backend development constitution (quality gates, boundaries, allowed/prohibited behavior).
+## Golden Path (Default)
+- Canonical flow + variants: `docs/runbooks/golden-paths.md`.
+- Plan lifecycle, completion protocol, and blocker format: `docs/exec-plans/README.md`.
 
-Start here: `spec/spec.md`.
+## Completion Criteria (Definition of Done)
+- Source of truth: `docs/exec-plans/README.md#definition-of-done`.
+- Enforce via `make check`, `make pr-ready`, and `make pr-submit`.
 
-## Global rules
+## Plan/Task Lifecycle
+- Follow `docs/exec-plans/README.md` for lifecycle details and blocker exception format.
+- Keep exactly one active plan and keep evidence current throughout execution.
 
-- Keep the implementation **minimal**:
-  - No model training.
-  - No “student model”.
-  - No heuristic classifier.
-  - No per-author rules or author-level tuning.
-  - No dashboards or analytics UI.
+## Keeping Docs Fresh
+- Follow `docs/runbooks/docs-freshness.md` on every meaningful change.
+- Run `docs/runbooks/quality-review.md` weekly during active development and after medium/large changes.
+- Keep `docs/quality/QUALITY_SCORE.md` and `docs/quality/tech-debt.md` aligned with real evidence.
 
-- The system should do only:
-  1) Extension extracts a post and asks the API for a decision.
-  2) API calls an LLM (via an inference provider) when needed.
-  3) API stores the decision + minimal metadata in Postgres.
-  4) Extension applies the decision (hide/keep) and can send feedback.
-  5) Auth + subscription billing + usage quotas.
-  6) A minimal public site that hosts install links + privacy + support.
+## Escalate To Humans When
+- Product specs are ambiguous or missing.
+- Security, privacy, compliance, or billing policy changes are involved.
+- A decision has broad cross-domain impact.
 
-## Safety
+## Repository-Specific Boundaries
+- This repo implements a minimal Chrome extension + backend + site.
+- Do not add model training, student models, heuristic classifiers, per-author tuning, or analytics dashboards.
+- Backend constitution is binding for backend changes: `backend/AGENTS.md`.
+- Extension constitution is binding for extension changes: `extension/AGENTS.md`.
+- Never guess dependency versions from memory; verify using repository manifests/lockfiles or explicit prompt instructions.
 
-- Never log or store secrets (JWTs, API keys).
-- Avoid logging full post text at high volume in production logs (DB storage is per spec; logs must remain minimal).
-- Billing changes must update `spec/billing.md` and `spec/api.md`.
+## Documentation Rule
+`AGENTS.md` is the table of contents, not the encyclopedia.
+Authoritative details belong in `docs/` and are mechanically checked by lint + CI.
