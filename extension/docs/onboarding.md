@@ -18,14 +18,18 @@ Core runtime guarantees:
 1. `extension/manifest.json`
    - Declares background worker and platform content-script entrypoints.
 2. `extension/src/platforms/<platform>/index.ts`
-   - Starts runtime: `createPlatformRuntime(plugin)`.
+   - Starts diagnostics host + runtime:
+     - `registerContentDiagnosticsHost(plugin)`
+     - `createPlatformRuntime(plugin)`
 3. `extension/src/platforms/<platform>/plugin.ts`
-   - Binds parser, surface resolver, selectors, and route detector.
+   - Binds parser, surface resolver, selectors, route detector, and platform diagnostics service.
 4. `extension/src/content/runtime.ts`
    - Shared content runtime orchestration for all platforms.
-5. `extension/src/background/index.ts`
+5. `extension/src/content/diagnostics-host.ts`
+   - Dedicated content diagnostics message host (dev-mode gated).
+6. `extension/src/background/index.ts`
    - Registers message router + handlers.
-6. `extension/src/popup/App.ts`
+7. `extension/src/popup/App.ts`
    - Popup UI shell; delegates diagnostics execution to `diagnostics-client.ts`.
 
 ## Runtime Pipeline
@@ -48,15 +52,17 @@ Core runtime guarantees:
 - Content queue/message boundary: `extension/src/content/batch-dispatcher.ts`
 - Background message routing: `extension/src/background/message-router.ts`
 - Background handlers (auth/billing/diagnostics/classify entry): `extension/src/background/handlers.ts`
+- Background runtime diagnostics engine: `extension/src/background/diagnostics-engine.ts`
 - Background classify orchestration: `extension/src/background/classification-service.ts` + `extension/src/background/classify-pipeline.ts`
 - Shared background storage access: `extension/src/background/storage-facade.ts`
 - Popup diagnostics orchestration: `extension/src/popup/diagnostics-client.ts`
+- Platform diagnostics ownership: `extension/src/platforms/*/diagnostics.ts`
 
 ## First Debug Path For New Contributors
 
 When feed posts are not getting classified:
-1. Run popup diagnostics button on `https://www.linkedin.com/feed/`.
+1. Run popup diagnostics button on a supported feed route.
 2. If background fails, inspect `background/index.ts` registration and `handlers.ts`.
-3. If content ping fails, inspect platform entry and content script host permissions.
-4. If identity extraction fails, inspect platform `selectors.ts` and `surface.ts`.
+3. If content diagnostics fail, inspect platform entry (`index.ts`) and content script host permissions.
+4. If identity extraction fails, inspect platform `selectors.ts`, `surface.ts`, and `diagnostics.ts`.
 5. If pending batch grows, inspect `batch-dispatcher.ts` and background classify flow.

@@ -6,11 +6,9 @@ import {
 } from "./api";
 import { streamClassifyBatch } from "./classify-pipeline";
 import { ClassificationService } from "./classification-service";
+import { DiagnosticsEngine } from "./diagnostics-engine";
 import { createStorageFacade, type StorageFacade } from "./storage-facade";
-import {
-	buildRuntimeDiagnosticsSnapshot,
-	isSupportedFeedUrl,
-} from "./runtime-diagnostics";
+import { isSupportedPlatformUrl } from "../platforms/registry";
 import {
 	MESSAGE_TYPES,
 	type ClassifyBatchMessage,
@@ -31,6 +29,7 @@ type SendTabMessage = (tabId: number, message: unknown) => Promise<void>;
 type BackgroundHandlerDependencies = {
 	storageFacade?: StorageFacade;
 	classificationService?: ClassificationService;
+	diagnosticsEngine?: DiagnosticsEngine;
 	getUserInfoWithUsageFn?: typeof getUserInfoWithUsage;
 	createCheckoutFn?: typeof createCheckout;
 	startAuthFlowFn?: typeof startAuthFlow;
@@ -95,6 +94,12 @@ export function createBackgroundMessageHandlers(
 			streamClassifyBatchFn,
 			sendTabMessageFn,
 		});
+	const diagnosticsEngine =
+		dependencies.diagnosticsEngine ??
+		new DiagnosticsEngine({
+			storageFacade,
+			queryTabsFn,
+		});
 
 	return {
 		async [MESSAGE_TYPES.CLASSIFY_BATCH](message, sender) {
@@ -155,7 +160,7 @@ export function createBackgroundMessageHandlers(
 		async [MESSAGE_TYPES.RELOAD_ACTIVE_TAB](message) {
 			const reloadActiveTabMessage = getReloadActiveTabMessage(message);
 			const tab = await getTabFn(reloadActiveTabMessage.tabId);
-			if (!tab?.id || !tab.url || !isSupportedFeedUrl(tab.url)) {
+			if (!tab?.id || !tab.url || !isSupportedPlatformUrl(tab.url)) {
 				return { status: "ignored" };
 			}
 
@@ -170,20 +175,7 @@ export function createBackgroundMessageHandlers(
 		},
 
 		async [MESSAGE_TYPES.GET_RUNTIME_DIAGNOSTICS]() {
-			const authState = await storageFacade.getAuthState();
-			const [activeTab] = await queryTabsFn({
-				active: true,
-				currentWindow: true,
-			});
-
-			return {
-				status: "ok",
-				snapshot: buildRuntimeDiagnosticsSnapshot({
-					enabled: authState.enabled,
-					hasJwt: authState.jwt !== null,
-					activeTab,
-				}),
-			};
+			return await diagnosticsEngine.collectRuntimeDiagnostics();
 		},
 	};
 }

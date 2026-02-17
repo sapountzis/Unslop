@@ -8,10 +8,12 @@ Primary signal source: popup `Run Diagnostics`.
 
 Key checks and owners:
 - `service_worker_reachable`: `extension/src/background/index.ts`, `extension/src/background/message-router.ts`
+- `developer_mode_enabled`: popup dev-mode toggle + `extension/src/lib/dev-mode.ts`
 - `storage_enabled`, `storage_jwt_present`: `extension/src/background/storage-facade.ts`
-- `content_ping`, `content_script_loaded`: platform entry + `extension/src/content/runtime.ts`
-- `feed_root_found`, `candidate_posts_found`, `post_identity_ready`: `extension/src/platforms/*/{selectors,surface,parser}.ts`
-- `runtime_processing_enabled`, `observer_live`, `runtime_markers_progress`: `extension/src/content/runtime.ts`
+- `active_tab_supported_platform`: `extension/src/background/runtime-diagnostics.ts`, `extension/src/platforms/registry.ts`
+- `backend_reachable`: `extension/src/background/runtime-diagnostics.ts`
+- `content_script_reachable`: `extension/src/content/diagnostics-host.ts`
+- `platform_*` checks (route/feed/candidates/identity/markers): `extension/src/platforms/*/diagnostics.ts`
 
 ## Message Contract Map
 
@@ -26,31 +28,31 @@ Key checks and owners:
   - consumer: `extension/src/background/handlers.ts`
 - `GET_CONTENT_DIAGNOSTICS`
   - producer: popup diagnostics client via `chrome.tabs.sendMessage`
-  - consumer: `extension/src/content/runtime.ts`
+  - consumer: `extension/src/content/diagnostics-host.ts`
 
 ## Symptom Playbook
 
 ### `/me` works but no classify traffic
 
-1. Run diagnostics on `https://www.linkedin.com/feed/`.
-2. Confirm `content_ping=pass`.
-3. If `candidate_posts_found=0`, inspect platform selectors against live DOM.
-4. If `post_identity_ready=0/x`, inspect `surface.ts` identity extraction.
-5. If markers stay `checking=0 processed=0`, inspect `runtime.ts` processing gates and observer attach path.
+1. Run diagnostics on a supported feed route.
+2. Confirm `content_script_reachable=pass`.
+3. If `platform_candidate_posts_found` is warn/fail, inspect platform selectors against live DOM.
+4. If `platform_identity_ready` is fail (`0/x`), inspect `surface.ts` identity extraction.
+5. If `platform_marker_progress` stays warn, inspect `runtime.ts` processing gates and observer attach path.
 6. If pending batch grows without results, inspect:
    - content dispatch: `batch-dispatcher.ts`
    - background classify: `classification-service.ts`, `classify-pipeline.ts`
 
-### Diagnostics fails at `content_ping`
+### Diagnostics fails at `content_script_reachable`
 
-1. Verify extension has site access for LinkedIn.
-2. Reload LinkedIn tab and rerun diagnostics.
+1. Verify extension has site access for the active platform host.
+2. Reload active tab and rerun diagnostics.
 3. Verify content script entry exists in `manifest.json`.
 
 ### Candidate posts found but identity extraction fails
 
-1. Validate selectors in `extension/src/platforms/linkedin/selectors.ts`.
-2. Validate `resolvePostSurface` invariants in `extension/src/platforms/linkedin/surface.ts`.
+1. Validate selectors in `extension/src/platforms/<platform>/selectors.ts`.
+2. Validate `resolvePostSurface` invariants in `extension/src/platforms/<platform>/surface.ts`.
 3. Re-run parser/surface tests.
 
 ### Classify responses arrive but hide is not applied

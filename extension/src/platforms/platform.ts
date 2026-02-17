@@ -2,6 +2,9 @@
 // The platform plugin interface. Each supported social network implements this contract.
 
 import { PostData } from "../types";
+import type { DiagnosticCheck } from "../lib/diagnostics";
+
+export type PlatformId = "linkedin" | "x" | "reddit";
 
 /**
  * Post surface: the content root (for extraction), render root (for hide/collapse decisions),
@@ -26,6 +29,18 @@ export type PlatformSelectors = {
 	renderPostRoot: string;
 };
 
+export type PlatformDiagnosticsSnapshot = {
+	platformId: PlatformId;
+	url: string;
+	routeKey: string;
+	routeEligible: boolean;
+	checks: DiagnosticCheck[];
+};
+
+export type PlatformDiagnosticsProvider = {
+	collectSnapshot: (url: string) => PlatformDiagnosticsSnapshot;
+};
+
 /**
  * Platform plugin contract.
  * Each supported social network (LinkedIn, X, Reddit) must implement this interface.
@@ -34,7 +49,7 @@ export type PlatformSelectors = {
  */
 export interface PlatformPlugin {
 	/** Unique platform identifier. */
-	readonly id: "linkedin" | "x" | "reddit";
+	readonly id: PlatformId;
 
 	/** Platform-specific DOM selectors. */
 	readonly selectors: PlatformSelectors;
@@ -65,4 +80,7 @@ export interface PlatformPlugin {
 
 	/** Read post identity from an element (used for deduplication checks). */
 	readPostIdentity(element: HTMLElement): string | null;
+
+	/** Platform-owned diagnostics collector for DOM and route checks. */
+	readonly diagnostics: PlatformDiagnosticsProvider;
 }

@@ -4,6 +4,7 @@ import { MESSAGE_TYPES } from "../lib/messages";
 import { resolveEnabled } from "../lib/enabled-state";
 import type { DiagnosticsReport } from "../lib/diagnostics";
 import type { HideRenderMode } from "../lib/config";
+import { DEV_MODE_STORAGE_KEY, resolveDevMode } from "../lib/dev-mode";
 import {
 	HIDE_RENDER_MODE_STORAGE_KEY,
 	resolveHideRenderMode,
@@ -16,6 +17,7 @@ export class App {
 	private readonly diagnosticsClient: DiagnosticsClient;
 	private diagnosticsReport: DiagnosticsReport | null = null;
 	private diagnosticsRunning = false;
+	private devModeEnabled = false;
 
 	constructor(
 		containerId: string,
@@ -35,13 +37,17 @@ export class App {
 			"jwt",
 			"enabled",
 			HIDE_RENDER_MODE_STORAGE_KEY,
+			DEV_MODE_STORAGE_KEY,
 		]);
 		const hideRenderMode = resolveHideRenderMode(
 			storage[HIDE_RENDER_MODE_STORAGE_KEY],
 		);
+		this.devModeEnabled = resolveDevMode(
+			storage[DEV_MODE_STORAGE_KEY] as boolean | null | undefined,
+		);
 
 		if (!storage.jwt) {
-			this.renderSignIn();
+			this.renderSignIn(this.devModeEnabled);
 			return;
 		}
 
@@ -51,9 +57,10 @@ export class App {
 				userInfo,
 				resolveEnabled(storage.enabled),
 				hideRenderMode,
+				this.devModeEnabled,
 			);
 		} else {
-			this.renderSignIn();
+			this.renderSignIn(this.devModeEnabled);
 		}
 	}
 
@@ -72,12 +79,12 @@ export class App {
 		}
 	}
 
-	private renderSignIn(): void {
+	private renderSignIn(devModeEnabled: boolean): void {
 		this.container.innerHTML = `
-	      <div>
-	        <div class="text-center">
-	          ${this.renderBrand()}
-	          <p>Sign in to filter your LinkedIn feed</p>
+		      <div>
+		        <div class="text-center">
+		          ${this.renderBrand()}
+		          <p>Sign in to filter your social feeds</p>
 	          <form id="signin-form">
 	            <input
 	              type="email"
@@ -86,12 +93,13 @@ export class App {
 	              required
 	            />
 	            <button type="submit" class="primary">Send Sign In Link</button>
-	          </form>
-	          <p id="status" class="status"></p>
-	        </div>
-	        ${this.renderDiagnosticsCard()}
-	      </div>
-	    `;
+		          </form>
+		          <p id="status" class="status"></p>
+		        </div>
+		        ${this.renderDevModeCard(devModeEnabled)}
+		        ${devModeEnabled ? this.renderDiagnosticsCard() : ""}
+		      </div>
+		    `;
 
 		const form = this.container.querySelector("#signin-form");
 		const emailInput = this.container.querySelector(
@@ -118,6 +126,7 @@ export class App {
 			}
 		});
 
+		this.bindDevModeControl();
 		this.bindDiagnosticsControls();
 	}
 
@@ -125,6 +134,7 @@ export class App {
 		userInfo: UserInfoWithUsage,
 		enabled: boolean,
 		hideRenderMode: HideRenderMode,
+		devModeEnabled: boolean,
 	): void {
 		const isPro = userInfo.plan === "pro" && userInfo.plan_status === "active";
 
@@ -194,12 +204,13 @@ export class App {
 							: ""
 					}
 
-	        <button id="stats-btn" class="secondary mb-8">View Statistics</button>
-	        ${this.renderDiagnosticsCard()}
+		        <button id="stats-btn" class="secondary mb-8">View Statistics</button>
+		        ${this.renderDevModeCard(devModeEnabled)}
+		        ${devModeEnabled ? this.renderDiagnosticsCard() : ""}
 
-	        <button id="signout-btn" class="ghost">Sign Out</button>
-	      </div>
-	    `;
+		        <button id="signout-btn" class="ghost">Sign Out</button>
+		      </div>
+		    `;
 
 		// Event listeners
 		const enabledToggle = this.container.querySelector(
@@ -255,6 +266,7 @@ export class App {
 			this.render();
 		});
 
+		this.bindDevModeControl();
 		this.bindDiagnosticsControls();
 	}
 
@@ -300,7 +312,7 @@ export class App {
 		}
 
 		if (!this.diagnosticsReport) {
-			return `<p class="status diagnostics-inline-status">Open LinkedIn feed, then click Run Diagnostics.</p>`;
+			return `<p class="status diagnostics-inline-status">Open a supported feed (LinkedIn, X, Reddit), then click Run Diagnostics.</p>`;
 		}
 
 		const report = this.diagnosticsReport;
@@ -360,6 +372,9 @@ export class App {
 	}
 
 	private bindDiagnosticsControls(): void {
+		if (!this.devModeEnabled) {
+			return;
+		}
 		const runButton = this.container.querySelector(
 			"#run-diagnostics-btn",
 		) as HTMLButtonElement | null;
@@ -369,6 +384,37 @@ export class App {
 		});
 
 		this.updateDiagnosticsUi();
+	}
+
+	private renderDevModeCard(devModeEnabled: boolean): string {
+		return `
+	      <div class="card mb-8">
+	        <label class="toggle-label">
+	          <input type="checkbox" id="dev-mode-toggle" ${devModeEnabled ? "checked" : ""} />
+	          <div class="toggle"></div>
+	          <span class="toggle-text">Developer mode</span>
+	        </label>
+	      </div>
+	    `;
+	}
+
+	private bindDevModeControl(): void {
+		const devModeToggle = this.container.querySelector(
+			"#dev-mode-toggle",
+		) as HTMLInputElement | null;
+		if (!devModeToggle) return;
+
+		devModeToggle.addEventListener("change", async () => {
+			await chrome.storage.sync.set({
+				[DEV_MODE_STORAGE_KEY]: devModeToggle.checked,
+			});
+			this.devModeEnabled = devModeToggle.checked;
+			if (!this.devModeEnabled) {
+				this.diagnosticsReport = null;
+				this.diagnosticsRunning = false;
+			}
+			await this.render();
+		});
 	}
 
 	private renderBrand(): string {

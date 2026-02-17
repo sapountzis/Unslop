@@ -1,61 +1,46 @@
-export type RuntimeMode = "disabled" | "enabled_attaching" | "enabled_active";
-
 export type DiagnosticStatus = "pass" | "warn" | "fail";
+export type DiagnosticScope = "core" | "platform";
+export type SupportedPlatformId = "linkedin" | "x" | "reddit";
 
-export type DiagnosticCheckId =
-	| "service_worker_reachable"
-	| "storage_enabled"
-	| "storage_jwt_present"
-	| "active_tab_linkedin"
-	| "eligible_feed_route"
-	| "content_ping"
-	| "content_script_loaded"
-	| "feed_root_found"
-	| "candidate_posts_found"
-	| "post_identity_ready"
-	| "runtime_processing_enabled"
-	| "observer_live"
-	| "runtime_markers_progress";
+export type DiagnosticCheckId = string;
 
-export type BackgroundDiagnosticsSnapshot = {
+export type RuntimeDiagnosticsSnapshot = {
+	devModeEnabled: boolean;
 	enabled: boolean;
 	hasJwt: boolean;
 	activeTabId: number | null;
 	activeTabUrl: string | null;
 	activeTabHost: string | null;
-	activeTabIsLinkedIn: boolean;
-	activeTabIsSupportedFeedHost: boolean;
+	supportedPlatformId: SupportedPlatformId | null;
+	backendReachable: boolean;
+	backendLatencyMs: number | null;
+	backendHttpStatus: number | null;
+	backendError: string | null;
 };
 
 export type ContentDiagnosticsSnapshot = {
-	platformId: string;
+	platformId: SupportedPlatformId;
 	url: string;
 	routeKey: string;
 	routeEligible: boolean;
-	preclassifyEnabled: boolean;
-	feedRootFound: boolean;
-	candidatePostCount: number;
-	identityReadyCount: number;
-	processingCount: number;
-	processedCount: number;
-	runtimeMode: RuntimeMode;
-	runtimeEnabledForProcessing: boolean;
-	observerLive: boolean;
-	pendingBatchCount: number;
+	checks: DiagnosticCheck[];
 };
 
 export type RuntimeDiagnosticsResponse = {
-	status: "ok";
-	snapshot: BackgroundDiagnosticsSnapshot;
+	status: "ok" | "disabled" | "error";
+	snapshot?: RuntimeDiagnosticsSnapshot;
+	reason?: string;
 };
 
 export type ContentDiagnosticsResponse = {
-	status: "ok";
-	snapshot: ContentDiagnosticsSnapshot;
+	status: "ok" | "disabled" | "error";
+	snapshot?: ContentDiagnosticsSnapshot;
+	reason?: string;
 };
 
 export type DiagnosticCheck = {
 	id: DiagnosticCheckId;
+	scope: DiagnosticScope;
 	label: string;
 	status: DiagnosticStatus;
 	evidence: string;

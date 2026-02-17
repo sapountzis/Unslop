@@ -8,13 +8,17 @@ import { DiagnosticsClient } from "./diagnostics-client";
 const RUNTIME_OK: RuntimeDiagnosticsResponse = {
 	status: "ok",
 	snapshot: {
+		devModeEnabled: true,
 		enabled: true,
 		hasJwt: true,
 		activeTabId: 7,
 		activeTabUrl: "https://www.linkedin.com/feed/",
 		activeTabHost: "www.linkedin.com",
-		activeTabIsLinkedIn: true,
-		activeTabIsSupportedFeedHost: true,
+		supportedPlatformId: "linkedin",
+		backendReachable: true,
+		backendLatencyMs: 10,
+		backendHttpStatus: 200,
+		backendError: null,
 	},
 };
 
@@ -25,21 +29,21 @@ const CONTENT_OK: ContentDiagnosticsResponse = {
 		url: "https://www.linkedin.com/feed/",
 		routeKey: "/feed/",
 		routeEligible: true,
-		preclassifyEnabled: true,
-		feedRootFound: true,
-		candidatePostCount: 4,
-		identityReadyCount: 4,
-		processingCount: 0,
-		processedCount: 4,
-		runtimeMode: "enabled_active",
-		runtimeEnabledForProcessing: true,
-		observerLive: true,
-		pendingBatchCount: 0,
+		checks: [
+			{
+				id: "platform_route_eligible",
+				scope: "platform",
+				label: "Feed route is eligible",
+				status: "pass",
+				evidence: "route=/feed/",
+				nextAction: "None.",
+			},
+		],
 	},
 };
 
 describe("DiagnosticsClient", () => {
-	it("returns healthy pass report when runtime and content snapshots are valid", async () => {
+	it("returns pass report when runtime and content snapshots are healthy", async () => {
 		const client = new DiagnosticsClient({
 			requestRuntimeDiagnostics: async () => RUNTIME_OK,
 			requestContentDiagnostics: async () => CONTENT_OK,
@@ -50,35 +54,43 @@ describe("DiagnosticsClient", () => {
 		expect(report.summary.fail).toBe(0);
 	});
 
-	it("returns service worker failure when runtime diagnostics are invalid", async () => {
-		const client = new DiagnosticsClient({
-			requestRuntimeDiagnostics: async () => null,
-		});
-
-		const report = await client.run();
-		const backgroundCheck = report.checks.find(
-			(check) => check.id === "service_worker_reachable",
-		);
-		expect(backgroundCheck?.status).toBe("fail");
-		expect(report.overallStatus).toBe("fail");
-	});
-
-	it("reports content ping failure when runtime has no active tab", async () => {
+	it("returns disabled report when runtime diagnostics are gated by developer mode", async () => {
 		const client = new DiagnosticsClient({
 			requestRuntimeDiagnostics: async () => ({
-				...RUNTIME_OK,
-				snapshot: {
-					...RUNTIME_OK.snapshot,
-					activeTabId: null,
-				},
+				status: "disabled",
+				reason: "Developer mode is disabled.",
 			}),
 		});
 
 		const report = await client.run();
-		const contentPing = report.checks.find(
-			(check) => check.id === "content_ping",
+		const gateCheck = report.checks.find(
+			(check) => check.id === "diagnostics_gate",
 		);
-		expect(contentPing?.status).toBe("fail");
-		expect(contentPing?.evidence).toContain("No active tab found");
+		expect(gateCheck?.status).toBe("warn");
+		expect(report.overallStatus).toBe("warn");
+	});
+
+	it("skips content diagnostics when active tab is unsupported", async () => {
+		const client = new DiagnosticsClient({
+			requestRuntimeDiagnostics: async () => ({
+				...RUNTIME_OK,
+				snapshot: {
+					...RUNTIME_OK.snapshot!,
+					activeTabUrl: "https://google.com",
+					activeTabHost: "google.com",
+					supportedPlatformId: null,
+				},
+			}),
+			requestContentDiagnostics: async () => {
+				throw new Error("should not be called");
+			},
+		});
+
+		const report = await client.run();
+		const contentCheck = report.checks.find(
+			(check) => check.id === "content_script_reachable",
+		);
+		expect(contentCheck?.status).toBe("warn");
+		expect(contentCheck?.evidence).toContain("Skipped");
 	});
 });

@@ -1,41 +1,36 @@
 import { describe, expect, it } from "bun:test";
-import {
-	buildRuntimeDiagnosticsSnapshot,
-	getHostname,
-	isSupportedFeedUrl,
-} from "./runtime-diagnostics";
+import { buildRuntimeDiagnosticsSnapshot } from "./runtime-diagnostics";
 
 describe("runtime diagnostics helpers", () => {
-	it("parses hostnames safely", () => {
-		expect(getHostname("https://www.linkedin.com/feed/")).toBe(
-			"www.linkedin.com",
-		);
-		expect(getHostname("not-a-url")).toBeNull();
-	});
-
-	it("matches supported feed host urls", () => {
-		expect(isSupportedFeedUrl("https://www.linkedin.com/feed/")).toBe(true);
-		expect(isSupportedFeedUrl("https://example.com/feed/")).toBe(false);
-	});
-
-	it("builds a runtime snapshot from auth and active-tab state", () => {
+	it("builds a runtime snapshot with platform support and backend probe signals", () => {
 		const snapshot = buildRuntimeDiagnosticsSnapshot({
+			devModeEnabled: true,
 			enabled: true,
 			hasJwt: true,
 			activeTab: {
 				id: 88,
 				url: "https://www.linkedin.com/feed/",
 			} as chrome.tabs.Tab,
+			backendProbe: {
+				reachable: true,
+				latencyMs: 24,
+				httpStatus: 200,
+				error: null,
+			},
 		});
 
 		expect(snapshot).toEqual({
+			devModeEnabled: true,
 			enabled: true,
 			hasJwt: true,
 			activeTabId: 88,
 			activeTabUrl: "https://www.linkedin.com/feed/",
 			activeTabHost: "www.linkedin.com",
-			activeTabIsLinkedIn: true,
-			activeTabIsSupportedFeedHost: true,
+			supportedPlatformId: "linkedin",
+			backendReachable: true,
+			backendLatencyMs: 24,
+			backendHttpStatus: 200,
+			backendError: null,
 		});
 	});
 });

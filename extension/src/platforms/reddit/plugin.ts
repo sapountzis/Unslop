@@ -8,6 +8,7 @@ import {
 } from "./route-detector";
 import { resolvePostSurface } from "./surface";
 import { extractPostData, readPostIdentity } from "./parser";
+import { redditDiagnostics } from "./diagnostics";
 
 export const redditPlugin: PlatformPlugin = {
 	id: "reddit",
@@ -31,4 +32,5 @@ export const redditPlugin: PlatformPlugin = {
 	resolvePostSurface,
 	extractPostData,
 	readPostIdentity,
+	diagnostics: redditDiagnostics,
 };

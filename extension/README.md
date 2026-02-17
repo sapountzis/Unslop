@@ -43,14 +43,14 @@ bun run build
 
 ## Where The Flow Starts
 
-If you want to trace LinkedIn classification from first touch to backend call, read in this order:
+If you want to trace classification from first touch to backend call, read in this order:
 
 1. `extension/manifest.json`
-   - Content script injection entrypoint for LinkedIn (`src/platforms/linkedin/index.ts`).
-2. `src/platforms/linkedin/index.ts`
-   - Calls `createPlatformRuntime(linkedinPlugin)`.
-3. `src/platforms/linkedin/plugin.ts`
-   - Wires LinkedIn selectors, parser, surface resolver, and route detector into the shared runtime contract.
+   - Content script injection entrypoints for each platform (`src/platforms/{linkedin,x,reddit}/index.ts`).
+2. `src/platforms/<platform>/index.ts`
+   - Calls `registerContentDiagnosticsHost(plugin)` and `createPlatformRuntime(plugin)`.
+3. `src/platforms/<platform>/plugin.ts`
+   - Wires selectors, parser, surface resolver, route detector, and platform diagnostics service.
 4. `src/content/runtime.ts`
    - Core engine: observers, candidate processing, batch enqueue, result handling, render commit.
 5. `src/background/index.ts`
@@ -65,6 +65,13 @@ If you want to trace LinkedIn classification from first touch to backend call, r
    - Performs HTTP call to `/v1/classify/batch` and streams NDJSON results back.
 
 If you only need one file to start debugging runtime behavior, start at `src/content/runtime.ts`.
+
+For diagnostics entry flow:
+1. `src/popup/App.ts` (Developer mode toggle + Run Diagnostics button).
+2. `src/popup/diagnostics-client.ts` (runtime/content diagnostics requests).
+3. `src/background/diagnostics-engine.ts` (core runtime checks).
+4. `src/content/diagnostics-host.ts` (platform diagnostics dispatch).
+5. `src/platforms/<platform>/diagnostics.ts` (platform-owned DOM checks).
 
 ## System Overview
 
@@ -225,10 +232,17 @@ Rules:
   - selectors
   - parser
   - surface resolution
+  - platform diagnostics service (`diagnostics.ts`)
 
 `src/content/runtime.ts`
 - Platform-agnostic content runtime orchestrator.
 - Owns lifecycle, observers, mutation buffer draining, classify dispatch, and decision commit handoff.
+- Diagnostics are intentionally out-of-band; runtime does not handle diagnostics messages.
+
+`src/content/diagnostics-host.ts`
+- Dedicated content diagnostics message host (`GET_CONTENT_DIAGNOSTICS`).
+- Dev-mode gated.
+- Delegates all platform checks to `platform.diagnostics.collectSnapshot(url)`.
 
 `src/content/attachment-controller.ts`
 - Observer ownership and generation guards.
@@ -276,6 +290,12 @@ Rules:
   - classify/auth/jwt/toggle/reload/stats/diagnostics.
 - Delegates storage access through `storage-facade`.
 - Delegates classify streaming through `classification-service`.
+- Delegates runtime diagnostics to `diagnostics-engine`.
+
+`src/background/diagnostics-engine.ts`
+- Core diagnostics orchestrator.
+- Dev-mode gated.
+- Owns platform-agnostic checks input assembly (storage/auth state, active tab, backend probe).
 
 `src/background/classification-service.ts`
 - Owns streaming classify flow from background to content tab.
@@ -293,7 +313,7 @@ Rules:
 - Normalizes `enabled` default resolution and toggle persistence.
 
 `src/background/runtime-diagnostics.ts`
-- Runtime diagnostics snapshot helpers for host detection and active-tab signal shaping.
+- Runtime diagnostics helpers for backend probe + platform support signal shaping.
 
 `src/background/attachment-resolver.ts`
 - Resolves image refs to `{ sha256, mime_type, base64 }` with byte budget enforcement.
@@ -303,11 +323,16 @@ Rules:
 `src/popup/App.ts`
 - Sign-in flow, enable toggle, hide mode selector, plan/usage UI.
 - Renders diagnostics panel UI and delegates execution to diagnostics client.
-- Hide-mode change triggers controlled LinkedIn feed tab reload via background.
+- Hide-mode change triggers controlled supported-platform tab reload via background.
 
 `src/popup/diagnostics-client.ts`
 - Executes diagnostics suite across background/content message boundaries.
 - Normalizes runtime/content response errors and builds final report.
+
+`src/popup/diagnostics.ts`
+- Builds final report from:
+  - core checks owned by popup diagnostics module
+  - platform checks returned by platform diagnostics services
 
 `src/stats/index.ts`
 - Stats dashboard rendered with Chart.js.
@@ -382,28 +407,28 @@ Rationale:
 3. Critical checks for classify path:
    - `storage_enabled`
    - `storage_jwt_present`
-   - `active_tab_linkedin`
-   - `eligible_feed_route`
-   - `content_ping`
-   - `candidate_posts_found`
-   - `post_identity_ready`
+   - `active_tab_supported_platform`
+   - `content_script_reachable`
+   - `platform_route_eligible`
+   - `platform_candidate_posts_found`
+   - `platform_identity_ready`
 4. If diagnostics are unavailable, fall back to manual checks:
-   - current URL is `/feed/` or starts with `/feed/`
+   - current URL is a supported feed route
    - popup toggle is enabled
-   - feed root matches `SELECTORS.feed`
+   - platform feed selector resolves
    - runtime markers appear on posts (`data-unslop-checking` / `data-unslop-processed`)
    - no stale disabled state in `chrome.storage.sync`
 
 ### Symptom: onboarding on a new machine fails
 
-1. Open `https://www.linkedin.com/feed/` in the same browser profile where the extension is installed.
+1. Open a supported feed in the same browser profile where the extension is installed (`linkedin.com/feed`, `x.com/home`, or `reddit.com` feed routes).
 2. Run popup `Run Diagnostics`.
 3. Follow the first failing line's `next action`.
 4. Re-run diagnostics until summary shows no failures.
 5. If failures remain with:
-   - `content_script_loaded`: check extension site access for LinkedIn and reload tab.
-   - `candidate_posts_found`: scroll feed, wait for hydration, rerun.
-   - `post_identity_ready`: LinkedIn DOM variant likely changed; compare selectors vs live DOM.
+   - `content_script_reachable`: check extension site access for that platform and reload tab.
+   - `platform_candidate_posts_found`: scroll feed, wait for hydration, rerun.
+   - `platform_identity_ready`: platform DOM variant likely changed; compare selectors/surface vs live DOM.
 
 ### Symptom: attachment context is missing in backend decisions
 
@@ -435,7 +460,7 @@ Rationale:
 
 Expected behavior:
 - Popup writes the new mode to storage.
-- Popup asks background to reload active LinkedIn feed tab.
+- Popup asks background to reload the active tab when it is on a supported platform.
 - Reload is intentional to avoid in-place mass remutation of the current feed DOM.
 
 ### Symptom: toggle off/on seems inconsistent

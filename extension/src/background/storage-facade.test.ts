@@ -31,4 +31,29 @@ describe("background storage facade", () => {
 		expect(next).toBe(false);
 		expect(writes).toEqual([{ enabled: false }]);
 	});
+
+	it("treats missing developer mode as disabled", async () => {
+		const storage = createStorageFacade({
+			getSync: async () => ({
+				devMode: undefined,
+			}),
+		});
+
+		expect(await storage.getDevMode()).toBe(false);
+	});
+
+	it("toggles developer mode and persists new value", async () => {
+		const writes: Record<string, unknown>[] = [];
+		const storage = createStorageFacade({
+			getSync: async () => ({ devMode: false }),
+			setSync: async (items) => {
+				writes.push(items);
+			},
+		});
+
+		const next = await storage.toggleDevMode();
+
+		expect(next).toBe(true);
+		expect(writes).toEqual([{ devMode: true }]);
+	});
 });

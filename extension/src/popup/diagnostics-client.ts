@@ -24,16 +24,15 @@ function formatErrorMessage(error: unknown): string {
 	return "Unknown error";
 }
 
-function isValidRuntimeDiagnosticsResponse(
-	response: RuntimeDiagnosticsResponse | null,
-): response is RuntimeDiagnosticsResponse {
-	return !!response && response.status === "ok" && !!response.snapshot;
-}
-
-function isValidContentDiagnosticsResponse(
-	response: ContentDiagnosticsResponse | null,
-): response is ContentDiagnosticsResponse {
-	return !!response && response.status === "ok" && !!response.snapshot;
+function isValidDiagnosticsResponse(
+	response: RuntimeDiagnosticsResponse | ContentDiagnosticsResponse | null,
+): response is RuntimeDiagnosticsResponse | ContentDiagnosticsResponse {
+	return (
+		!!response &&
+		(response.status === "ok" ||
+			response.status === "disabled" ||
+			response.status === "error")
+	);
 }
 
 export class DiagnosticsClient {
@@ -65,45 +64,68 @@ export class DiagnosticsClient {
 	}
 
 	async run(): Promise<DiagnosticsReport> {
-		let backgroundSnapshot: RuntimeDiagnosticsResponse["snapshot"] | null =
-			null;
-		let backgroundError: string | null = null;
+		let runtimeSnapshot: RuntimeDiagnosticsResponse["snapshot"] | null = null;
+		let runtimeDisabledReason: string | null = null;
+		let runtimeError: string | null = null;
 		let contentSnapshot: ContentDiagnosticsResponse["snapshot"] | null = null;
+		let contentDisabledReason: string | null = null;
 		let contentError: string | null = null;
 
 		try {
 			const response = await this.requestRuntimeDiagnostics();
-			if (!isValidRuntimeDiagnosticsResponse(response)) {
+			if (!isValidDiagnosticsResponse(response)) {
 				throw new Error("Runtime diagnostics response was invalid.");
 			}
-			backgroundSnapshot = response.snapshot;
+			if (response.status === "ok") {
+				runtimeSnapshot = response.snapshot ?? null;
+				if (!runtimeSnapshot) {
+					throw new Error("Runtime diagnostics snapshot was missing.");
+				}
+			} else if (response.status === "disabled") {
+				runtimeDisabledReason =
+					response.reason ?? "Developer mode is disabled.";
+			} else {
+				runtimeError = response.reason ?? "Runtime diagnostics failed.";
+			}
 		} catch (error) {
-			backgroundError = formatErrorMessage(error);
+			runtimeError = formatErrorMessage(error);
 		}
 
 		if (
-			backgroundSnapshot &&
-			typeof backgroundSnapshot.activeTabId === "number"
+			runtimeSnapshot &&
+			runtimeSnapshot.supportedPlatformId !== null &&
+			typeof runtimeSnapshot.activeTabId === "number"
 		) {
 			try {
 				const response = await this.requestContentDiagnostics(
-					backgroundSnapshot.activeTabId,
+					runtimeSnapshot.activeTabId,
 				);
-				if (!isValidContentDiagnosticsResponse(response)) {
+				if (!isValidDiagnosticsResponse(response)) {
 					throw new Error("Content diagnostics response was invalid.");
 				}
-				contentSnapshot = response.snapshot;
+
+				if (response.status === "ok") {
+					contentSnapshot = response.snapshot ?? null;
+					if (!contentSnapshot) {
+						throw new Error("Content diagnostics snapshot was missing.");
+					}
+				} else if (response.status === "disabled") {
+					contentDisabledReason =
+						response.reason ?? "Developer mode is disabled.";
+				} else {
+					contentError = response.reason ?? "Content diagnostics failed.";
+				}
 			} catch (error) {
 				contentError = formatErrorMessage(error);
 			}
-		} else if (backgroundSnapshot) {
-			contentError = "No active tab found.";
 		}
 
 		return this.buildDiagnosticsReportFn({
-			backgroundSnapshot,
-			backgroundError,
+			runtimeSnapshot,
+			runtimeDisabledReason,
+			runtimeError,
 			contentSnapshot,
+			contentDisabledReason,
 			contentError,
 		});
 	}

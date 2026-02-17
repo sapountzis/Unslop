@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { MESSAGE_TYPES, type RuntimeRequest } from "../lib/messages";
 import type { PostData } from "../types";
 import { createBackgroundMessageHandlers } from "./handlers";
+import type { DiagnosticsEngine } from "./diagnostics-engine";
 import type { StorageFacade } from "./storage-facade";
 
 type MessageSender = chrome.runtime.MessageSender;
@@ -22,9 +23,11 @@ function createStorageFacadeMock(
 	return {
 		getJwt: async () => "jwt-token",
 		getAuthState: async () => ({ jwt: "jwt-token", enabled: true }),
+		getDevMode: async () => true,
 		setJwt: async () => {},
 		clearJwt: async () => {},
 		toggleEnabled: async () => false,
+		toggleDevMode: async () => false,
 		...overrides,
 	};
 }
@@ -91,16 +94,24 @@ describe("background handlers", () => {
 
 	it("builds runtime diagnostics snapshot from active tab state", async () => {
 		const handlers = createBackgroundMessageHandlers({
-			storageFacade: createStorageFacadeMock({
-				getAuthState: async () => ({ jwt: "jwt-token", enabled: true }),
-			}),
-			queryTabsFn: async () =>
-				[
-					{
-						id: 55,
-						url: "https://www.linkedin.com/feed/",
+			diagnosticsEngine: {
+				collectRuntimeDiagnostics: async () => ({
+					status: "ok",
+					snapshot: {
+						devModeEnabled: true,
+						enabled: true,
+						hasJwt: true,
+						activeTabId: 55,
+						activeTabUrl: "https://www.linkedin.com/feed/",
+						activeTabHost: "www.linkedin.com",
+						supportedPlatformId: "linkedin",
+						backendReachable: true,
+						backendLatencyMs: 10,
+						backendHttpStatus: 200,
+						backendError: null,
 					},
-				] as chrome.tabs.Tab[],
+				}),
+			} as unknown as DiagnosticsEngine,
 		});
 		const handler = handlers[MESSAGE_TYPES.GET_RUNTIME_DIAGNOSTICS];
 		if (!handler) throw new Error("diagnostics handler missing");
@@ -112,17 +123,41 @@ describe("background handlers", () => {
 			status: string;
 			snapshot: {
 				activeTabId: number | null;
-				activeTabIsLinkedIn: boolean;
-				activeTabIsSupportedFeedHost: boolean;
+				supportedPlatformId: string | null;
 				hasJwt: boolean;
 			};
 		};
 
 		expect(response.status).toBe("ok");
 		expect(response.snapshot.activeTabId).toBe(55);
-		expect(response.snapshot.activeTabIsLinkedIn).toBe(true);
-		expect(response.snapshot.activeTabIsSupportedFeedHost).toBe(true);
+		expect(response.snapshot.supportedPlatformId).toBe("linkedin");
 		expect(response.snapshot.hasJwt).toBe(true);
+	});
+
+	it("returns disabled diagnostics when developer mode is turned off", async () => {
+		const handlers = createBackgroundMessageHandlers({
+			diagnosticsEngine: {
+				collectRuntimeDiagnostics: async () => ({
+					status: "disabled",
+					reason: "Developer mode is disabled.",
+				}),
+			} as unknown as DiagnosticsEngine,
+		});
+		const handler = handlers[MESSAGE_TYPES.GET_RUNTIME_DIAGNOSTICS];
+		if (!handler) throw new Error("diagnostics handler missing");
+
+		const response = (await handler(
+			{ type: MESSAGE_TYPES.GET_RUNTIME_DIAGNOSTICS } as RuntimeRequest,
+			{} as MessageSender,
+		)) as {
+			status: string;
+			reason?: string;
+		};
+
+		expect(response).toEqual({
+			status: "disabled",
+			reason: "Developer mode is disabled.",
+		});
 	});
 
 	it("ignores reload requests for non-feed hosts", async () => {

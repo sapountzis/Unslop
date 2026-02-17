@@ -1,4 +1,9 @@
 import { resolveEnabled, toggleEnabled } from "../lib/enabled-state";
+import {
+	DEV_MODE_STORAGE_KEY,
+	resolveDevMode,
+	toggleDevMode,
+} from "../lib/dev-mode";
 
 type SyncStorageGet = (
 	keys: string | string[],
@@ -20,9 +25,11 @@ type AuthState = {
 export type StorageFacade = {
 	getJwt: () => Promise<string | null>;
 	getAuthState: () => Promise<AuthState>;
+	getDevMode: () => Promise<boolean>;
 	setJwt: (jwt: string) => Promise<void>;
 	clearJwt: () => Promise<void>;
 	toggleEnabled: () => Promise<boolean>;
+	toggleDevMode: () => Promise<boolean>;
 };
 
 export function createStorageFacade(
@@ -61,6 +68,11 @@ export function createStorageFacade(
 				enabled: resolveEnabled(enabledValue),
 			};
 		},
+		async getDevMode(): Promise<boolean> {
+			const storage = await getSync(DEV_MODE_STORAGE_KEY);
+			const raw = storage[DEV_MODE_STORAGE_KEY] as boolean | null | undefined;
+			return resolveDevMode(raw);
+		},
 		async setJwt(jwt: string): Promise<void> {
 			await setSync({ jwt });
 		},
@@ -72,6 +84,13 @@ export function createStorageFacade(
 			const enabledValue = current.enabled as boolean | null | undefined;
 			const next = toggleEnabled(enabledValue);
 			await setSync({ enabled: next });
+			return next;
+		},
+		async toggleDevMode(): Promise<boolean> {
+			const current = await getSync(DEV_MODE_STORAGE_KEY);
+			const raw = current[DEV_MODE_STORAGE_KEY] as boolean | null | undefined;
+			const next = toggleDevMode(raw);
+			await setSync({ [DEV_MODE_STORAGE_KEY]: next });
 			return next;
 		},
 	};
