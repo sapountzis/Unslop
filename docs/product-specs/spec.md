@@ -1,7 +1,7 @@
 ---
 owner: unslop
 status: verified
-last_verified: 2026-02-16
+last_verified: 2026-02-17
 ---
 
 # Unslop – Minimal Project Spec (v0.1)
@@ -71,7 +71,7 @@ Ship the smallest product that:
 - **Chrome Extension (MV3)**
   - Content script: detect posts + apply decision.
   - Background service worker: handles auth token + all API calls.
-  - Popup UI: enabled toggle, sign-in, plan status, upgrade.
+  - Popup UI: enabled toggle, sign-in, plan status, upgrade, diagnostics.
 
 - **Backend API**
   - Bun + Hono TypeScript service.

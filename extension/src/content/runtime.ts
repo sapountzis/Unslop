@@ -18,6 +18,7 @@ import {
 	HideRenderMode,
 } from "../lib/config";
 import { MESSAGE_TYPES } from "../lib/messages";
+import type { ContentDiagnosticsSnapshot } from "../lib/diagnostics";
 import { createMutationBuffer } from "./mutation-buffer";
 import { createStarvationWatchdog } from "./starvation-watchdog";
 import { createAttachmentController } from "./attachment-controller";
@@ -562,6 +563,52 @@ export function createPlatformRuntime(platform: PlatformPlugin): void {
 		}, ROUTE_POLL_MS);
 	}
 
+	function collectContentDiagnosticsSnapshot(): ContentDiagnosticsSnapshot {
+		const routeKey = platform.routeKeyFromUrl(window.location.href);
+		const routeEligible = platform.shouldFilterRouteKey(routeKey);
+		const feedRootFound = platform.findFeedRoot() !== null;
+		const candidates = document.querySelectorAll(
+			platform.selectors.candidatePostRoot,
+		);
+		let candidatePostCount = 0;
+		let identityReadyCount = 0;
+
+		for (const candidate of candidates) {
+			if (!(candidate instanceof HTMLElement)) continue;
+			candidatePostCount += 1;
+			if (platform.resolvePostSurface(candidate)) {
+				identityReadyCount += 1;
+			}
+		}
+
+		const runtimeState = runtimeController.getState();
+		const processingCount = document.querySelectorAll(
+			`[${ATTRIBUTES.processing}]`,
+		).length;
+		const processedCount = document.querySelectorAll(
+			`[${ATTRIBUTES.processed}]`,
+		).length;
+
+		return {
+			platformId: platform.id,
+			url: window.location.href,
+			routeKey,
+			routeEligible,
+			preclassifyEnabled: document.documentElement.hasAttribute(
+				ATTRIBUTES.preclassify,
+			),
+			feedRootFound,
+			candidatePostCount,
+			identityReadyCount,
+			processingCount,
+			processedCount,
+			runtimeMode: runtimeState.mode,
+			runtimeEnabledForProcessing: runtimeController.isEnabledForProcessing(),
+			observerLive: attachmentController.isLive(routeKey),
+			pendingBatchCount: getPendingBatchCount(),
+		};
+	}
+
 	async function hydrateHideRenderMode(): Promise<void> {
 		try {
 			const storage = await chrome.storage.sync.get(
@@ -582,9 +629,17 @@ export function createPlatformRuntime(platform: PlatformPlugin): void {
 		decisionCache.cleanupExpired().catch(console.error);
 		await hydrateHideRenderMode();
 
-		chrome.runtime.onMessage.addListener((message) => {
+		chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 			if (message?.type === MESSAGE_TYPES.CLASSIFY_BATCH_RESULT) {
 				handleBatchResult(message.item);
+				return;
+			}
+
+			if (message?.type === MESSAGE_TYPES.GET_CONTENT_DIAGNOSTICS) {
+				sendResponse({
+					status: "ok",
+					snapshot: collectContentDiagnosticsSnapshot(),
+				});
 			}
 		});
 
