@@ -35,6 +35,12 @@ bunx tsc --noEmit --noUnusedLocals --noUnusedParameters -p tsconfig.json
 bun run build
 ```
 
+## Navigation Docs
+
+- End-to-end flow map: `extension/docs/onboarding.md`
+- Debug playbook: `extension/docs/debug-guide.md`
+- Attachment + preclassify boundaries: `extension/docs/architecture/attachment-and-preclassify.md`
+
 ## Where The Flow Starts
 
 If you want to trace LinkedIn classification from first touch to backend call, read in this order:
@@ -48,39 +54,56 @@ If you want to trace LinkedIn classification from first touch to backend call, r
 4. `src/content/runtime.ts`
    - Core engine: observers, candidate processing, batch enqueue, result handling, render commit.
 5. `src/background/index.ts`
-   - Message hub that enforces auth/enabled gates and dispatches classify work.
-6. `src/background/classify-pipeline.ts`
+   - Registers message router + handler map.
+6. `src/background/handlers.ts`
+   - Message-specific handlers for classify/auth/toggle/stats/diagnostics.
+7. `src/background/classification-service.ts`
+   - Streams classify results back to content tab with fail-open fallback.
+8. `src/background/classify-pipeline.ts`
    - Resolves attachments and dispatches classify micro-batches.
-7. `src/background/api.ts`
+9. `src/background/api.ts`
    - Performs HTTP call to `/v1/classify/batch` and streams NDJSON results back.
 
 If you only need one file to start debugging runtime behavior, start at `src/content/runtime.ts`.
 
 ## System Overview
 
+Content runtime flow:
+
 ```mermaid
-flowchart LR
-  LI[LinkedIn DOM] --> ENTRY[Platform Entry<br/>src/platforms/linkedin/index.ts]
-  ENTRY --> PLUGIN[LinkedIn Plugin<br/>src/platforms/linkedin/plugin.ts]
-  PLUGIN --> CS[Shared Runtime<br/>src/content/runtime.ts]
-  CS --> ATTACH[Attachment Controller]
-  CS --> PARSER[LinkedIn Parser<br/>nodes + attachment refs]
-  CS --> SURFACE[Post Surface Resolver]
-  CS --> BUFFER[Mutation Buffer]
-  CS --> BATCH[Batch Queue]
-  BATCH --> BG[Background Worker]
-  BG --> PIPE[Classify Pipeline]
-  PIPE --> RESOLVE[Attachment Resolver]
-  PIPE --> API[/v1/classify/batch]
-  API --> BG
-  BG --> BATCH
-  CS --> VIS[Visibility Index]
-  CS --> PIPE[Render Commit Pipeline]
-  PIPE --> RENDER[Decision Renderer]
-  RENDER --> LI
-  CS --> LIFE[Runtime Lifecycle]
-  CS --> CTRL[Runtime Controller]
-  CS --> WD[Starvation Watchdog]
+flowchart TB
+  DOM[Feed DOM mutations] --> ENTRY[Platform entry<br/>src/platforms/*/index.ts]
+  ENTRY --> RUNTIME[Runtime orchestrator<br/>src/content/runtime.ts]
+  RUNTIME --> ATTACH[AttachmentController]
+  RUNTIME --> SURFACE[resolvePostSurface]
+  RUNTIME --> BUFFER[MutationBuffer]
+  RUNTIME --> DISPATCH[BatchDispatcher]
+  RUNTIME --> PENDING[PendingDecisionCoordinator]
+  RUNTIME --> COMMIT[RenderCommitPipeline]
+  COMMIT --> RENDER[DecisionRenderer]
+  DISPATCH --> MSGOUT[chrome.runtime.sendMessage<br/>CLASSIFY_BATCH]
+  MSGIN[CLASSIFY_BATCH_RESULT] --> DISPATCH
+  RENDER --> DOM
+```
+
+Background + API flow:
+
+```mermaid
+sequenceDiagram
+  participant Content as Content Runtime
+  participant Router as Background Message Router
+  participant Handler as Background Handlers
+  participant Service as ClassificationService
+  participant Resolver as Attachment Resolver
+  participant API as /v1/classify/batch
+
+  Content->>Router: CLASSIFY_BATCH(posts)
+  Router->>Handler: route by message type
+  Handler->>Service: classifyForTab(request, jwt, tabId)
+  Service->>Resolver: resolve attachment refs
+  Service->>API: classify micro-batches
+  API-->>Service: NDJSON stream items
+  Service-->>Content: CLASSIFY_BATCH_RESULT(item)
 ```
 
 ## End-to-End Flow (What Actually Happens)
@@ -101,7 +124,7 @@ flowchart LR
    - `labelRoot` (for pill placement in label mode)
    - `identity` (stable post instance key)
 7. Mutation buffer batches candidate processing.
-8. Each candidate is parsed into a multimodal payload (`nodes[]` + attachment refs) and sent through `batch-queue` to background.
+8. Each candidate is parsed into a multimodal payload (`nodes[]` + attachment refs) and sent through `BatchDispatcher` to background.
 9. Background classify pipeline resolves attachments concurrently (bounded) and dispatches classify micro-batches as posts become ready.
 10. Pending decision coordinator starts the 3s fail-open timer only when a pending post is in viewport; offscreen posts wait for real classify results.
 11. Background streams NDJSON classify results from backend back to content runtime.
@@ -215,9 +238,14 @@ Rules:
 - Deduplicated queue of candidate elements.
 - Drained per frame (`PROCESS_PER_FRAME`).
 
+`src/content/batch-dispatcher.ts`
+- Instance-scoped classify dispatch service.
+- Owns queue, flush window, and pending `post_id` promises.
+- Resolves pending entries from `CLASSIFY_BATCH_RESULT`.
+
 `src/content/batch-queue.ts`
-- Batches classify requests and routes classify results back by `post_id`.
-- Transport-only responsibility (no UI timeout policy).
+- Backward-compatible wrapper over one default `BatchDispatcher`.
+- Kept for compatibility while runtime moves to instance-owned dispatcher wiring.
 
 `src/content/pending-decision-coordinator.ts`
 - Owns pending decision state (`post_id`, identity, render root, timer/status).
@@ -236,14 +264,36 @@ Rules:
   - `label`: keeps post visible and prepends a compact Unslop decision pill.
 
 `src/background/index.ts`
-- Message hub and auth/enabled enforcement.
-- Handles classify dispatch, billing, usage, stats, JWT state, and diagnostics.
+- Bootstrap only.
+- Registers `createMessageRouter(createBackgroundMessageHandlers())`.
+
+`src/background/message-router.ts`
+- Generic runtime message router (`type` -> handler).
+- Converts thrown handler errors into stable `{ error: "Internal error" }` responses.
+
+`src/background/handlers.ts`
+- Message-specific handler set:
+  - classify/auth/jwt/toggle/reload/stats/diagnostics.
+- Delegates storage access through `storage-facade`.
+- Delegates classify streaming through `classification-service`.
+
+`src/background/classification-service.ts`
+- Owns streaming classify flow from background to content tab.
+- Sends per-item `CLASSIFY_BATCH_RESULT`.
+- Sends fail-open item payloads when pipeline errors.
 
 `src/background/classify-pipeline.ts`
 - Staged background orchestrator for classify requests.
 - Resolves attachments with bounded concurrency (`p-limit`) and short deadline budget.
 - Flushes ready posts to classify batches using shared batch constants (`BATCH_MAX_ITEMS`, `BATCH_WINDOW_MS`).
 - Caps concurrent in-flight classify HTTP requests (`BATCH_MAX_INFLIGHT_REQUESTS`, default `2`) to avoid connection-pool saturation.
+
+`src/background/storage-facade.ts`
+- Shared adapter for JWT/enabled reads and writes.
+- Normalizes `enabled` default resolution and toggle persistence.
+
+`src/background/runtime-diagnostics.ts`
+- Runtime diagnostics snapshot helpers for host detection and active-tab signal shaping.
 
 `src/background/attachment-resolver.ts`
 - Resolves image refs to `{ sha256, mime_type, base64 }` with byte budget enforcement.
@@ -252,8 +302,12 @@ Rules:
 
 `src/popup/App.ts`
 - Sign-in flow, enable toggle, hide mode selector, plan/usage UI.
-- One-click diagnostics panel with pass/warn/fail checks and remediation hints.
+- Renders diagnostics panel UI and delegates execution to diagnostics client.
 - Hide-mode change triggers controlled LinkedIn feed tab reload via background.
+
+`src/popup/diagnostics-client.ts`
+- Executes diagnostics suite across background/content message boundaries.
+- Normalizes runtime/content response errors and builds final report.
 
 `src/stats/index.ts`
 - Stats dashboard rendered with Chart.js.

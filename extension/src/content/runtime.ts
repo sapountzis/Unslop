@@ -6,11 +6,7 @@ import type { PlatformPlugin } from "../platforms/platform";
 import { renderDecision } from "./decision-renderer";
 import { Decision, PostData, Source } from "../types";
 import { decisionCache, userData } from "../lib/storage";
-import {
-	enqueueBatch,
-	getPendingBatchCount,
-	handleBatchResult,
-} from "./batch-queue";
+import { BatchDispatcher } from "./batch-dispatcher";
 import { ATTRIBUTES } from "../lib/selectors";
 import {
 	DEBUG_CONTENT_RUNTIME,
@@ -94,6 +90,7 @@ export function createPlatformRuntime(platform: PlatformPlugin): void {
 		render: renderDecision,
 	});
 	const pendingDecisionCoordinator = createPendingDecisionCoordinator();
+	const batchDispatcher = new BatchDispatcher();
 
 	const runtimeLifecycle = createRuntimeLifecycle();
 
@@ -150,7 +147,7 @@ export function createPlatformRuntime(platform: PlatformPlugin): void {
 		}
 
 		try {
-			const result = await enqueueBatch(postData);
+			const result = await batchDispatcher.enqueue(postData);
 			debugLog("classify response", {
 				postId,
 				decision: result.decision,
@@ -443,7 +440,7 @@ export function createPlatformRuntime(platform: PlatformPlugin): void {
 			const pendingMutationCount = mutationBuffer.size();
 			const pendingRenderCommitCount = renderCommitPipeline.size();
 			const actionableRenderCommitCount = renderCommitPipeline.actionableSize();
-			const pendingBatchCount = getPendingBatchCount();
+			const pendingBatchCount = batchDispatcher.getPendingCount();
 
 			const backlogSize =
 				pendingMutationCount +
@@ -492,6 +489,7 @@ export function createPlatformRuntime(platform: PlatformPlugin): void {
 				clearUnslopStateInDocument(platform.selectors);
 				terminalStateByRoot = new WeakMap<HTMLElement, TerminalState>();
 				inFlightProcessCount = 0;
+				batchDispatcher.reset();
 			});
 
 			startRuntimeWatchdog();
@@ -605,7 +603,7 @@ export function createPlatformRuntime(platform: PlatformPlugin): void {
 			runtimeMode: runtimeState.mode,
 			runtimeEnabledForProcessing: runtimeController.isEnabledForProcessing(),
 			observerLive: attachmentController.isLive(routeKey),
-			pendingBatchCount: getPendingBatchCount(),
+			pendingBatchCount: batchDispatcher.getPendingCount(),
 		};
 	}
 
@@ -631,7 +629,7 @@ export function createPlatformRuntime(platform: PlatformPlugin): void {
 
 		chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 			if (message?.type === MESSAGE_TYPES.CLASSIFY_BATCH_RESULT) {
-				handleBatchResult(message.item);
+				batchDispatcher.handleResult(message.item);
 				return;
 			}
 

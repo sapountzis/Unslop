@@ -63,6 +63,10 @@ From `extension/`:
 
 - `extension/README.md` is a required living technical guide for the extension.
 - Any change to extension behavior, architecture, lifecycle, message contracts, selectors, configuration, or troubleshooting flow must update `extension/README.md` in the same change.
+- Keep navigation docs in sync with runtime boundaries:
+  - `extension/docs/onboarding.md`
+  - `extension/docs/debug-guide.md`
+  - `extension/docs/architecture/attachment-and-preclassify.md`
 - Do not ship extension changes with stale README content.
 
 ## Prohibited

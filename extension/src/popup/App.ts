@@ -2,31 +2,32 @@
 import { UserInfoWithUsage } from "../types";
 import { MESSAGE_TYPES } from "../lib/messages";
 import { resolveEnabled } from "../lib/enabled-state";
-import type {
-	ContentDiagnosticsResponse,
-	DiagnosticsReport,
-	RuntimeDiagnosticsResponse,
-} from "../lib/diagnostics";
+import type { DiagnosticsReport } from "../lib/diagnostics";
 import type { HideRenderMode } from "../lib/config";
 import {
 	HIDE_RENDER_MODE_STORAGE_KEY,
 	resolveHideRenderMode,
 } from "../lib/hide-render-mode";
-import { buildDiagnosticsReport } from "./diagnostics";
+import { DiagnosticsClient } from "./diagnostics-client";
 
 export class App {
 	private container: HTMLElement;
 	private readonly logoUrl: string;
+	private readonly diagnosticsClient: DiagnosticsClient;
 	private diagnosticsReport: DiagnosticsReport | null = null;
 	private diagnosticsRunning = false;
 
-	constructor(containerId: string) {
+	constructor(
+		containerId: string,
+		diagnosticsClient: DiagnosticsClient = new DiagnosticsClient(),
+	) {
 		const container = document.getElementById(containerId);
 		if (!container) {
 			throw new Error(`Container ${containerId} not found`);
 		}
 		this.container = container;
 		this.logoUrl = chrome.runtime.getURL("icons/logo.svg");
+		this.diagnosticsClient = diagnosticsClient;
 	}
 
 	async render(): Promise<void> {
@@ -266,80 +267,16 @@ export class App {
 			.replace(/'/g, "&#39;");
 	}
 
-	private formatErrorMessage(error: unknown): string {
-		if (error instanceof Error) {
-			return error.message || "Unknown error";
-		}
-		if (typeof error === "string") {
-			return error;
-		}
-		return "Unknown error";
-	}
-
-	private async requestRuntimeDiagnostics(): Promise<
-		RuntimeDiagnosticsResponse["snapshot"]
-	> {
-		const response = (await chrome.runtime.sendMessage({
-			type: MESSAGE_TYPES.GET_RUNTIME_DIAGNOSTICS,
-		})) as RuntimeDiagnosticsResponse | null;
-		if (!response || response.status !== "ok" || !response.snapshot) {
-			throw new Error("Runtime diagnostics response was invalid.");
-		}
-		return response.snapshot;
-	}
-
-	private async requestContentDiagnostics(
-		tabId: number,
-	): Promise<ContentDiagnosticsResponse["snapshot"]> {
-		const response = (await chrome.tabs.sendMessage(tabId, {
-			type: MESSAGE_TYPES.GET_CONTENT_DIAGNOSTICS,
-		})) as ContentDiagnosticsResponse | null;
-
-		if (!response || response.status !== "ok" || !response.snapshot) {
-			throw new Error("Content diagnostics response was invalid.");
-		}
-
-		return response.snapshot;
-	}
-
 	private async runDiagnostics(): Promise<void> {
 		if (this.diagnosticsRunning) return;
 		this.diagnosticsRunning = true;
 		this.updateDiagnosticsUi();
 
-		let backgroundSnapshot: RuntimeDiagnosticsResponse["snapshot"] | null =
-			null;
-		let backgroundError: string | null = null;
-		let contentSnapshot: ContentDiagnosticsResponse["snapshot"] | null = null;
-		let contentError: string | null = null;
-
 		try {
-			backgroundSnapshot = await this.requestRuntimeDiagnostics();
+			this.diagnosticsReport = await this.diagnosticsClient.run();
 		} catch (error) {
-			backgroundError = this.formatErrorMessage(error);
+			console.error("[Unslop] diagnostics run failed", error);
 		}
-
-		if (
-			backgroundSnapshot &&
-			typeof backgroundSnapshot.activeTabId === "number"
-		) {
-			try {
-				contentSnapshot = await this.requestContentDiagnostics(
-					backgroundSnapshot.activeTabId,
-				);
-			} catch (error) {
-				contentError = this.formatErrorMessage(error);
-			}
-		} else if (backgroundSnapshot) {
-			contentError = "No active tab found.";
-		}
-
-		this.diagnosticsReport = buildDiagnosticsReport({
-			backgroundSnapshot,
-			backgroundError,
-			contentSnapshot,
-			contentError,
-		});
 		this.diagnosticsRunning = false;
 		this.updateDiagnosticsUi();
 	}
