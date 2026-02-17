@@ -1,7 +1,8 @@
 ---
 owner: agent
-status: active
+status: completed
 created: 2026-02-17
+completed: 2026-02-17
 ---
 
 # Plan: extension_diagnostics_suite
@@ -17,8 +18,8 @@ Links:
 - Init Command: `make init-feature FEATURE=extension-diagnostics-suite`
 - Worktree: `/tmp/unslop-worktrees/extension-diagnostics-suite`
 - Branch: `feat/extension-diagnostics-suite`
-- Active Plan: `docs/exec-plans/active/2026-02-17-extension-diagnostics-suite.md`
-- Status: implementation
+- Active Plan: `docs/exec-plans/completed/2026-02-17-extension-diagnostics-suite.md`
+- Status: completed
 - Autonomy: Continue through `make pr-ready` then `make pr-submit` unless blocked or human input is required.
 
 ## Steps
@@ -93,6 +94,8 @@ Planned initial check set:
 
 ## Verification
 - `make check` (pass)
+- `bun test src/popup/diagnostics.test.ts` (pass)
+- `bun run build` in `extension/` (pass)
 
 ## PR
 - PR: pending (replace with PR URL after `make pr-submit`, or record blocker context)
