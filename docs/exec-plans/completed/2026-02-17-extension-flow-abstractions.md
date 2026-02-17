@@ -1,7 +1,8 @@
 ---
 owner: agent
-status: active
+status: completed
 created: 2026-02-17
+completed: 2026-02-17
 ---
 
 # Plan: extension_flow_abstractions
@@ -18,7 +19,7 @@ Links:
 - Worktree: `/tmp/unslop-worktrees/extension-flow-abstractions`
 - Branch: `feat/extension-flow-abstractions`
 - Active Plan: `docs/exec-plans/active/2026-02-17-extension-flow-abstractions.md`
-- Status: diagnostics re-architecture planning in progress
+- Status: completed; diagnostics architecture refactor shipped with platform-owned services and core-engine isolation
 - Autonomy: Continue through `make pr-ready` then `make pr-submit` unless blocked or human input is required.
 
 ## Steps
@@ -56,11 +57,17 @@ Links:
 - Iteration 2: implemented content/background/popup abstractions and added regression tests; ran `bun test extension/src/background extension/src/content extension/src/popup`; review: fixed workflow-level issues before gate run.
 - Iteration 3: ran `make check`; review: workflow validator required explicit edit/check/review loop wording in this plan and was remediated.
 - Iteration 4: user requested diagnostics redesign from scratch (dev-mode gated, platform-agnostic core checks, platform-owned DOM checks, no main-flow interference); committed baseline changes first (`061e508`) and replanned architecture before new edits.
+- Iteration 5: edit -> `make fmt` -> review; reformatted refactor changes and confirmed no formatter drift remained.
+- Iteration 6: edit -> `make check` -> review; fixed architecture lint by removing `src/lib` dependency on `src/platforms` in diagnostics types.
+- Iteration 7: edit -> test/typecheck -> review; validated platform-owned diagnostics services via `bun test extension/src/background extension/src/content extension/src/popup extension/src/platforms extension/src/lib` and `cd extension && ./node_modules/.bin/tsc --noEmit --noUnusedLocals --noUnusedParameters -p tsconfig.json`.
+- Iteration 8: review -> `make check`; full repository quality gate passed after diagnostics/service ownership and docs updates.
 
 ## Verification
-- `bun test extension/src/content/*.test.ts extension/src/background/*.test.ts extension/src/popup/*.test.ts` (expected pass after refactor updates)
-- `make check` (must pass)
-- `make pr-ready` then `make pr-submit` (must pass, with PR URL recorded)
+- `bun test extension/src/background extension/src/content extension/src/popup extension/src/platforms extension/src/lib` (pass)
+- `cd extension && ./node_modules/.bin/tsc --noEmit --noUnusedLocals --noUnusedParameters -p tsconfig.json` (pass)
+- `make fmt` (pass)
+- `make check` (pass)
+- `make pr-ready` then `make pr-submit` (pending at plan finalization time)
 
 ## PR
 - PR: pending (replace with PR URL after `make pr-submit`, or record blocker context)
