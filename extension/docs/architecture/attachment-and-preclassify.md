@@ -6,14 +6,17 @@
   - Owns feed/body observer lifecycle.
   - Exposes idempotent `ensureAttached({ routeKey, force })`.
   - Owns liveness (`isLive`) and generation checks.
-- `src/content/linkedin.ts`
-  - Orchestrates route sync, watchdog ticks, mutation buffering, and classification flow.
-  - Owns preclassify DOM gate toggling inline with runtime lifecycle transitions.
-- `src/content/linkedin-parser.ts`
-  - Produces multimodal post payload primitives from LinkedIn DOM:
-    - `nodes[]` (`root` + deterministic `repost-*` ordering)
+- `src/content/runtime.ts`
+  - Shared runtime orchestrator across LinkedIn/X/Reddit.
+  - Owns preclassify gate toggling, runtime reconcile, mutation buffering, and render commit handoff.
+- `src/platforms/<platform>/parser.ts`
+  - Produces multimodal post payload primitives for each platform:
+    - `nodes[]` (deterministic ordering)
     - `attachments[]` references (image/pdf metadata only)
   - Does not fetch binary payloads in content script context.
+- `src/content/batch-dispatcher.ts`
+  - Owns classify request batching and `post_id` pending promise map.
+  - Resolves pending entries from streamed background results.
 - `src/background/attachment-resolver.ts`
   - Resolves attachment refs before API classify call.
   - Image path: fetches bytes, enforces max size, computes sha256 + base64.
@@ -45,7 +48,7 @@
 
 1. Confirm preclassify gate is set at bootstrap (`data-unslop-preclassify="true"`).
 2. Confirm gate is only cleared when extension is disabled.
-3. Confirm unprocessed feed selectors match current LinkedIn post roots.
+3. Confirm unprocessed feed selectors match current LinkedIn post roots (`src/platforms/linkedin/selectors.ts`).
 
 ### Attachments expected but missing in classify payload
 
@@ -53,6 +56,7 @@
    - image: `.update-components-image__image`
    - PDF container: `.update-components-document__container`
    - PDF iframe: `.document-s-container__document-element`
+   - implementation: `src/platforms/linkedin/parser.ts`
 2. Confirm manifest host permission includes `https://media.licdn.com/*`.
 3. Confirm background resolver limits are not exceeded:
    - `MAX_IMAGE_BYTES`
@@ -64,4 +68,4 @@
 
 1. Confirm hidden posts use `.unslop-hidden-post { display: none !important; }`.
 2. Verify decisions eventually set `data-unslop-processed`.
-3. Verify mutation buffer drain is running (no stalled RAF queue).
+3. Verify mutation buffer drain and dispatcher queue are running (`src/content/runtime.ts`, `src/content/batch-dispatcher.ts`).

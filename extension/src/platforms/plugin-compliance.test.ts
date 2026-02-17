@@ -18,6 +18,8 @@ function assertPluginContract(plugin: PlatformPlugin): void {
 	expect(typeof plugin.resolvePostSurface).toBe("function");
 	expect(typeof plugin.extractPostData).toBe("function");
 	expect(typeof plugin.readPostIdentity).toBe("function");
+	expect(plugin.diagnostics).toBeTruthy();
+	expect(typeof plugin.diagnostics.collectSnapshot).toBe("function");
 }
 
 describe("platform plugin contract compliance", () => {

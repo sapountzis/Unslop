@@ -8,6 +8,7 @@ import {
 } from "./route-detector";
 import { resolvePostSurface } from "./surface";
 import { extractPostData, readPostIdentity } from "./parser";
+import { linkedinDiagnostics } from "./diagnostics";
 
 export const linkedinPlugin: PlatformPlugin = {
 	id: "linkedin",
@@ -31,4 +32,5 @@ export const linkedinPlugin: PlatformPlugin = {
 	resolvePostSurface,
 	extractPostData,
 	readPostIdentity,
+	diagnostics: linkedinDiagnostics,
 };

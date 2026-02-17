@@ -1,18 +1,22 @@
 import { describe, expect, it } from "bun:test";
 import type {
-	BackgroundDiagnosticsSnapshot,
 	ContentDiagnosticsSnapshot,
+	RuntimeDiagnosticsSnapshot,
 } from "../lib/diagnostics";
 import { buildDiagnosticsReport } from "./diagnostics";
 
-const BASE_BACKGROUND: BackgroundDiagnosticsSnapshot = {
+const BASE_RUNTIME: RuntimeDiagnosticsSnapshot = {
+	devModeEnabled: true,
 	enabled: true,
 	hasJwt: true,
 	activeTabId: 7,
 	activeTabUrl: "https://www.linkedin.com/feed/",
 	activeTabHost: "www.linkedin.com",
-	activeTabIsLinkedIn: true,
-	activeTabIsSupportedFeedHost: true,
+	supportedPlatformId: "linkedin",
+	backendReachable: true,
+	backendLatencyMs: 9,
+	backendHttpStatus: 200,
+	backendError: null,
 };
 
 const BASE_CONTENT: ContentDiagnosticsSnapshot = {
@@ -20,24 +24,26 @@ const BASE_CONTENT: ContentDiagnosticsSnapshot = {
 	url: "https://www.linkedin.com/feed/",
 	routeKey: "/feed/",
 	routeEligible: true,
-	preclassifyEnabled: true,
-	feedRootFound: true,
-	candidatePostCount: 6,
-	identityReadyCount: 6,
-	processingCount: 1,
-	processedCount: 6,
-	runtimeMode: "enabled_active",
-	runtimeEnabledForProcessing: true,
-	observerLive: true,
-	pendingBatchCount: 0,
+	checks: [
+		{
+			id: "platform_route_eligible",
+			scope: "platform",
+			label: "Feed route is eligible",
+			status: "pass",
+			evidence: "route=/feed/",
+			nextAction: "None.",
+		},
+	],
 };
 
 describe("popup diagnostics report", () => {
-	it("reports service worker failure when background diagnostics are unavailable", () => {
+	it("reports service worker failure when runtime diagnostics are unavailable", () => {
 		const report = buildDiagnosticsReport({
-			backgroundSnapshot: null,
-			backgroundError: "Extension context invalidated",
+			runtimeSnapshot: null,
+			runtimeDisabledReason: null,
+			runtimeError: "Extension context invalidated",
 			contentSnapshot: null,
+			contentDisabledReason: null,
 			contentError: null,
 		});
 
@@ -48,9 +54,11 @@ describe("popup diagnostics report", () => {
 
 	it("returns pass summary for healthy snapshots", () => {
 		const report = buildDiagnosticsReport({
-			backgroundSnapshot: BASE_BACKGROUND,
-			backgroundError: null,
+			runtimeSnapshot: BASE_RUNTIME,
+			runtimeDisabledReason: null,
+			runtimeError: null,
 			contentSnapshot: BASE_CONTENT,
+			contentDisabledReason: null,
 			contentError: null,
 		});
 
@@ -59,37 +67,41 @@ describe("popup diagnostics report", () => {
 		expect(report.summary.warn).toBe(0);
 	});
 
-	it("flags missing content diagnostics as failure", () => {
+	it("flags backend reachability failure", () => {
 		const report = buildDiagnosticsReport({
-			backgroundSnapshot: BASE_BACKGROUND,
-			backgroundError: null,
-			contentSnapshot: null,
-			contentError:
-				"Could not establish connection. Receiving end does not exist.",
-		});
-
-		const contentPing = report.checks.find(
-			(check) => check.id === "content_ping",
-		);
-		expect(contentPing?.status).toBe("fail");
-		expect(report.overallStatus).toBe("fail");
-	});
-
-	it("fails identity extraction when posts exist but identities are missing", () => {
-		const report = buildDiagnosticsReport({
-			backgroundSnapshot: BASE_BACKGROUND,
-			backgroundError: null,
-			contentSnapshot: {
-				...BASE_CONTENT,
-				identityReadyCount: 0,
+			runtimeSnapshot: {
+				...BASE_RUNTIME,
+				backendReachable: false,
+				backendError: "Failed to fetch",
+				backendHttpStatus: null,
 			},
+			runtimeDisabledReason: null,
+			runtimeError: null,
+			contentSnapshot: BASE_CONTENT,
+			contentDisabledReason: null,
 			contentError: null,
 		});
 
-		const identityCheck = report.checks.find(
-			(check) => check.id === "post_identity_ready",
+		const backendCheck = report.checks.find(
+			(check) => check.id === "backend_reachable",
 		);
-		expect(identityCheck?.status).toBe("fail");
+		expect(backendCheck?.status).toBe("fail");
 		expect(report.overallStatus).toBe("fail");
+	});
+
+	it("warns when runtime diagnostics are disabled by developer mode gate", () => {
+		const report = buildDiagnosticsReport({
+			runtimeSnapshot: null,
+			runtimeDisabledReason: "Developer mode is disabled.",
+			runtimeError: null,
+			contentSnapshot: null,
+			contentDisabledReason: null,
+			contentError: null,
+		});
+
+		expect(report.overallStatus).toBe("warn");
+		expect(report.checks.some((check) => check.id === "diagnostics_gate")).toBe(
+			true,
+		);
 	});
 });

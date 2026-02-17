@@ -8,6 +8,7 @@ import {
 } from "./route-detector";
 import { resolvePostSurface } from "./surface";
 import { extractPostData, readPostIdentity } from "./parser";
+import { xDiagnostics } from "./diagnostics";
 
 export const xPlugin: PlatformPlugin = {
 	id: "x",
@@ -31,4 +32,5 @@ export const xPlugin: PlatformPlugin = {
 	resolvePostSurface,
 	extractPostData,
 	readPostIdentity,
+	diagnostics: xDiagnostics,
 };

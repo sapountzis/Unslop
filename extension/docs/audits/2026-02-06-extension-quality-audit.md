@@ -4,10 +4,10 @@
 
 Executed:
 - `bun test ./src/lib/enabled-state.test.ts`
-- `bun test ./src/content/classification-timeout.test.ts`
+- `bun test ./src/content/runtime-timeout-regression.test.ts`
 - `bun test ./src/content/preclassify-selectors.test.ts`
 - `bun test ./src/content/decision-renderer.test.ts`
-- `bun test ./src/content/linkedin-parser.test.ts`
+- `bun test ./src/platforms/linkedin/parser.test.ts`
 - `bun test ./src/background/ndjson.test.ts`
 - `bun run build`
 - `rg -n "CLASSIFY_POST|SEND_FEEDBACK|AUTH_REQUIRED|UNSLOP_AUTH_SUCCESS|FEED_POLL_INTERVAL_MS|feedObserved" extension/src`
@@ -30,7 +30,7 @@ All tests/build passed. Dead-reference sweep returned no matches.
 
 4. DOM parsing and rendering responsibilities were mixed.
    - Extracted renderer: `src/content/decision-renderer.ts`.
-   - Kept parser extraction-focused: `src/content/linkedin-parser.ts`.
+   - Kept parser extraction-focused: `src/platforms/linkedin/parser.ts`.
 
 5. Dead runtime message paths and stale auth event flow existed.
    - Removed `CLASSIFY_POST`, `SEND_FEEDBACK`, `AUTH_REQUIRED`, `UNSLOP_AUTH_SUCCESS` paths from extension runtime.

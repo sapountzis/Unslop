@@ -2,9 +2,7 @@
 import {
 	BatchClassifyRequest,
 	BatchClassifyResult,
-	UserInfo,
 	UserInfoWithUsage,
-	UsageInfo,
 	StatsInfo,
 } from "../types";
 import { API_BASE_URL, FETCH_TIMEOUT_MS } from "../lib/config";

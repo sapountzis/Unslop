@@ -6,11 +6,7 @@ import type { PlatformPlugin } from "../platforms/platform";
 import { renderDecision } from "./decision-renderer";
 import { Decision, PostData, Source } from "../types";
 import { decisionCache, userData } from "../lib/storage";
-import {
-	enqueueBatch,
-	getPendingBatchCount,
-	handleBatchResult,
-} from "./batch-queue";
+import { BatchDispatcher } from "./batch-dispatcher";
 import { ATTRIBUTES } from "../lib/selectors";
 import {
 	DEBUG_CONTENT_RUNTIME,
@@ -18,7 +14,6 @@ import {
 	HideRenderMode,
 } from "../lib/config";
 import { MESSAGE_TYPES } from "../lib/messages";
-import type { ContentDiagnosticsSnapshot } from "../lib/diagnostics";
 import { createMutationBuffer } from "./mutation-buffer";
 import { createStarvationWatchdog } from "./starvation-watchdog";
 import { createAttachmentController } from "./attachment-controller";
@@ -94,6 +89,7 @@ export function createPlatformRuntime(platform: PlatformPlugin): void {
 		render: renderDecision,
 	});
 	const pendingDecisionCoordinator = createPendingDecisionCoordinator();
+	const batchDispatcher = new BatchDispatcher();
 
 	const runtimeLifecycle = createRuntimeLifecycle();
 
@@ -150,7 +146,7 @@ export function createPlatformRuntime(platform: PlatformPlugin): void {
 		}
 
 		try {
-			const result = await enqueueBatch(postData);
+			const result = await batchDispatcher.enqueue(postData);
 			debugLog("classify response", {
 				postId,
 				decision: result.decision,
@@ -443,7 +439,7 @@ export function createPlatformRuntime(platform: PlatformPlugin): void {
 			const pendingMutationCount = mutationBuffer.size();
 			const pendingRenderCommitCount = renderCommitPipeline.size();
 			const actionableRenderCommitCount = renderCommitPipeline.actionableSize();
-			const pendingBatchCount = getPendingBatchCount();
+			const pendingBatchCount = batchDispatcher.getPendingCount();
 
 			const backlogSize =
 				pendingMutationCount +
@@ -492,6 +488,7 @@ export function createPlatformRuntime(platform: PlatformPlugin): void {
 				clearUnslopStateInDocument(platform.selectors);
 				terminalStateByRoot = new WeakMap<HTMLElement, TerminalState>();
 				inFlightProcessCount = 0;
+				batchDispatcher.reset();
 			});
 
 			startRuntimeWatchdog();
@@ -563,52 +560,6 @@ export function createPlatformRuntime(platform: PlatformPlugin): void {
 		}, ROUTE_POLL_MS);
 	}
 
-	function collectContentDiagnosticsSnapshot(): ContentDiagnosticsSnapshot {
-		const routeKey = platform.routeKeyFromUrl(window.location.href);
-		const routeEligible = platform.shouldFilterRouteKey(routeKey);
-		const feedRootFound = platform.findFeedRoot() !== null;
-		const candidates = document.querySelectorAll(
-			platform.selectors.candidatePostRoot,
-		);
-		let candidatePostCount = 0;
-		let identityReadyCount = 0;
-
-		for (const candidate of candidates) {
-			if (!(candidate instanceof HTMLElement)) continue;
-			candidatePostCount += 1;
-			if (platform.resolvePostSurface(candidate)) {
-				identityReadyCount += 1;
-			}
-		}
-
-		const runtimeState = runtimeController.getState();
-		const processingCount = document.querySelectorAll(
-			`[${ATTRIBUTES.processing}]`,
-		).length;
-		const processedCount = document.querySelectorAll(
-			`[${ATTRIBUTES.processed}]`,
-		).length;
-
-		return {
-			platformId: platform.id,
-			url: window.location.href,
-			routeKey,
-			routeEligible,
-			preclassifyEnabled: document.documentElement.hasAttribute(
-				ATTRIBUTES.preclassify,
-			),
-			feedRootFound,
-			candidatePostCount,
-			identityReadyCount,
-			processingCount,
-			processedCount,
-			runtimeMode: runtimeState.mode,
-			runtimeEnabledForProcessing: runtimeController.isEnabledForProcessing(),
-			observerLive: attachmentController.isLive(routeKey),
-			pendingBatchCount: getPendingBatchCount(),
-		};
-	}
-
 	async function hydrateHideRenderMode(): Promise<void> {
 		try {
 			const storage = await chrome.storage.sync.get(
@@ -629,17 +580,10 @@ export function createPlatformRuntime(platform: PlatformPlugin): void {
 		decisionCache.cleanupExpired().catch(console.error);
 		await hydrateHideRenderMode();
 
-		chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+		chrome.runtime.onMessage.addListener((message) => {
 			if (message?.type === MESSAGE_TYPES.CLASSIFY_BATCH_RESULT) {
-				handleBatchResult(message.item);
+				batchDispatcher.handleResult(message.item);
 				return;
-			}
-
-			if (message?.type === MESSAGE_TYPES.GET_CONTENT_DIAGNOSTICS) {
-				sendResponse({
-					status: "ok",
-					snapshot: collectContentDiagnosticsSnapshot(),
-				});
 			}
 		});
 
