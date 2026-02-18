@@ -3,9 +3,65 @@ import path from "node:path";
 import { exec, execGit } from "./process";
 import { git, readWorkflowMarker } from "./workflow-marker";
 
+const CHANGELOG_PATHS = new Set(["CHANGELOG.md"]);
+
 function fail(message: string): never {
 	console.error(message);
 	throw new Error("pr-ready failed");
+}
+
+function isDocPath(rel: string): boolean {
+	return rel.startsWith("docs/") || rel.endsWith(".md");
+}
+
+function resolveBaseRef(rootDir: string, baseBranch: string): string {
+	const remoteCandidate = `origin/${baseBranch}`;
+	const hasRemote = execGit(rootDir, ["rev-parse", "--verify", remoteCandidate]);
+	if (hasRemote.exitCode === 0) {
+		return remoteCandidate;
+	}
+
+	const hasLocal = execGit(rootDir, ["rev-parse", "--verify", baseBranch]);
+	if (hasLocal.exitCode === 0) {
+		return baseBranch;
+	}
+
+	fail(
+		`[PR-READY] FAIL: unable to resolve base branch '${baseBranch}' locally or on origin.`,
+	);
+}
+
+function enforceChangelogUpdate(
+	rootDir: string,
+	branch: string,
+	baseBranch: string,
+): void {
+	const baseRef = resolveBaseRef(rootDir, baseBranch);
+	const changed = execGit(rootDir, ["diff", "--name-only", `${baseRef}...${branch}`]);
+	if (changed.exitCode !== 0) {
+		fail(
+			`[PR-READY] FAIL: unable to inspect branch diff against '${baseRef}'${changed.stderr ? `: ${changed.stderr}` : "."}`,
+		);
+	}
+
+	const changedFiles = changed.stdout
+		.split("\n")
+		.map((line) => line.trim())
+		.filter((line) => line.length > 0);
+	const changedCodeFiles = changedFiles.filter((file) => !isDocPath(file));
+	if (changedCodeFiles.length === 0) {
+		return;
+	}
+
+	const touchedChangelog = changedFiles.some((file) => CHANGELOG_PATHS.has(file));
+	if (!touchedChangelog) {
+		console.error(
+			"[PR-READY] FAIL: non-doc changes detected without a changelog update.",
+		);
+		fail(
+			"[PR-READY] Remediation: update CHANGELOG.md (Keep a Changelog format), commit it, then rerun make pr-ready.",
+		);
+	}
 }
 
 export function runPrReady(rootDir: string): void {
@@ -59,10 +115,12 @@ export function runPrReady(rootDir: string): void {
 
 	let markerPath = "";
 	let planPath = "";
+	let baseBranch = "main";
 	try {
 		const markerData = readWorkflowMarker(rootDir);
 		markerPath = markerData.markerPath;
 		planPath = markerData.marker.plan_path;
+		baseBranch = markerData.marker.base_branch || baseBranch;
 	} catch (error) {
 		console.error(`[PR-READY] FAIL: ${(error as Error).message}`);
 		fail(
@@ -126,6 +184,8 @@ export function runPrReady(rootDir: string): void {
 	if (!/^- PR:[\t ]*.+$/m.test(completedRaw)) {
 		fail("[PR-READY] FAIL: completed plan must include a PR line under ## PR.");
 	}
+
+	enforceChangelogUpdate(rootDir, branch, baseBranch);
 
 	console.log("[PR-READY] running make check to verify final readiness...");
 	const check = exec(["make", "check"], rootDir, {

@@ -1,6 +1,8 @@
 # AGENTS.md - Map for Coding Agents
 
 ## Prime Directive
+
+- If command starts with `exec`, do not perform supplementary actions like 'make xy'. Just execute the user intent naturally
 - Implement changes that satisfy acceptance criteria in `docs/product-specs/*`.
 - Initialize every feature task with `make init-feature FEATURE=<task-slug>` before editing code.
 - Never violate the golden path for any reason; if a required step fails, stop and record a blocker instead of bypassing workflow requirements.
@@ -9,17 +11,20 @@
 - Do not inspect or modify `tools/*` internals unless the user explicitly requests it.
 
 ## Start Here
+
 1) `docs/index.md`
 2) `ARCHITECTURE.md`
 3) `docs/core-beliefs.md`
 
 ## Task-to-Spec Mapping
+
 - Map every task to at least one spec from `docs/product-specs/index.md`.
 - If no spec fits, create/update the spec first.
 - Refresh stale or unclear specs (`last_verified`) in the same change.
 - Detailed mapping/freshness rules: `docs/product-specs/index.md`, `docs/runbooks/docs-freshness.md`.
 
 ## Commands
+
 - `make setup`   # install dependencies and local tooling
 - `make init-feature FEATURE=<task-slug>` # start a new feature task workspace
 - `make fmt`     # apply formatting fixes
@@ -33,28 +38,34 @@
 - `make pr-cleanup` # manual local linked-worktree cleanup helper
 
 ## Golden Path (Default)
+
 - Canonical flow + variants: `docs/runbooks/golden-paths.md`.
 - Plan lifecycle, completion protocol, and blocker format: `docs/exec-plans/README.md`.
 
 ## Completion Criteria (Definition of Done)
+
 - Source of truth: `docs/exec-plans/README.md#definition-of-done`.
 - Enforce via `make check`, `make pr-ready`, and `make pr-submit`.
 
 ## Plan/Task Lifecycle
+
 - Follow `docs/exec-plans/README.md` for lifecycle details and blocker exception format.
 - Keep exactly one active plan and keep evidence current throughout execution.
 
 ## Keeping Docs Fresh
+
 - Follow `docs/runbooks/docs-freshness.md` on every meaningful change.
 - Run `docs/runbooks/quality-review.md` weekly during active development and after medium/large changes.
 - Keep `docs/quality/QUALITY_SCORE.md` and `docs/quality/tech-debt.md` aligned with real evidence.
 
 ## Escalate To Humans When
+
 - Product specs are ambiguous or missing.
 - Security, privacy, compliance, or billing policy changes are involved.
 - A decision has broad cross-domain impact.
 
 ## Repository-Specific Boundaries
+
 - This repo implements a minimal Chrome extension + backend + site.
 - Do not add model training, student models, heuristic classifiers, per-author tuning, or analytics dashboards.
 - Backend constitution is binding for backend changes: `backend/AGENTS.md`.
@@ -62,5 +73,6 @@
 - Never guess dependency versions from memory; verify using repository manifests/lockfiles or explicit prompt instructions.
 
 ## Documentation Rule
+
 `AGENTS.md` is the table of contents, not the encyclopedia.
 Authoritative details belong in `docs/` and are mechanically checked by lint + CI.
