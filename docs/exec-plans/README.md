@@ -30,6 +30,7 @@ Execution plans link product specs to implementation steps.
 ## Definition of Done
 - A task is complete when all of the following are true:
   - Governing specs/runbooks/docs are updated to match delivered behavior.
+  - Non-doc changes include a root changelog update (`CHANGELOG.md`, Keep a Changelog format).
   - `make check` passes from repository root.
   - Plan verification evidence lists the exact commands run and outcomes.
   - Plan includes PR tracking under `## PR` and no unresolved `<fill-...>` placeholders.

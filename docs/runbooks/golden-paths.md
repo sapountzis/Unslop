@@ -18,7 +18,7 @@ Update trigger: changes to default delivery workflow, planning workflow, or qual
 4. Read constraints in `ARCHITECTURE.md`, `backend/AGENTS.md`, and/or `extension/AGENTS.md` as needed.
 5. Implement minimal scoped changes.
 6. Repeat `(edit -> make check -> review update in plan)` until all required gates pass.
-7. Update specs/runbooks/quality docs touched by the change.
+7. Update specs/runbooks/quality docs touched by the change, including root `CHANGELOG.md` for non-doc changes (Keep a Changelog format).
 8. Capture verification in the plan, finalize plan status/move per `docs/exec-plans/README.md`, then run `make pr-ready` and immediately run `make pr-submit`.
 
 ### Golden Path: Bug Fix
