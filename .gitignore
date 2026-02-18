@@ -145,3 +145,6 @@ vite.config.ts.timestamp-*
 extension/src/**/*.js
 
 .mcp.json
+
+.claude/
+.vscode/

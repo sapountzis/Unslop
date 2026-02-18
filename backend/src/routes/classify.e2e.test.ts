@@ -41,16 +41,7 @@ describe("Classify Endpoint E2E", () => {
 			body: JSON.stringify({
 				post: {
 					post_id: "e2e-test-post-1",
-					author_id: "author-123",
-					author_name: "E2E Test",
-					nodes: [
-						{
-							id: "root",
-							parent_id: null,
-							kind: "root",
-							text: "This is a genuine helpful post about programming best practices.",
-						},
-					],
+					text: "This is a genuine helpful post about programming best practices.",
 					attachments: [],
 				},
 			}),
@@ -80,9 +71,7 @@ describe("Classify Endpoint E2E", () => {
 			body: JSON.stringify({
 				post: {
 					post_id: "x",
-					author_id: "x",
-					author_name: "x",
-					nodes: [{ id: "root", parent_id: null, kind: "root", text: "x" }],
+					text: "x",
 					attachments: [],
 				},
 			}),
@@ -130,16 +119,7 @@ describe("Batch Classify Endpoint E2E", () => {
 		const token = await generateSessionToken(TEST_USER_ID, "test@example.com");
 		const posts = Array.from({ length: 21 }, (_, index) => ({
 			post_id: `batch-max-${index}`,
-			author_id: "author-123",
-			author_name: "Batch Test",
-			nodes: [
-				{
-					id: "root",
-					parent_id: null,
-					kind: "root",
-					text: "Short test content.",
-				},
-			],
+			text: "Short test content.",
 			attachments: [],
 		}));
 

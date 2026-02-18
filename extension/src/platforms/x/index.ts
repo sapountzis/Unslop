@@ -1,8 +1,6 @@
 // X (Twitter) content script entry point
-import { createPlatformRuntime } from "../../content/runtime";
-import { registerContentDiagnosticsHost } from "../../content/diagnostics-host";
+import { createPlatformRuntime } from "../../content/index";
 import { xPlugin } from "./plugin";
 import "../../styles/content.css";
 
-registerContentDiagnosticsHost(xPlugin);
 createPlatformRuntime(xPlugin);

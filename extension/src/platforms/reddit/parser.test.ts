@@ -7,10 +7,12 @@ type ElementShape = Partial<{
 	querySelectorAll: (selector: string) => unknown[];
 	getAttribute: (name: string) => string | null;
 	textContent: string;
+	tagName: string;
 }>;
 
 function makeElement(overrides: ElementShape = {}): HTMLElement {
 	return {
+		tagName: overrides.tagName ?? "SHREDDIT-POST",
 		matches: overrides.matches ?? (() => false),
 		querySelector: overrides.querySelector ?? (() => null),
 		querySelectorAll: overrides.querySelectorAll ?? (() => []),
@@ -121,11 +123,13 @@ describe("reddit parser", () => {
 						return "https://www.reddit.com/gallery/t3_post1";
 					return null;
 				},
+				textContent:
+					"Shreddit title Body text for the post subreddit r/programming post type gallery link domain www.reddit.com",
 				querySelectorAll: (selector) => {
 					if (selector.includes('[slot="text-body"]')) {
 						return [body];
 					}
-					if (selector.includes('[slot="post-media-container"]')) {
+					if (selector === "img" || selector.includes("img")) {
 						return [imageA, imageADupe, imageB];
 					}
 					return [];
@@ -135,24 +139,19 @@ describe("reddit parser", () => {
 			const result = await extractPostData(el);
 			expect(result).not.toBeNull();
 			expect(result!.post_id).toBe("t3_post1");
-			expect(result!.author_id).toBe("test_user");
-			expect(result!.author_name).toBe("test_user");
-			expect(result!.nodes).toHaveLength(1);
-			expect(result!.nodes[0].text).toContain("shreddit title");
-			expect(result!.nodes[0].text).toContain("body text for the post");
-			expect(result!.nodes[0].text).toContain("subreddit r/programming");
-			expect(result!.nodes[0].text).toContain("post type gallery");
-			expect(result!.nodes[0].text).toContain("link domain www.reddit.com");
+			expect(result!.text).toContain("shreddit title");
+			expect(result!.text).toContain("body text for the post");
+			expect(result!.text).toContain("subreddit r/programming");
+			expect(result!.text).toContain("post type gallery");
+			expect(result!.text).toContain("link domain www.reddit.com");
 			expect(result!.attachments).toHaveLength(2);
 			expect(result!.attachments[0]).toEqual({
-				node_id: "root",
 				kind: "image",
 				src: "https://cdn.reddit.com/a.jpg",
 				alt: "A",
 				ordinal: 0,
 			});
 			expect(result!.attachments[1]).toEqual({
-				node_id: "root",
 				kind: "image",
 				src: "https://cdn.reddit.com/b.jpg",
 				alt: "B",
@@ -160,9 +159,7 @@ describe("reddit parser", () => {
 			});
 		});
 
-		it("derives author from /user href when author attribute is absent", async () => {
-			const authorEl = makeNode({ href: "/user/spez" }, "u/spez");
-
+		it("extracts post with title when author attribute is absent", async () => {
 			const el = makeElement({
 				matches: (selector) => selector.includes("shreddit-post"),
 				getAttribute: (name) => {
@@ -170,21 +167,13 @@ describe("reddit parser", () => {
 					if (name === "post-title") return "No author attribute";
 					return null;
 				},
-				querySelector: (selector) => {
-					if (
-						selector.includes('[data-testid="post-author"]') ||
-						selector.includes('a[href*="/user/"]')
-					) {
-						return authorEl;
-					}
-					return null;
-				},
+				textContent: "No author attribute",
 			});
 
 			const result = await extractPostData(el);
 			expect(result).not.toBeNull();
-			expect(result!.author_id).toBe("spez");
-			expect(result!.author_name).toBe("spez");
+			expect(result!.post_id).toBe("t3_no_attr_author");
+			expect(result!.text).toContain("no author attribute");
 		});
 
 		it("extracts sponsored ad posts and assigns deterministic ad identity", async () => {
@@ -197,15 +186,16 @@ describe("reddit parser", () => {
 					if (name === "domain") return "kilo.ai";
 					return null;
 				},
+				textContent:
+					"Try GLM-5 Free post type ad:display sponsored domain kilo.ai",
 			});
 
 			const result = await extractPostData(adEl);
 			expect(result).not.toBeNull();
 			expect(result!.post_id.startsWith("ad:")).toBe(true);
-			expect(result!.author_id).toBe("kiloCode");
-			expect(result!.nodes[0].text).toContain("try glm-5 free");
-			expect(result!.nodes[0].text).toContain("post type ad:display");
-			expect(result!.nodes[0].text).toContain("sponsored domain kilo.ai");
+			expect(result!.text).toContain("try glm-5 free");
+			expect(result!.text).toContain("post type ad:display");
+			expect(result!.text).toContain("sponsored domain kilo.ai");
 		});
 	});
 });

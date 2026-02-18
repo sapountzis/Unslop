@@ -2,75 +2,184 @@
 
 You are working in the **Chrome extension** that filters social media feeds (LinkedIn, X/Twitter, Reddit).
 
-## Plugin Architecture
+## Architecture Overview
 
-The extension uses a **platform plugin system** to support multiple social media platforms. All platform-specific logic (DOM selectors, post parsing, route detection, surface resolution) is encapsulated in plugins.
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  CONTENT (per-tab, platform-specific)                                       │
+│  src/platforms/{linkedin,x,reddit}/index.ts → new Runtime(plugin).start()  │
+│  src/content/runtime.ts  (class Runtime)                                    │
+│  src/content/domObservation/  src/content/classification/                   │
+│  src/content/rendering/  src/content/parsing/  src/content/detection/       │
+│  src/content/diagnostics/  src/content/auth/                                │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                    chrome.runtime.sendMessage / onMessage
+                                    │
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  BACKGROUND (service worker)                                                 │
+│  src/background/index.ts → message-router, handlers                          │
+│  src/background/classification-service.ts  classify-pipeline.ts              │
+│  src/background/attachment-resolver.ts  storage-facade.ts  diagnostics-engine│
+└──────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                              HTTP /v1/classify/batch
+                                    │
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  POPUP / STATS (UI only)                                                    │
+│  src/popup/App.ts  diagnostics-client.ts  src/stats/index.ts                │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
 
-- **Core runtime**: `src/content/runtime.ts` — platform-agnostic engine, parameterized by a `PlatformPlugin`.
-- **Platform interface**: `src/platforms/platform.ts` — defines the `PlatformPlugin` contract.
-- **Platform plugins**: `src/platforms/{linkedin,x,reddit}/` — each contains:
-  - `plugin.ts` — wires together all platform-specific modules into a `PlatformPlugin`.
-  - `selectors.ts` — platform-specific DOM selectors.
-  - `parser.ts` — post data extraction and identity reading.
-  - `surface.ts` — post surface resolution (content root, render root, label root → identity).
-  - `route-detector.ts` — route eligibility and key extraction.
-  - `index.ts` — entry point: imports `createPlatformRuntime` and the plugin, calls it.
+## Content Flow (Classification Loop)
 
-## Minimal behavior
+```mermaid
+flowchart TB
+  DOM[Feed DOM mutations] --> ENTRY[Platform entry<br/>src/platforms/*/index.ts]
+  ENTRY --> RUNTIME[class Runtime<br/>src/content/runtime.ts]
+  RUNTIME --> OBS[domObservation/observer.ts<br/>DomObserver]
+  RUNTIME --> DET[detection/detector.ts<br/>Detector]
+  RUNTIME --> PAR[parsing/parser.ts<br/>Parser]
+  RUNTIME --> CLS[classification/classifier.ts<br/>Classifier]
+  RUNTIME --> REN[rendering/renderer.ts<br/>Renderer]
+  CLS --> MSGOUT[CLASSIFY_BATCH]
+  MSGIN[CLASSIFY_BATCH_RESULT] --> CLS
+  REN --> DOM
+```
 
-- Content script observes platform feed, extracts post text + ids.
-- Background service worker calls backend `/v1/classify`.
-- Content script applies `decision ∈ {keep, hide}`.
-- Popup offers:
-  - enabled toggle
-  - sign-in status / sign-in action
-  - upgrade button (when authenticated)
-- Feedback is in-scope: user can mark a decision wrong (stored by backend).
+## Background + API Flow
 
-Refer to:
-- `../docs/product-specs/extension.md`
-- `../docs/product-specs/api.md`
-- `../docs/product-specs/spec.md`
-- `./docs/constitution.md` (binding extension constitution)
+```mermaid
+sequenceDiagram
+  participant Content as Content Runtime
+  participant Router as message-router
+  participant Handler as handlers
+  participant Service as ClassificationService
+  participant Resolver as attachment-resolver
+  participant API as /v1/classify/batch
 
-## Setup & dev commands
+  Content->>Router: CLASSIFY_BATCH(posts)
+  Router->>Handler: route by type
+  Handler->>Service: classifyForTab(request, jwt, tabId)
+  Service->>Resolver: resolve attachment refs
+  Service->>API: classify micro-batches
+  API-->>Service: NDJSON stream
+  Service-->>Content: CLASSIFY_BATCH_RESULT(item)
+```
+
+## Entry Points
+
+| Entry | Path | Role |
+|-------|------|------|
+| Manifest | `manifest.json` | Content script injection per platform; auth callback on `api.getunslop.com` |
+| Platform entry | `src/platforms/{linkedin,x,reddit}/index.ts` | Calls `registerContentDiagnosticsHost(plugin)` and `new Runtime(plugin).start()` |
+| Runtime | `src/content/runtime.ts` | class Runtime: lifecycle, pipeline wiring, storage hydration, navigation detection |
+| Background | `src/background/index.ts` | Registers message router + handlers |
+| Popup | `src/popup/App.ts` | UI shell; diagnostics via `diagnostics-client.ts` |
+| Auth callback | `src/content/auth/auth.ts` | Extracts JWT from page, sends to background |
+
+## Module Roles
+
+### Content (`src/content/`)
+
+| Module | Path | Role |
+|--------|------|------|
+| **Runtime** | `runtime.ts` | class Runtime: lifecycle, reconcile, storage, pipeline wiring |
+| | `runtime/controller.ts` | Route + enabled state; modes: `disabled`, `enabled_attaching`, `enabled_active` |
+| | `runtime/lifecycle.ts`, `runtime/observability.ts` | State and event tracking |
+| **DOM Observation** | `domObservation/observer.ts` | class DomObserver: feed/body observer lifecycle, node callbacks |
+| | `domObservation/attachment.ts` | Feed/body observer lifecycle; `ensureAttached`, `detachAll`, `isLive` |
+| | `domObservation/mutation.ts` | Deduplicated candidate queue; drained per frame |
+| | `domObservation/watchdog.ts` | Detects pipeline stall; triggers recovery reattach |
+| **Detection** | `detection/detector.ts` | class Detector: public API for surface detection + cache persistence |
+| | `detection/engine.ts` | Hint collection → prune → score → resolve roots → identity |
+| | `detection/candidate-pruner.ts`, `feature-extractor.ts`, `fingerprint.ts`, `relocalizer.ts`, `reliability-store.ts` | Supporting detection pipeline |
+| **Parsing** | `parsing/parser.ts` | class Parser: thin wrapper over `platform.extractPostData()` |
+| **Classification** | `classification/classifier.ts` | class Classifier: classify with cache + batch dispatcher |
+| | `classification/batchDispatcher.ts` | Batching, pending `post_id` promises; resolves from streamed results |
+| | `classification/batchQueue.ts` | Wrapper over BatchDispatcher |
+| | `classification/pendingCoordinator.ts` | 3s fail-open timer when in viewport; late `hide` when identity current |
+| **Rendering** | `rendering/renderer.ts` | class Renderer: apply decisions to DOM surfaces |
+| | `rendering/commitPipeline.ts` | Coalesces by renderRoot; flushes by RAF |
+| | `rendering/decisionRenderer.ts` | Applies `keep|hide`; modes: `collapse`, `label` |
+| | `rendering/markerManager.ts` | Clears markers; lifecycle reset |
+| **Diagnostics** | `diagnostics/diagnostics-host.ts` | `GET_CONTENT_DIAGNOSTICS`; dev-mode gated; delegates to platform |
+| **Auth** | `auth/auth.ts` | JWT extraction from auth callback page |
+
+### Platforms (`src/platforms/`)
+
+| Module | Path | Role |
+|--------|------|------|
+| Interface | `platform.ts` | `PlatformPlugin` contract |
+| Plugin | `{linkedin,x,reddit}/plugin.ts` | Wires selectors, parser, route-detector, detection-profile (content/render/label roots), diagnostics |
+| Per platform | `selectors.ts`, `parser.ts`, `route-detector.ts`, `detection-profile.ts` | Platform-specific DOM logic |
+| Shared | `platform-diagnostics.ts` | Shared platform-owned DOM checks |
+
+### Background (`src/background/`)
+
+| Module | Path | Role |
+|--------|------|------|
+| Bootstrap | `index.ts` | Registers `createMessageRouter(createBackgroundMessageHandlers())` |
+| Router | `message-router.ts` | `type` → handler; converts thrown errors to `{ error: "Internal error" }` |
+| Handlers | `handlers.ts` | classify/auth/jwt/toggle/reload/stats/diagnostics |
+| Classify | `classification-service.ts` | Streams results to content; fail-open items |
+| | `classify-pipeline.ts` | Resolves attachments; dispatches micro-batches; caps in-flight requests |
+| Resolver | `attachment-resolver.ts` | Image: sha256+base64; PDF: excerpt; fail-open per attachment |
+| Storage | `storage-facade.ts` | JWT/enabled reads and writes |
+| Diagnostics | `diagnostics-engine.ts` | Runtime checks; dev-mode gated |
+
+### Shared (`src/lib/`)
+
+| Module | Path | Role |
+|--------|------|------|
+| Messages | `messages.ts` | Message type constants and typed request/response shapes |
+| Selectors | `selectors.ts` | Shared ATTRIBUTES, auth selectors (no platform selectors) |
+| Config | `config.ts` | API_BASE_URL, BATCH_*, CACHE_*, DEBUG_CONTENT_RUNTIME, HIDE_RENDER_MODE |
+
+## Binding Rules (Constitution)
+
+- **Scope**: detect posts, request decision, apply `keep|hide`; auth, subscription, usage, stats; fail open on every error.
+- **Out of scope**: heuristic classifiers, per-author tuning, analytics dashboards.
+- **Boundaries**: `background/` = transport + API; `content/` = DOM observation + extraction + rendering; `popup/`, `stats/` = UI only; `lib/` = pure helpers.
+- **Rules**: DOM parsing and rendering separate; message contracts centralized; storage defaults centralized; typed message shapes; no secrets in logs.
+- **Prohibited**: scope expansion during maintenance; bypassing fail-open; parallel TS/JS drift.
+
+## Diagnostics Quick Reference
+
+- **Entry**: Popup `Run Diagnostics` (dev-mode gated).
+- **Key checks**: `content_script_reachable` → `content/diagnostics/diagnostics-host.ts`; `platform_*` → `platforms/platform-diagnostics.ts`; `runtime_pipeline_counters` from observability snapshot.
+- **No classify traffic**: Run diagnostics; check `content_script_reachable`, `platform_*`, `content/runtime.ts` gates, `classification/batchDispatcher.ts`. If `platform_identity_ready` fails, inspect platform `parser.ts` (readPostIdentity).
+- **Hide not applied**: Inspect `classification/pendingCoordinator.ts`, `rendering/commitPipeline.ts`, `rendering/decisionRenderer.ts`.
+
+## Setup & Commands
 
 From `extension/`:
 
-- `bun install`
-- `bun run dev`
-- `bun run build`
-- `bun test src/` — runs all tests (platforms, content, lib)
-- `bun test src/platforms/` — runs platform plugin tests only
+```bash
+bun install
+bun run dev
+bun run build
+bun test src/
+bun test src/content    # content tests only
+bun test src/platforms  # platform tests only
+bunx tsc --noEmit --noUnusedLocals --noUnusedParameters -p tsconfig.json
+```
 
-## UX constraints
+## Adding a New Platform
 
-- **Fail open**:
-  - If classify fails, do not break the platform. Leave post as-is.
-- Keep UI minimal:
-  - No "aggressiveness sliders", category controls, or per-author rules.
-
-## Adding a new platform
-
-1. Create `src/platforms/<platform>/` with: `selectors.ts`, `parser.ts`, `surface.ts`, `route-detector.ts`, `plugin.ts`, `index.ts`.
-2. Implement the `PlatformPlugin` interface from `src/platforms/platform.ts`.
+1. Create `src/platforms/<platform>/` with `selectors.ts`, `parser.ts`, `route-detector.ts`, `detection-profile.ts`, `plugin.ts`, `index.ts`.
+2. Implement `PlatformPlugin` from `src/platforms/platform.ts`.
 3. Add content script entry + host permissions in `manifest.json`.
-4. Add the origin to the backend CORS allowlist in `backend/src/app/create-app.ts`.
-5. Add tests for all modules: route-detector, parser, selectors.
-6. Run `bun test src/platforms/plugin-compliance.test.ts` to verify contract compliance.
-
-## Documentation Discipline
-
-- `extension/README.md` is a required living technical guide for the extension.
-- Any change to extension behavior, architecture, lifecycle, message contracts, selectors, configuration, or troubleshooting flow must update `extension/README.md` in the same change.
-- Keep navigation docs in sync with runtime boundaries:
-  - `extension/docs/onboarding.md`
-  - `extension/docs/debug-guide.md`
-  - `extension/docs/architecture/attachment-and-preclassify.md`
-- Do not ship extension changes with stale README content.
+4. Add origin to backend CORS allowlist in `backend/src/app/create-app.ts`.
+5. Add tests; run `bun test src/platforms/plugin-compliance.test.ts`.
 
 ## Prohibited
 
 - Platform-specific logic outside `src/platforms/<platform>/`.
-- `instanceof HTMLElement` in parsers (use duck-type checks for bun test compatibility).
-- Importing platform selectors from `src/lib/selectors.ts` (that file only contains shared ATTRIBUTES and auth selectors).
+- `instanceof HTMLElement` in parsers (use duck-type checks for bun test).
+- Importing platform selectors from `src/lib/selectors.ts` (only shared ATTRIBUTES and auth selectors).
+
+## References
+
+- Product spec: `../docs/product-specs/extension.md`
+- API spec: `../docs/product-specs/api.md`

@@ -1,5 +1,5 @@
 import { createBackgroundMessageHandlers } from "./handlers";
-import { createMessageRouter } from "./message-router";
+import { createMessageRouter } from "./messageRouter";
 
 const handlers = createBackgroundMessageHandlers();
 

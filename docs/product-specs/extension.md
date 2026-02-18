@@ -29,7 +29,7 @@ Users need a minimal Chrome extension that can classify LinkedIn, X, and Reddit 
 - Traces: Optional message flow spans across content/background/api boundaries.
 
 ## test_plan
-- Unit: Parser, selector, surface, and decision rendering modules.
+- Unit: Parser, selector, detection-profile, and decision rendering modules.
 - Integration: Background/content message contracts and auth persistence behavior.
 - E2E: Popup auth + feed classification smoke across supported pages.
 
@@ -55,7 +55,7 @@ The extension must be minimal and must **fail open**.
    - Reddit plugin runs on `https://www.reddit.com/*` and `https://old.reddit.com/*`.
    - Starts at `document_start` to enable pre-classification hiding.
    - Detects posts using `MutationObserver`.
-   - Extracts `post_id`, `author_id`, `author_name`, `nodes`, and `attachments`.
+   - Extracts `post_id`, `text`, and `attachments`.
    - Sends posts to background for batch classification.
    - Applies the returned decision to the DOM.
 
@@ -98,15 +98,10 @@ For each feed post element:
 
 - `post_id`:
   - Use platform-native stable ID if present, else derive (see below)
-- `author_id`:
-  - profile URL or stable author identifier if present
-- `author_name`:
-  - visible author name text (best-effort)
-- `nodes`:
-  - ordered text nodes (`root` first, then nested repost nodes in DOM order)
-  - each node includes: `id`, `parent_id`, `kind`, `text`
+- `text`:
+  - whole post content (author, title, body, quoted content, metadata) as a single normalized string
 - `attachments`:
-  - zero or more items tied to `node_id`
+  - zero or more items with optional `ordinal` for ordering
   - parser may emit attachment refs (image `src`; pdf `iframe_src` / `container_data_url` / `source_hint`)
   - background resolver converts refs into canonical payloads:
     - `image` attachments include `sha256`, `mime_type`, `base64`
@@ -116,18 +111,18 @@ For each feed post element:
 
 If no native post id exists:
 
-- `post_id = hex(SHA-256(author_id + "\n" + JSON.stringify(nodes)))`
+- `post_id = hex(SHA-256(normalizeContentText(text)))`
 
 ### Canonical payload requirements
 
-- preserve deterministic node and attachment ordering when building request payloads
+- preserve deterministic attachment ordering when building request payloads
 - the extension does not compute `content_fingerprint`
 - backend computes global `content_fingerprint` for cache lookups from canonical payload content
 
 ### Reddit capture requirements
 
 - Candidate post roots include both `shreddit-post` and `shreddit-ad-post`.
-- Parser includes title/body plus available subreddit and post metadata in normalized node text.
+- Parser includes title/body plus available subreddit and post metadata in normalized text.
 - Parser emits image attachment refs from Reddit media containers with deterministic ordinals and stable deduping by source URL.
 
 ## Classification flow (required)
@@ -137,7 +132,7 @@ Content script → background:
 ```ts
 chrome.runtime.sendMessage({
   type: "CLASSIFY_BATCH",
-  posts: [{ post_id, author_id, author_name, nodes, attachments }]
+  posts: [{ post_id, text, attachments }]
 });
 ```
 

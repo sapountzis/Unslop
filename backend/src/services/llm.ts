@@ -22,6 +22,7 @@ import {
 	LLM_RETRY_MIN_TIMEOUT_MS,
 	LLM_TEMPERATURE,
 	MULTIMODAL_MAX_ATTACHMENTS,
+	MULTIMODAL_MAX_ATTACHMENTS_VLM,
 	MULTIMODAL_MAX_PDF_EXCERPT_CHARS,
 } from "../lib/policy-constants";
 
@@ -65,10 +66,9 @@ const DecisionSchema = z.object({
 	x: z.number(),
 });
 
-const PROMPT_MAX_ROOT_CHARS = 1600;
-const PROMPT_MAX_REPOST_CHARS = 800;
-const PROMPT_MAX_REPOST_COUNT = 5;
+const PROMPT_MAX_ROOT_CHARS = 2400;
 const PROMPT_MAX_ATTACHMENTS = MULTIMODAL_MAX_ATTACHMENTS;
+const PROMPT_MAX_ATTACHMENTS_VLM = MULTIMODAL_MAX_ATTACHMENTS_VLM;
 const PROMPT_MAX_PDF_EXCERPT_CHARS = Math.min(
 	800,
 	MULTIMODAL_MAX_PDF_EXCERPT_CHARS,
@@ -88,27 +88,12 @@ function truncate(value: string, maxChars: number): string {
 	return `${value.slice(0, Math.max(0, maxChars - 3))}...`;
 }
 
-function resolveRootText(post: PostInput): string {
-	const rootNode = post.nodes.find((node) => node.kind === "root");
-	const source = rootNode?.text ?? post.nodes[0]?.text ?? "";
+function resolvePostText(post: PostInput): string {
+	const source = post.text ?? "";
 	const cleaned = compactWhitespace(source);
 	return cleaned.length > 0
 		? truncate(cleaned, PROMPT_MAX_ROOT_CHARS)
 		: "(empty)";
-}
-
-function resolveRepostLines(post: PostInput): string[] {
-	const repostNodes = post.nodes.filter((node) => node.kind === "repost");
-	if (repostNodes.length === 0) {
-		return ["- (none)"];
-	}
-
-	return repostNodes
-		.slice(0, PROMPT_MAX_REPOST_COUNT)
-		.map(
-			(node, index) =>
-				`- [${index + 1}] ${truncate(compactWhitespace(node.text), PROMPT_MAX_REPOST_CHARS)}`,
-		);
 }
 
 function isImageAttachment(
@@ -124,9 +109,10 @@ function hasProviderAttachments(post: PostInput): boolean {
 function resolveAttachmentLines(
 	attachments: PostInput["attachments"],
 ): string[] {
-	return attachments.slice(0, PROMPT_MAX_ATTACHMENTS).map((attachment) => {
+	return attachments.slice(0, PROMPT_MAX_ATTACHMENTS).map((attachment, i) => {
+		const ordinal = attachment.ordinal ?? i;
 		if (attachment.kind === IMAGE_ATTACHMENT_KIND) {
-			return `- [image] node=${attachment.node_id} mime=${attachment.mime_type} sha256=${attachment.sha256}`;
+			return `- [image ${ordinal + 1}] mime=${attachment.mime_type} sha256=${attachment.sha256}`;
 		}
 
 		const excerpt = compactWhitespace(attachment.excerpt_text ?? "");
@@ -134,7 +120,7 @@ function resolveAttachmentLines(
 			excerpt.length > 0
 				? ` excerpt="${truncate(excerpt, PROMPT_MAX_PDF_EXCERPT_CHARS)}"`
 				: "";
-		return `- [${PDF_ATTACHMENT_KIND}] node=${attachment.node_id} source_url=${attachment.source_url}${excerptText}`;
+		return `- [${PDF_ATTACHMENT_KIND} ${ordinal + 1}] source_url=${attachment.source_url}${excerptText}`;
 	});
 }
 
@@ -143,11 +129,7 @@ function formatSection(title: string, body: string): string {
 }
 
 function buildPostContext(post: PostInput): string {
-	const sections: string[] = [
-		`Author: ${post.author_name}`,
-		formatSection("ROOT POST", resolveRootText(post)),
-		formatSection("REPOSTS", resolveRepostLines(post).join("\n")),
-	];
+	const sections: string[] = [formatSection("POST", resolvePostText(post))];
 
 	const attachmentLines = resolveAttachmentLines(post.attachments);
 	if (attachmentLines.length > 0) {
@@ -184,18 +166,26 @@ export function constructUserPrompt(post: PostInput): string {
 function toImageContentPart(
 	attachment: MultimodalImageAttachment,
 ): ChatCompletionContentPart {
+	const base64 = String(attachment.base64 ?? "")
+		.replace(/\s/g, "")
+		.trim();
+	const mime = (attachment.mime_type ?? "image/jpeg").trim();
 	return {
 		type: "image_url",
 		image_url: {
-			url: `data:${attachment.mime_type};base64,${attachment.base64}`,
+			url: `data:${mime};base64,${base64}`,
+			detail: "low",
 		},
 	};
 }
 
 export function buildMessages(post: PostInput): ChatCompletionMessageParam[] {
+	const imageLimit = hasProviderAttachments(post)
+		? PROMPT_MAX_ATTACHMENTS_VLM
+		: PROMPT_MAX_ATTACHMENTS;
 	const imageParts = post.attachments
 		.filter(isImageAttachment)
-		.slice(0, PROMPT_MAX_ATTACHMENTS)
+		.slice(0, imageLimit)
 		.map(toImageContentPart);
 
 	const userContent: ChatCompletionContentPart[] = [
@@ -229,9 +219,34 @@ function extractProviderErrorMetadata(error: unknown): ProviderErrorMetadata {
 		return {};
 	}
 
+	const err = error as unknown as Record<string, unknown>;
+	const rawBody = err.error;
 	const metadata: ProviderErrorMetadata = {
 		provider_error_message: error.message,
 	};
+
+	// Prefer nested error body (OpenAI/OpenRouter API response) when present
+	if (rawBody && typeof rawBody === "object" && rawBody !== null) {
+		const inner = rawBody as Record<string, unknown>;
+		if (typeof inner.message === "string" && inner.message.length > 0) {
+			metadata.provider_error_message = inner.message;
+		}
+		// OpenRouter may nest upstream details in metadata.raw
+		const meta = inner.metadata;
+		if (meta && typeof meta === "object" && meta !== null) {
+			const metaObj = meta as Record<string, unknown>;
+			const raw = metaObj.raw;
+			if (raw !== undefined && raw !== null) {
+				metadata.provider_error_message =
+					typeof raw === "string"
+						? raw
+						: typeof (raw as Record<string, unknown>)?.message === "string"
+							? ((raw as Record<string, unknown>).message as string)
+							: metadata.provider_error_message;
+			}
+		}
+	}
+
 	const status = Reflect.get(error, "status");
 	const code = Reflect.get(error, "code");
 	const type = Reflect.get(error, "type");
@@ -369,10 +384,11 @@ export function createLlmService(deps: LlmServiceDeps): LlmService {
 				latency: Date.now() - startTime,
 			};
 		} catch (error) {
+			const providerMetadata = extractProviderErrorMetadata(error);
 			logger.error("llm_classification_failed", error, {
 				model: selectedModel,
+				...providerMetadata,
 			});
-			const providerMetadata = extractProviderErrorMetadata(error);
 			return {
 				scores: null,
 				source: "error",

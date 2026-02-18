@@ -1,36 +1,17 @@
 // Reddit platform plugin
 import type { PlatformPlugin } from "../platform";
-import { SELECTORS } from "./selectors";
-import {
-	routeKeyFromUrl,
-	shouldFilterRoute,
-	shouldFilterRouteKey,
-} from "./route-detector";
-import { resolvePostSurface } from "./surface";
+import { routeKeyFromUrl, shouldFilterRouteKey } from "./routeDetector";
 import { extractPostData, readPostIdentity } from "./parser";
-import { redditDiagnostics } from "./diagnostics";
+import { redditDetectionProfile } from "./detectionProfile";
 
 export const redditPlugin: PlatformPlugin = {
 	id: "reddit",
-
-	selectors: {
-		feed: SELECTORS.feed,
-		candidatePostRoot: SELECTORS.candidatePostRoot,
-		renderPostRoot: SELECTORS.renderPostRoot,
-	},
-
-	preclassifyCssSelector: `shreddit-post:not([data-unslop-processed]), shreddit-ad-post:not([data-unslop-processed]), article[data-testid="post-container"]:not([data-unslop-processed]), .Post:not([data-unslop-processed])`,
-
-	shouldFilterRoute,
+	detectionProfile: redditDetectionProfile,
 	routeKeyFromUrl,
 	shouldFilterRouteKey,
-
 	findFeedRoot(): Element | null {
-		return document.querySelector(SELECTORS.feed);
+		return document.querySelector("shreddit-feed, main");
 	},
-
-	resolvePostSurface,
 	extractPostData,
 	readPostIdentity,
-	diagnostics: redditDiagnostics,
 };

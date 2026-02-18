@@ -60,9 +60,7 @@ The backend uses external LLM calls (text or multimodal) and a deterministic sco
 Per post:
 
 - `post_id` (string)
-- `author_id` (string)
-- `author_name` (string)
-- `nodes[]` (ordered text nodes)
+- `text` (string, whole post content)
 - `attachments[]` (image/PDF metadata; PDF uses `excerpt_text` in v0.1)
 
 ## Model Output Contract

@@ -22,11 +22,26 @@ function sanitizeValue(value: unknown, depth = 0, isDev: boolean): unknown {
 	}
 
 	if (value instanceof Error) {
-		return {
+		const base: Record<string, unknown> = {
 			name: value.name,
 			message: value.message,
 			stack: isDev ? value.stack : undefined,
 		};
+		// Include APIError-like provider error body when present (OpenAI SDK, OpenRouter)
+		const err = value as unknown as Record<string, unknown>;
+		if (err.error !== undefined) {
+			base.provider_error_body = err.error;
+		}
+		if (typeof err.status === "number") {
+			base.status = err.status;
+		}
+		if (typeof err.code === "string") {
+			base.code = err.code;
+		}
+		if (typeof err.type === "string") {
+			base.type = err.type;
+		}
+		return base;
 	}
 
 	if (Array.isArray(value)) {

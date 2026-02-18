@@ -110,23 +110,18 @@ Request:
 {
   "post": {
     "post_id": "linkedin-post-id-or-derived-hash",
-    "author_id": "author-id-or-url",
-    "author_name": "Some Person",
-    "nodes": [
-      { "id": "root", "parent_id": null, "kind": "root", "text": "root post text" },
-      { "id": "repost-0", "parent_id": "root", "kind": "repost", "text": "nested repost text" }
-    ],
+    "text": "whole post content including author, title, body, quoted content",
     "attachments": [
       {
-        "node_id": "root",
         "kind": "image",
+        "ordinal": 0,
         "sha256": "hex",
         "mime_type": "image/jpeg",
         "base64": "..."
       },
       {
-        "node_id": "root",
         "kind": "pdf",
+        "ordinal": 1,
         "source_url": "https://media.licdn.com/...",
         "excerpt_text": "optional extracted text"
       }
@@ -190,11 +185,7 @@ Request:
   "posts": [
     {
       "post_id": "linkedin-post-id-or-derived-hash",
-      "author_id": "author-id-or-url",
-      "author_name": "Some Person",
-      "nodes": [
-        { "id": "root", "parent_id": null, "kind": "root", "text": "root post text" }
-      ],
+      "text": "whole post content",
       "attachments": []
     }
   ]

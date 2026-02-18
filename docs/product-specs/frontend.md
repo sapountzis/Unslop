@@ -74,8 +74,7 @@ Must describe (plain language):
 - Account:
   - email (for magic-link login)
 - Content for classification:
-  - `post_id`, `author_id`, `author_name`
-  - `nodes[]` text graph (`id`, `parent_id`, `kind`, `text`) used to preserve root/repost context
+  - `post_id`, `text` (whole post content)
   - `attachments[]` classification inputs (e.g., image `sha256`, `mime_type`, `base64`; pdf `source_url`, `excerpt_text`)
   - decision/event metadata used for cache and attempt history (`decision`, `source`, timestamps, provider error/status metadata)
 - Feedback (if user submits it):

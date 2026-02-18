@@ -1,15 +1,15 @@
 // extension/src/popup/App.ts
 import { UserInfoWithUsage } from "../types";
 import { MESSAGE_TYPES } from "../lib/messages";
-import { resolveEnabled } from "../lib/enabled-state";
+import { resolveEnabled } from "../lib/enabledState";
 import type { DiagnosticsReport } from "../lib/diagnostics";
 import type { HideRenderMode } from "../lib/config";
-import { DEV_MODE_STORAGE_KEY, resolveDevMode } from "../lib/dev-mode";
+import { DEV_MODE_STORAGE_KEY, resolveDevMode } from "../lib/devMode";
 import {
 	HIDE_RENDER_MODE_STORAGE_KEY,
 	resolveHideRenderMode,
-} from "../lib/hide-render-mode";
-import { DiagnosticsClient } from "./diagnostics-client";
+} from "../lib/hideRenderMode";
+import { DiagnosticsClient } from "./diagnosticsClient";
 
 export class App {
 	private container: HTMLElement;
@@ -232,17 +232,6 @@ export class App {
 				[HIDE_RENDER_MODE_STORAGE_KEY]: nextMode,
 			});
 			hideRenderModeSelect.value = nextMode;
-
-			const [activeTab] = await chrome.tabs.query({
-				active: true,
-				currentWindow: true,
-			});
-			if (typeof activeTab?.id === "number") {
-				await chrome.runtime.sendMessage({
-					type: MESSAGE_TYPES.RELOAD_ACTIVE_TAB,
-					tabId: activeTab.id,
-				});
-			}
 		});
 
 		const upgradeBtn = this.container.querySelector("#upgrade-btn");
@@ -301,6 +290,7 @@ export class App {
 	          <span class="diagnostics-subtitle">Checks content runtime, selectors, storage, and messaging.</span>
 	        </div>
 	        <button id="run-diagnostics-btn" type="button" class="secondary diagnostics-run-btn">Run Diagnostics</button>
+	        <button id="copy-diagnostics-btn" type="button" class="ghost diagnostics-run-btn">Copy Diagnostics JSON</button>
 	        <div id="diagnostics-results" class="diagnostics-results">${this.renderDiagnosticsResults()}</div>
 	      </div>
 	    `;
@@ -362,6 +352,12 @@ export class App {
 				? "Running Diagnostics..."
 				: "Run Diagnostics";
 		}
+		const copyButton = this.container.querySelector(
+			"#copy-diagnostics-btn",
+		) as HTMLButtonElement | null;
+		if (copyButton) {
+			copyButton.disabled = this.diagnosticsRunning || !this.diagnosticsReport;
+		}
 
 		const resultsContainer = this.container.querySelector(
 			"#diagnostics-results",
@@ -378,12 +374,46 @@ export class App {
 		const runButton = this.container.querySelector(
 			"#run-diagnostics-btn",
 		) as HTMLButtonElement | null;
+		const copyButton = this.container.querySelector(
+			"#copy-diagnostics-btn",
+		) as HTMLButtonElement | null;
 
 		runButton?.addEventListener("click", () => {
 			void this.runDiagnostics();
 		});
+		copyButton?.addEventListener("click", () => {
+			void this.copyDiagnosticsReport();
+		});
 
 		this.updateDiagnosticsUi();
+	}
+
+	private async copyDiagnosticsReport(): Promise<void> {
+		if (!this.diagnosticsReport) return;
+		const serialized = JSON.stringify(this.diagnosticsReport, null, 2);
+
+		try {
+			if (typeof navigator !== "undefined" && navigator.clipboard) {
+				await navigator.clipboard.writeText(serialized);
+				return;
+			}
+		} catch (error) {
+			console.error("[Unslop] failed to write diagnostics to clipboard", error);
+		}
+
+		// Fallback for environments where clipboard API is unavailable.
+		const textarea = document.createElement("textarea");
+		textarea.value = serialized;
+		textarea.setAttribute("readonly", "true");
+		textarea.style.position = "fixed";
+		textarea.style.left = "-9999px";
+		document.body.appendChild(textarea);
+		textarea.select();
+		try {
+			document.execCommand("copy");
+		} finally {
+			textarea.remove();
+		}
 	}
 
 	private renderDevModeCard(devModeEnabled: boolean): string {
