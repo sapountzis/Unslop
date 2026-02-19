@@ -1,10 +1,10 @@
 ---
 owner: unslop
 status: verified
-last_verified: 2026-02-15
+last_verified: 2026-02-19
 ---
 
-# Frontend (Public Site) Spec (v0.1)
+# Frontend (Public Site) Spec (v0.3)
 
 ## problem
 The product requires a trustworthy public web presence with stable policy/support pages and install CTA, without becoming an app surface.
@@ -84,11 +84,11 @@ Must describe (plain language):
 - Provide filtering decisions
 - Prevent duplicate LLM calls (cache)
 - Enforce quotas
-- Improve future versions (data collection only; no training in v0.1)
+- Improve future versions (data collection only; no model training)
 
 **Where it goes (processors)**
 - LLM inference provider (e.g. OpenRouter): receives post content for classification
-- Hosting provider for backend (Railway)
+- Hosting provider for backend (Cloudflare Workers)
 - Database provider (Neon)
 - Billing provider (Polar)
 

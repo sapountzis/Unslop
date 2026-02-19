@@ -4,7 +4,7 @@ status: verified
 last_verified: 2026-02-16
 ---
 
-# LLM Classification (v0.1)
+# LLM Classification (v0.3)
 
 ## problem
 Classification requires deterministic routing and decision derivation on top of external LLM/VLM responses, while remaining fail-open and policy-constrained.
@@ -61,7 +61,7 @@ Per post:
 
 - `post_id` (string)
 - `text` (string, whole post content)
-- `attachments[]` (image/PDF metadata; PDF uses `excerpt_text` in v0.1)
+- `attachments[]` (image/PDF metadata; PDF uses `excerpt_text`)
 
 ## Model Output Contract
 

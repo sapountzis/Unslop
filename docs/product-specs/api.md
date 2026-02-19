@@ -4,13 +4,13 @@ status: verified
 last_verified: 2026-02-16
 ---
 
-# API Spec (v0.1)
+# API Spec (v0.3)
 
 ## problem
 The extension and supporting flows need stable backend API contracts for authentication, classification, feedback, usage, and billing.
 
 ## non_goals
-- Introducing non-spec endpoints or expanding beyond v0.1 product scope.
+- Introducing non-spec endpoints or expanding beyond current product scope.
 - Breaking response contract changes without synchronized spec updates.
 
 ## acceptance_criteria
@@ -34,7 +34,7 @@ The extension and supporting flows need stable backend API contracts for authent
 - E2E: Extension-to-API auth/classification and checkout flow validation.
 
 ## rollout
-- Flags: No endpoint-level feature flags required in v0.1.
+- Flags: No endpoint-level feature flags required.
 - Migration: Contract-aligned schema changes handled via backend migrations.
 - Backout: Revert route changes while preserving backward-compatible responses.
 

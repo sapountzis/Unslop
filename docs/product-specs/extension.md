@@ -4,7 +4,7 @@ status: verified
 last_verified: 2026-02-17
 ---
 
-# Chrome Extension Spec (v0.1)
+# Chrome Extension Spec (v0.3)
 
 ## problem
 Users need a minimal Chrome extension that can classify LinkedIn, X, and Reddit feed posts and apply decisions without breaking normal browsing.
@@ -34,7 +34,7 @@ Users need a minimal Chrome extension that can classify LinkedIn, X, and Reddit 
 - E2E: Popup auth + feed classification smoke across supported pages.
 
 ## rollout
-- Flags: No runtime feature flags required for v0.1 extension baseline.
+- Flags: No runtime feature flags required.
 - Migration: Manifest/build changes shipped with versioned extension bundles.
 - Backout: Roll back to last known-good extension package if regressions appear.
 
@@ -81,14 +81,16 @@ The extension must be minimal and must **fail open**.
      - Upgrade to Pro (opens checkout URL)
      - Run Diagnostics (one-click runtime + selector + storage health checks)
 
-No options page is required in v0.1.
+No options page is required.
 
 ## Storage keys (sync)
 
 ```ts
 type Storage = {
-  jwt?: string;            // session token
-  enabled: boolean;        // default true
+  jwt?: string;                              // session token
+  enabled: boolean;                          // default true
+  hideRenderMode?: "collapse" | "label";     // default "collapse"
+  devMode?: boolean;                         // default false; gates diagnostics UI
 };
 ```
 
@@ -166,10 +168,9 @@ The content script uses a fail-open timeout (`3000ms` baseline). If no decision 
 
 ## Pre-classification behavior
 
-- While filtering is enabled, unprocessed post nodes are hidden until a decision is applied.
-- The preclassify gate is enabled synchronously at content-script bootstrap on feed routes.
-- Processed `keep` posts become visible once marked processed.
-- This prevents "appear then disappear" flicker for posts that end up hidden.
+- While a post is being classified, its render root is marked with `data-unslop-checking`.
+- Once a decision is applied the marker is removed and `data-unslop-processed` is set.
+- Already-processed elements are skipped on subsequent mutation callbacks.
 
 ## Failure modes (required)
 

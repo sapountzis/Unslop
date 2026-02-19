@@ -4,7 +4,7 @@ status: verified
 last_verified: 2026-02-17
 ---
 
-# Unslop – Minimal Project Spec (v0.1)
+# Unslop – Minimal Project Spec (v0.3)
 
 ## problem
 Users need a minimal, fail-open way to filter low-value social feed content without introducing brittle UI complexity.
@@ -35,15 +35,15 @@ Users need a minimal, fail-open way to filter low-value social feed content with
 - E2E: Auth + classify + extension runtime + UI smoke.
 
 ## rollout
-- Flags: No feature flags required for v0.1 scope.
+- Flags: No feature flags required.
 - Migration: Data schema evolves through Drizzle migrations.
 - Backout: Revert deployment and rollback migration-compatible changes as needed.
 
 Unslop is a Chrome extension + backend API that filters supported social feeds (LinkedIn, X, Reddit) by **hiding posts** according to a backend decision.
 
-v0.1 also includes a minimal public website (`getunslop.com`) for trust + policy/support pages.
+Also includes a minimal public website (`getunslop.com`) for trust + policy/support pages.
 
-## v0.1 goal
+## Goal
 
 Ship the smallest product that:
 
@@ -58,7 +58,7 @@ Ship the smallest product that:
    - user feedback rows (in-scope)
 7) Hosts a minimal public site with install + privacy + support pages.
 
-## Explicitly out of scope (v0.1)
+## Explicitly out of scope
 
 - Training or fine-tuning any model.
 - Any “student model” or heuristic classifier.

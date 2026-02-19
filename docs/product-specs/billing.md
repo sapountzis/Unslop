@@ -4,7 +4,7 @@ status: verified
 last_verified: 2026-02-16
 ---
 
-# Billing & Plans (v0.1)
+# Billing & Plans (v0.3)
 
 ## problem
 The product needs deterministic free/pro entitlement behavior with quota enforcement and reliable subscription lifecycle handling.
@@ -34,7 +34,7 @@ The product needs deterministic free/pro entitlement behavior with quota enforce
 - E2E: Upgrade flow and entitlement changes reflected in `/v1/me` and quota behavior.
 
 ## rollout
-- Flags: No billing feature flags required for v0.1 baseline.
+- Flags: No billing feature flags required.
 - Migration: Schema and entitlement changes ship with migration-safe updates.
 - Backout: Disable or revert billing route changes and keep free-tier behavior intact.
 

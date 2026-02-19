@@ -7,27 +7,26 @@ You are working in the **Chrome extension** that filters social media feeds (Lin
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │  CONTENT (per-tab, platform-specific)                                       │
-│  src/platforms/{linkedin,x,reddit}/index.ts → new Runtime(plugin).start()  │
-│  src/content/runtime.ts  (class Runtime)                                    │
-│  src/content/domObservation/  src/content/classification/                   │
-│  src/content/rendering/  src/content/parsing/  src/content/detection/       │
-│  src/content/diagnostics/  src/content/auth/                                │
+│  src/platforms/{linkedin,x,reddit}/index.ts → createPlatformRuntime(plugin) │
+│  src/content/pipeline.ts  (class Pipeline)                                  │
+│  src/content/observer.ts  classifier.ts  detector.ts  renderer.ts           │
+│  src/content/navigation.ts  state.ts  types.ts  auth/                       │
 └─────────────────────────────────────────────────────────────────────────────┘
                                     │
                     chrome.runtime.sendMessage / onMessage
                                     │
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │  BACKGROUND (service worker)                                                 │
-│  src/background/index.ts → message-router, handlers                          │
-│  src/background/classification-service.ts  classify-pipeline.ts              │
-│  src/background/attachment-resolver.ts  storage-facade.ts  diagnostics-engine│
+│  src/background/index.ts → messageRouter, handlers                           │
+│  src/background/classificationService.ts  classifyPipeline.ts                │
+│  src/background/attachmentResolver.ts  storageFacade.ts  diagnosticsEngine.ts│
 └──────────────────────────────────────────────────────────────────────────────┘
                                     │
                               HTTP /v1/classify/batch
                                     │
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │  POPUP / STATS (UI only)                                                    │
-│  src/popup/App.ts  diagnostics-client.ts  src/stats/index.ts                │
+│  src/popup/index.ts  App.ts  diagnosticsClient.ts  src/stats/index.ts       │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -36,12 +35,11 @@ You are working in the **Chrome extension** that filters social media feeds (Lin
 ```mermaid
 flowchart TB
   DOM[Feed DOM mutations] --> ENTRY[Platform entry<br/>src/platforms/*/index.ts]
-  ENTRY --> RUNTIME[class Runtime<br/>src/content/runtime.ts]
-  RUNTIME --> OBS[domObservation/observer.ts<br/>DomObserver]
-  RUNTIME --> DET[detection/detector.ts<br/>Detector]
-  RUNTIME --> PAR[parsing/parser.ts<br/>Parser]
-  RUNTIME --> CLS[classification/classifier.ts<br/>Classifier]
-  RUNTIME --> REN[rendering/renderer.ts<br/>Renderer]
+  ENTRY --> PIPELINE[class Pipeline<br/>src/content/pipeline.ts]
+  PIPELINE --> OBS[observer.ts<br/>FeedObserver]
+  PIPELINE --> DET[detector.ts<br/>collectHints / detectPost / scanFeed]
+  PIPELINE --> CLS[classifier.ts<br/>Classifier]
+  PIPELINE --> REN[renderer.ts<br/>renderDecision]
   CLS --> MSGOUT[CLASSIFY_BATCH]
   MSGIN[CLASSIFY_BATCH_RESULT] --> CLS
   REN --> DOM
@@ -51,11 +49,11 @@ flowchart TB
 
 ```mermaid
 sequenceDiagram
-  participant Content as Content Runtime
-  participant Router as message-router
+  participant Content as Content Pipeline
+  participant Router as messageRouter
   participant Handler as handlers
   participant Service as ClassificationService
-  participant Resolver as attachment-resolver
+  participant Resolver as attachmentResolver
   participant API as /v1/classify/batch
 
   Content->>Router: CLASSIFY_BATCH(posts)
@@ -72,10 +70,10 @@ sequenceDiagram
 | Entry | Path | Role |
 |-------|------|------|
 | Manifest | `manifest.json` | Content script injection per platform; auth callback on `api.getunslop.com` |
-| Platform entry | `src/platforms/{linkedin,x,reddit}/index.ts` | Calls `registerContentDiagnosticsHost(plugin)` and `new Runtime(plugin).start()` |
-| Runtime | `src/content/runtime.ts` | class Runtime: lifecycle, pipeline wiring, storage hydration, navigation detection |
+| Platform entry | `src/platforms/{linkedin,x,reddit}/index.ts` | Calls `createPlatformRuntime(plugin)` |
+| Pipeline | `src/content/pipeline.ts` | class Pipeline: lifecycle, pipeline wiring, storage hydration, navigation detection |
 | Background | `src/background/index.ts` | Registers message router + handlers |
-| Popup | `src/popup/App.ts` | UI shell; diagnostics via `diagnostics-client.ts` |
+| Popup | `src/popup/index.ts` | UI shell; diagnostics via `diagnosticsClient.ts` |
 | Auth callback | `src/content/auth/auth.ts` | Extracts JWT from page, sends to background |
 
 ## Module Roles
@@ -84,26 +82,14 @@ sequenceDiagram
 
 | Module | Path | Role |
 |--------|------|------|
-| **Runtime** | `runtime.ts` | class Runtime: lifecycle, reconcile, storage, pipeline wiring |
-| | `runtime/controller.ts` | Route + enabled state; modes: `disabled`, `enabled_attaching`, `enabled_active` |
-| | `runtime/lifecycle.ts`, `runtime/observability.ts` | State and event tracking |
-| **DOM Observation** | `domObservation/observer.ts` | class DomObserver: feed/body observer lifecycle, node callbacks |
-| | `domObservation/attachment.ts` | Feed/body observer lifecycle; `ensureAttached`, `detachAll`, `isLive` |
-| | `domObservation/mutation.ts` | Deduplicated candidate queue; drained per frame |
-| | `domObservation/watchdog.ts` | Detects pipeline stall; triggers recovery reattach |
-| **Detection** | `detection/detector.ts` | class Detector: public API for surface detection + cache persistence |
-| | `detection/engine.ts` | Hint collection → prune → score → resolve roots → identity |
-| | `detection/candidate-pruner.ts`, `feature-extractor.ts`, `fingerprint.ts`, `relocalizer.ts`, `reliability-store.ts` | Supporting detection pipeline |
-| **Parsing** | `parsing/parser.ts` | class Parser: thin wrapper over `platform.extractPostData()` |
-| **Classification** | `classification/classifier.ts` | class Classifier: classify with cache + batch dispatcher |
-| | `classification/batchDispatcher.ts` | Batching, pending `post_id` promises; resolves from streamed results |
-| | `classification/batchQueue.ts` | Wrapper over BatchDispatcher |
-| | `classification/pendingCoordinator.ts` | 3s fail-open timer when in viewport; late `hide` when identity current |
-| **Rendering** | `rendering/renderer.ts` | class Renderer: apply decisions to DOM surfaces |
-| | `rendering/commitPipeline.ts` | Coalesces by renderRoot; flushes by RAF |
-| | `rendering/decisionRenderer.ts` | Applies `keep|hide`; modes: `collapse`, `label` |
-| | `rendering/markerManager.ts` | Clears markers; lifecycle reset |
-| **Diagnostics** | `diagnostics/diagnostics-host.ts` | `GET_CONTENT_DIAGNOSTICS`; dev-mode gated; delegates to platform |
+| **Pipeline** | `pipeline.ts` | class Pipeline: orchestrator; lifecycle (start/stop), reconcile, route detection, message/storage listeners |
+| **DOM Observation** | `observer.ts` | class FeedObserver: two-phase attach (body→feed), MutationObserver lifecycle, node dispatch |
+| **Detection** | `detector.ts` | `collectHints()`, `detectPost()`, `scanFeed()` — scoring-based ancestor walk; resolves content/render/label roots + identity |
+| **Classification** | `classifier.ts` | class Classifier: decision cache, batch queue, flush on window/threshold, fail-open timeout |
+| **Rendering** | `renderer.ts` | `renderDecision()`, `clearAllDecisions()` — applies keep/hide; modes: collapse, label |
+| **Navigation** | `navigation.ts` | class NavigationHandler: monkey-patches history.pushState/replaceState, listens popstate |
+| **State** | `state.ts` | `PipelineState`: enabled, hideMode, routeKey, processed WeakSet |
+| **Types** | `types.ts` | `DetectedSurface`: contentRoot, renderRoot, labelRoot, identity |
 | **Auth** | `auth/auth.ts` | JWT extraction from auth callback page |
 
 ### Platforms (`src/platforms/`)
@@ -111,22 +97,22 @@ sequenceDiagram
 | Module | Path | Role |
 |--------|------|------|
 | Interface | `platform.ts` | `PlatformPlugin` contract |
-| Plugin | `{linkedin,x,reddit}/plugin.ts` | Wires selectors, parser, route-detector, detection-profile (content/render/label roots), diagnostics |
-| Per platform | `selectors.ts`, `parser.ts`, `route-detector.ts`, `detection-profile.ts` | Platform-specific DOM logic |
-| Shared | `platform-diagnostics.ts` | Shared platform-owned DOM checks |
+| Plugin | `{linkedin,x,reddit}/plugin.ts` | Wires parser, routeDetector, detectionProfile |
+| Per platform | `parser.ts`, `routeDetector.ts`, `detectionProfile.ts` | Platform-specific DOM logic |
+| Shared | `platformDiagnostics.ts` | Shared platform-owned DOM checks (`collectContentDiagnostics`) |
 
 ### Background (`src/background/`)
 
 | Module | Path | Role |
 |--------|------|------|
 | Bootstrap | `index.ts` | Registers `createMessageRouter(createBackgroundMessageHandlers())` |
-| Router | `message-router.ts` | `type` → handler; converts thrown errors to `{ error: "Internal error" }` |
+| Router | `messageRouter.ts` | `type` → handler; converts thrown errors to `{ error: "Internal error" }` |
 | Handlers | `handlers.ts` | classify/auth/jwt/toggle/reload/stats/diagnostics |
-| Classify | `classification-service.ts` | Streams results to content; fail-open items |
-| | `classify-pipeline.ts` | Resolves attachments; dispatches micro-batches; caps in-flight requests |
-| Resolver | `attachment-resolver.ts` | Image: sha256+base64; PDF: excerpt; fail-open per attachment |
-| Storage | `storage-facade.ts` | JWT/enabled reads and writes |
-| Diagnostics | `diagnostics-engine.ts` | Runtime checks; dev-mode gated |
+| Classify | `classificationService.ts` | Streams results to content; fail-open items |
+| | `classifyPipeline.ts` | Resolves attachments; dispatches micro-batches; caps in-flight requests |
+| Resolver | `attachmentResolver.ts` | Image: sha256+base64; PDF: excerpt; fail-open per attachment |
+| Storage | `storageFacade.ts` | JWT/enabled reads and writes |
+| Diagnostics | `diagnosticsEngine.ts` | Runtime checks; dev-mode gated |
 
 ### Shared (`src/lib/`)
 
@@ -134,7 +120,17 @@ sequenceDiagram
 |--------|------|------|
 | Messages | `messages.ts` | Message type constants and typed request/response shapes |
 | Selectors | `selectors.ts` | Shared ATTRIBUTES, auth selectors (no platform selectors) |
-| Config | `config.ts` | API_BASE_URL, BATCH_*, CACHE_*, DEBUG_CONTENT_RUNTIME, HIDE_RENDER_MODE |
+| Config | `config.ts` | API_BASE_URL, BATCH_*, CACHE_*, timings, HideRenderMode |
+| Storage | `storage.ts` | `decisionCache`, `userData` singleton instances |
+| Decision Cache | `decisionCache.ts` | DecisionCacheService: TTL-based cache with cleanup |
+| User Data | `userData.ts` | UserDataService |
+| Enabled State | `enabledState.ts` | `resolveEnabled()`, `toggleEnabled()` |
+| Hide Render Mode | `hideRenderMode.ts` | `resolveHideRenderMode()` |
+| Dev Mode | `devMode.ts` | `resolveDevMode()`, `toggleDevMode()` |
+| Diagnostics types | `diagnostics.ts` | Type definitions for diagnostics responses |
+| Windowed Batcher | `windowedBatcher.ts` | Windowed batching utility |
+| Media Hydration | `mediaHydration.ts` | Media attachment resolution helpers |
+| Hash | `hash.ts` | Hashing utilities |
 
 ## Binding Rules (Constitution)
 
@@ -147,9 +143,9 @@ sequenceDiagram
 ## Diagnostics Quick Reference
 
 - **Entry**: Popup `Run Diagnostics` (dev-mode gated).
-- **Key checks**: `content_script_reachable` → `content/diagnostics/diagnostics-host.ts`; `platform_*` → `platforms/platform-diagnostics.ts`; `runtime_pipeline_counters` from observability snapshot.
-- **No classify traffic**: Run diagnostics; check `content_script_reachable`, `platform_*`, `content/runtime.ts` gates, `classification/batchDispatcher.ts`. If `platform_identity_ready` fails, inspect platform `parser.ts` (readPostIdentity).
-- **Hide not applied**: Inspect `classification/pendingCoordinator.ts`, `rendering/commitPipeline.ts`, `rendering/decisionRenderer.ts`.
+- **Key checks**: `content_script_reachable` → `pipeline.ts` (`setupMessageListener`); `platform_*` → `platforms/platformDiagnostics.ts`; pipeline counters from `pipeline.ts` state.
+- **No classify traffic**: Run diagnostics; check `content_script_reachable`, `platform_*`, `pipeline.ts` gates, `content/classifier.ts`. If `platform_identity_ready` fails, inspect platform `parser.ts` (`readPostIdentity`).
+- **Hide not applied**: Inspect `content/classifier.ts` (fail-open timer), `content/renderer.ts` (`renderDecision`).
 
 ## Setup & Commands
 
@@ -167,11 +163,11 @@ bunx tsc --noEmit --noUnusedLocals --noUnusedParameters -p tsconfig.json
 
 ## Adding a New Platform
 
-1. Create `src/platforms/<platform>/` with `selectors.ts`, `parser.ts`, `route-detector.ts`, `detection-profile.ts`, `plugin.ts`, `index.ts`.
+1. Create `src/platforms/<platform>/` with `parser.ts`, `routeDetector.ts`, `detectionProfile.ts`, `plugin.ts`, `index.ts`.
 2. Implement `PlatformPlugin` from `src/platforms/platform.ts`.
 3. Add content script entry + host permissions in `manifest.json`.
 4. Add origin to backend CORS allowlist in `backend/src/app/create-app.ts`.
-5. Add tests; run `bun test src/platforms/plugin-compliance.test.ts`.
+5. Add tests; run `bun test src/platforms/pluginCompliance.test.ts`.
 
 ## Prohibited
 

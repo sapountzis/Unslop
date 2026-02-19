@@ -1,10 +1,10 @@
 ---
 owner: unslop
 status: verified
-last_verified: 2026-02-15
+last_verified: 2026-02-19
 ---
 
-# Infra & Deployment (v0.2)
+# Infra & Deployment (v0.3)
 
 ## problem
 The system needs clear runtime, deployment, and environment boundaries so backend/extension/frontend ship consistently across dev and production.
