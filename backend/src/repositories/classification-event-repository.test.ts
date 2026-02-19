@@ -13,7 +13,7 @@ function createInsertDbMock() {
 }
 
 describe("classification event repository", () => {
-	it("appendMany writes compact error-only telemetry rows", async () => {
+	it("appendMany writes success-only telemetry rows", async () => {
 		const { db, spies } = createInsertDbMock();
 		const repository = createClassificationEventRepository({ db });
 
@@ -21,15 +21,30 @@ describe("classification event repository", () => {
 			{
 				contentFingerprint: "fp-1",
 				postId: "post-1",
-				providerHttpStatus: 429,
-				providerErrorCode: "rate_limit",
-				providerErrorType: "provider_error",
-				providerErrorMessage: "rate limited",
+				model: "gpt-4",
+				decision: "keep",
+				requestPayload: { post_id: "post-1", text: "hi", attachments: [] },
+				responsePayload: {
+					model: "gpt-4",
+					scores: { u: 0.1, d: 0 },
+					source: "llm",
+					latency: 100,
+					decision: "keep",
+				},
 			},
 			{
 				contentFingerprint: "fp-2",
 				postId: "post-2",
-				providerErrorMessage: "llm_error:timeout",
+				model: "gpt-4",
+				decision: "hide",
+				requestPayload: { post_id: "post-2", text: "bye", attachments: [] },
+				responsePayload: {
+					model: "gpt-4",
+					scores: {},
+					source: "llm",
+					latency: 50,
+					decision: "hide",
+				},
 			},
 		]);
 
@@ -39,19 +54,26 @@ describe("classification event repository", () => {
 			expect.objectContaining({
 				contentFingerprint: "fp-1",
 				postId: "post-1",
-				attemptStatus: "error",
-				providerHttpStatus: 429,
-				providerErrorCode: "rate_limit",
-				providerErrorType: "provider_error",
-				providerErrorMessage: "rate limited",
-				requestPayload: {},
-				responsePayload: expect.objectContaining({ source: "error" }),
+				model: "gpt-4",
+				attemptStatus: "success",
+				requestPayload: { post_id: "post-1", text: "hi", attachments: [] },
+				responsePayload: expect.objectContaining({
+					model: "gpt-4",
+					source: "llm",
+					latency: 100,
+					decision: "keep",
+				}),
 			}),
 			expect.objectContaining({
 				contentFingerprint: "fp-2",
 				postId: "post-2",
-				attemptStatus: "error",
-				providerErrorMessage: "llm_error:timeout",
+				model: "gpt-4",
+				attemptStatus: "success",
+				responsePayload: expect.objectContaining({
+					model: "gpt-4",
+					source: "llm",
+					decision: "hide",
+				}),
 			}),
 		]);
 	});

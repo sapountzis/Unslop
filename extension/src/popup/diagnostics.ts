@@ -5,6 +5,7 @@ import type {
 	DiagnosticsReport,
 	RuntimeDiagnosticsSnapshot,
 } from "../lib/diagnostics";
+import { API_BASE_URL } from "../lib/config";
 
 type BuildDiagnosticsInput = {
 	runtimeSnapshot: RuntimeDiagnosticsSnapshot | null;
@@ -217,8 +218,8 @@ export function buildDiagnosticsReport(
 			label: "Backend endpoint reachable",
 			status: runtime.backendReachable ? "pass" : "fail",
 			evidence: runtime.backendReachable
-				? `status=${runtime.backendHttpStatus ?? "none"}, latency_ms=${runtime.backendLatencyMs ?? "unknown"}`
-				: (runtime.backendError ?? "Network probe failed."),
+				? `base=${API_BASE_URL}, status=${runtime.backendHttpStatus ?? "none"}, latency_ms=${runtime.backendLatencyMs ?? "unknown"}`
+				: `base=${API_BASE_URL}, error=${runtime.backendError ?? "Network probe failed."}`,
 			nextAction: runtime.backendReachable
 				? "None."
 				: "Check internet access and API base URL settings.",

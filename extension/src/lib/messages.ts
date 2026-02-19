@@ -18,7 +18,6 @@ export const MESSAGE_TYPES = {
 	SET_JWT: "SET_JWT",
 	CLEAR_JWT: "CLEAR_JWT",
 	TOGGLE_ENABLED: "TOGGLE_ENABLED",
-	RELOAD_ACTIVE_TAB: "RELOAD_ACTIVE_TAB",
 	GET_STATS: "GET_STATS",
 	GET_RUNTIME_DIAGNOSTICS: "GET_RUNTIME_DIAGNOSTICS",
 	GET_CONTENT_DIAGNOSTICS: "GET_CONTENT_DIAGNOSTICS",
@@ -62,11 +61,6 @@ export type ToggleEnabledMessage = {
 	type: typeof MESSAGE_TYPES.TOGGLE_ENABLED;
 };
 
-export type ReloadActiveTabMessage = {
-	type: typeof MESSAGE_TYPES.RELOAD_ACTIVE_TAB;
-	tabId: number;
-};
-
 export type GetStatsMessage = {
 	type: typeof MESSAGE_TYPES.GET_STATS;
 };
@@ -87,7 +81,6 @@ export type RuntimeRequest =
 	| SetJwtMessage
 	| ClearJwtMessage
 	| ToggleEnabledMessage
-	| ReloadActiveTabMessage
 	| GetStatsMessage
 	| GetRuntimeDiagnosticsMessage
 	| GetContentDiagnosticsMessage;
@@ -101,7 +94,6 @@ export type RuntimeResponseByType = {
 	[MESSAGE_TYPES.SET_JWT]: { status: "ok" };
 	[MESSAGE_TYPES.CLEAR_JWT]: { status: "ok" };
 	[MESSAGE_TYPES.TOGGLE_ENABLED]: { enabled: boolean };
-	[MESSAGE_TYPES.RELOAD_ACTIVE_TAB]: { status: "reloaded" | "ignored" };
 	[MESSAGE_TYPES.GET_STATS]: StatsInfo | null;
 	[MESSAGE_TYPES.GET_RUNTIME_DIAGNOSTICS]: RuntimeDiagnosticsResponse;
 	[MESSAGE_TYPES.GET_CONTENT_DIAGNOSTICS]: ContentDiagnosticsResponse;

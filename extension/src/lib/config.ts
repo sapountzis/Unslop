@@ -6,8 +6,8 @@
 // For local development, use: http://localhost:3000
 // For production, use: https://api.getunslop.com
 
-// export const API_BASE_URL = "http://localhost:3000";
-export const API_BASE_URL = "https://api.getunslop.com";
+export const API_BASE_URL = "http://localhost:3000";
+// export const API_BASE_URL = "https://api.getunslop.com";
 
 // Cache settings
 export const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -31,3 +31,24 @@ export const DEBUG_CONTENT_RUNTIME = false;
 // - 'label': keep post visible and show a compact decision pill
 export type HideRenderMode = "collapse" | "label";
 export const HIDE_RENDER_MODE: HideRenderMode = "collapse";
+
+// Runtime orchestration timings
+export const WATCHDOG_POLL_MS = 1000;
+export const PERSIST_INTERVAL_MS = 30_000;
+export const SYNC_STORAGE_AREA = "sync";
+
+// Mutation buffer drain limit per animation frame
+export const PROCESS_PER_FRAME = 20;
+
+// Render commit pipeline fallback frame interval (used when rAF is unavailable)
+export const FALLBACK_RAF_INTERVAL_MS = 16;
+
+// Background attachment resolver
+export const ATTACHMENT_BUDGET_RATIO = 0.3;
+export const ATTACHMENT_RESOLVE_CONCURRENCY = 8;
+
+// Backend reachability probe timeout
+export const BACKEND_PROBE_TIMEOUT_MS = 5000;
+
+// Observability event ring buffer size
+export const MAX_OBSERVABILITY_EVENTS = 25;

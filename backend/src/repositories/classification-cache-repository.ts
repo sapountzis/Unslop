@@ -1,4 +1,4 @@
-import { and, eq, gt, inArray, sql } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import type { Database } from "../db";
 import { classificationCache } from "../db/schema";
 import type { Decision } from "../types/classification";
@@ -10,21 +10,19 @@ export interface ClassificationCacheRow {
 	updatedAt: Date;
 }
 
-export interface UpsertClassificationCacheInput {
+export interface InsertClassificationCacheInput {
 	contentFingerprint: string;
 	decision: Decision;
 }
 
 export interface ClassificationCacheRepository {
-	findFreshByFingerprint: (
+	findByFingerprint: (
 		contentFingerprint: string,
-		freshnessCutoff: Date,
 	) => Promise<ClassificationCacheRow | null>;
-	findFreshByFingerprints: (
+	findByFingerprints: (
 		contentFingerprints: string[],
-		freshnessCutoff: Date,
 	) => Promise<Map<string, ClassificationCacheRow>>;
-	upsertMany: (inputs: UpsertClassificationCacheInput[]) => Promise<void>;
+	insertMany: (inputs: InsertClassificationCacheInput[]) => Promise<void>;
 }
 
 export interface ClassificationCacheRepositoryDeps {
@@ -36,9 +34,8 @@ export function createClassificationCacheRepository(
 ): ClassificationCacheRepository {
 	const { db } = deps;
 
-	async function findFreshByFingerprint(
+	async function findByFingerprint(
 		contentFingerprint: string,
-		freshnessCutoff: Date,
 	): Promise<ClassificationCacheRow | null> {
 		const rows = await db
 			.select({
@@ -56,10 +53,6 @@ export function createClassificationCacheRepository(
 		}
 
 		const row = rows[0];
-		if (row.createdAt.getTime() <= freshnessCutoff.getTime()) {
-			return null;
-		}
-
 		return {
 			contentFingerprint: row.contentFingerprint,
 			decision: row.decision as Decision,
@@ -68,9 +61,8 @@ export function createClassificationCacheRepository(
 		};
 	}
 
-	async function findFreshByFingerprints(
+	async function findByFingerprints(
 		contentFingerprints: string[],
-		freshnessCutoff: Date,
 	): Promise<Map<string, ClassificationCacheRow>> {
 		if (contentFingerprints.length === 0) {
 			return new Map();
@@ -85,29 +77,24 @@ export function createClassificationCacheRepository(
 			})
 			.from(classificationCache)
 			.where(
-				and(
-					inArray(classificationCache.contentFingerprint, contentFingerprints),
-					gt(classificationCache.createdAt, freshnessCutoff),
-				),
+				inArray(classificationCache.contentFingerprint, contentFingerprints),
 			);
 
 		return new Map(
-			rows
-				.filter((row) => row.createdAt.getTime() > freshnessCutoff.getTime())
-				.map((row) => [
-					row.contentFingerprint,
-					{
-						contentFingerprint: row.contentFingerprint,
-						decision: row.decision as Decision,
-						createdAt: row.createdAt,
-						updatedAt: row.updatedAt,
-					},
-				]),
+			rows.map((row) => [
+				row.contentFingerprint,
+				{
+					contentFingerprint: row.contentFingerprint,
+					decision: row.decision as Decision,
+					createdAt: row.createdAt,
+					updatedAt: row.updatedAt,
+				},
+			]),
 		);
 	}
 
-	async function upsertMany(
-		inputs: UpsertClassificationCacheInput[],
+	async function insertMany(
+		inputs: InsertClassificationCacheInput[],
 	): Promise<void> {
 		if (inputs.length === 0) {
 			return;
@@ -125,19 +112,14 @@ export function createClassificationCacheRepository(
 					updatedAt: now,
 				})),
 			)
-			.onConflictDoUpdate({
+			.onConflictDoNothing({
 				target: classificationCache.contentFingerprint,
-				set: {
-					decision: sql`excluded.decision`,
-					createdAt: now,
-					updatedAt: now,
-				},
 			});
 	}
 
 	return {
-		findFreshByFingerprint,
-		findFreshByFingerprints,
-		upsertMany,
+		findByFingerprint,
+		findByFingerprints,
+		insertMany,
 	};
 }

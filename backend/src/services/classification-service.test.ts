@@ -9,6 +9,8 @@ import type { ActivityRepository } from "../repositories/activity-repository";
 import type { QuotaService } from "./quota";
 import type { LlmService } from "./llm";
 import type { ScoreResult } from "../types/classification";
+import type { MultimodalClassifyPost } from "../types/multimodal";
+import type { ContentFingerprintInput } from "../lib/content-fingerprint";
 import {
 	type BatchClassificationResponse,
 	createClassificationService,
@@ -35,65 +37,34 @@ const fullScores: ScoreResult = {
 	x: 0.1,
 };
 
-const post = {
+const post: MultimodalClassifyPost = {
 	post_id: "post-1",
-	author_id: "author-1",
-	author_name: "Author One",
-	nodes: [
-		{ id: "root", parent_id: null, kind: "root" as const, text: "Hello world" },
-		{
-			id: "node-2",
-			parent_id: "root",
-			kind: "repost" as const,
-			text: "Follow up",
-		},
-	],
+	text: "Hello world Follow up",
 	attachments: [],
 };
 
-const postTwo = {
+const postTwo: MultimodalClassifyPost = {
 	post_id: "post-2",
-	author_id: "author-2",
-	author_name: "Author Two",
-	nodes: [
-		{ id: "root", parent_id: null, kind: "root" as const, text: "Second post" },
-	],
+	text: "Second post",
 	attachments: [],
 };
 
-const postThree = {
+const postThree: MultimodalClassifyPost = {
 	post_id: "post-3",
-	author_id: "author-3",
-	author_name: "Author Three",
-	nodes: [
-		{ id: "root", parent_id: null, kind: "root" as const, text: "Third post" },
-	],
+	text: "Third post",
 	attachments: [],
 };
 
-const postFour = {
+const postFour: MultimodalClassifyPost = {
 	post_id: "post-4",
-	author_id: "author-4",
-	author_name: "Author Four",
-	nodes: [
-		{ id: "root", parent_id: null, kind: "root" as const, text: "Fourth post" },
-	],
+	text: "Fourth post",
 	attachments: [],
 };
 
-function createPost(index: number): typeof post {
+function createPost(index: number): MultimodalClassifyPost {
 	return {
 		post_id: `post-${index}`,
-		author_id: `author-${index}`,
-		author_name: `Author ${index}`,
-		nodes: [
-			{
-				id: "root",
-				parent_id: null,
-				kind: "root" as const,
-				text: `Post ${index}`,
-			},
-		],
+		text: `Post ${index}`,
 		attachments: [],
 	};
 }
@@ -136,9 +107,9 @@ function createCacheRepository(
 	overrides: Partial<ClassificationCacheRepository> = {},
 ): ClassificationCacheRepository {
 	return {
-		findFreshByFingerprint: mock(async () => null),
-		findFreshByFingerprints: mock(async () => new Map()),
-		upsertMany: mock(async () => undefined),
+		findByFingerprint: mock(async () => null),
+		findByFingerprints: mock(async () => new Map()),
+		insertMany: mock(async () => undefined),
 		...overrides,
 	};
 }
@@ -178,7 +149,7 @@ async function collectBatchOutcomes(
 
 describe("classification service", () => {
 	it("classifySingle cache hit skips quota/llm and writes cache activity", async () => {
-		const findFreshByFingerprint = mock(async () => ({
+		const findByFingerprint = mock(async () => ({
 			contentFingerprint: "fp-cache",
 			decision: "hide" as const,
 			createdAt: new Date(),
@@ -206,7 +177,7 @@ describe("classification service", () => {
 			llmService: createLlmService({ classifyPost }),
 			quotaService: createQuotaService({ getQuotaStatus, incrementUsageBy }),
 			classificationCacheRepository: createCacheRepository({
-				findFreshByFingerprint,
+				findByFingerprint,
 			}),
 			classificationEventRepository: createEventRepository(),
 			activityRepository: createActivityRepository({ insertMany }),
@@ -221,9 +192,8 @@ describe("classification service", () => {
 			decision: "hide",
 			source: "cache",
 		});
-		expect(findFreshByFingerprint).toHaveBeenCalledWith(
-			computeContentFingerprint(post),
-			expect.any(Date),
+		expect(findByFingerprint).toHaveBeenCalledWith(
+			computeContentFingerprint(post as unknown as ContentFingerprintInput),
 		);
 		expect(getQuotaStatus).not.toHaveBeenCalled();
 		expect(classifyPost).not.toHaveBeenCalled();
@@ -254,7 +224,7 @@ describe("classification service", () => {
 			model: "openrouter/mock",
 			latency: 5,
 		}));
-		const upsertMany = mock(async () => undefined);
+		const cacheInsertMany = mock(async () => undefined);
 		const insertMany = mock(async () => undefined);
 		const incrementUsageBy = mock(async () => undefined);
 		const appendMany = mock(async () => undefined);
@@ -262,7 +232,9 @@ describe("classification service", () => {
 		const service = createClassificationService({
 			llmService: createLlmService({ classifyPost }),
 			quotaService: createQuotaService({ getQuotaStatus, incrementUsageBy }),
-			classificationCacheRepository: createCacheRepository({ upsertMany }),
+			classificationCacheRepository: createCacheRepository({
+				insertMany: cacheInsertMany,
+			}),
 			classificationEventRepository: createEventRepository({ appendMany }),
 			activityRepository: createActivityRepository({ insertMany }),
 			logger: { info: mock(() => undefined) },
@@ -278,8 +250,13 @@ describe("classification service", () => {
 		});
 		expect(getQuotaStatus).toHaveBeenCalledTimes(1);
 		expect(classifyPost).toHaveBeenCalledTimes(1);
-		expect(upsertMany).toHaveBeenCalledWith([
-			{ contentFingerprint: computeContentFingerprint(post), decision: "keep" },
+		expect(cacheInsertMany).toHaveBeenCalledWith([
+			{
+				contentFingerprint: computeContentFingerprint(
+					post as unknown as ContentFingerprintInput,
+				),
+				decision: "keep",
+			},
 		]);
 		expect(insertMany).toHaveBeenCalledWith([
 			{
@@ -290,7 +267,26 @@ describe("classification service", () => {
 			},
 		]);
 		expect(incrementUsageBy).toHaveBeenCalledWith("user-1", 1, "2026-02-01");
-		expect(appendMany).not.toHaveBeenCalled();
+		expect(appendMany).toHaveBeenCalledWith([
+			expect.objectContaining({
+				contentFingerprint: computeContentFingerprint(
+					post as unknown as ContentFingerprintInput,
+				),
+				postId: post.post_id,
+				model: "openrouter/mock",
+				decision: "keep",
+				requestPayload: expect.objectContaining({
+					post_id: post.post_id,
+					text: post.text,
+					attachments: [],
+				}),
+				responsePayload: expect.objectContaining({
+					model: "openrouter/mock",
+					source: "llm",
+					decision: "keep",
+				}),
+			}),
+		]);
 	});
 
 	it("classifySingle throws quota_exceeded when snapshot has no remaining budget", async () => {
@@ -355,7 +351,7 @@ describe("classification service", () => {
 				provider_error_code: "upstream_unavailable",
 			};
 		});
-		const upsertMany = mock(async () => undefined);
+		const cacheInsertMany = mock(async () => undefined);
 		const insertMany = mock(async () => undefined);
 		const appendMany = mock(async () => undefined);
 		const incrementUsageBy = mock(async () => undefined);
@@ -363,7 +359,9 @@ describe("classification service", () => {
 		const service = createClassificationService({
 			llmService: createLlmService({ classifyPost }),
 			quotaService: createQuotaService({ getQuotaStatus, incrementUsageBy }),
-			classificationCacheRepository: createCacheRepository({ upsertMany }),
+			classificationCacheRepository: createCacheRepository({
+				insertMany: cacheInsertMany,
+			}),
 			classificationEventRepository: createEventRepository({ appendMany }),
 			activityRepository: createActivityRepository({ insertMany }),
 			logger: { info: mock(() => undefined) },
@@ -379,8 +377,13 @@ describe("classification service", () => {
 
 		expect(classifyPost).toHaveBeenCalledTimes(2);
 		expect(incrementUsageBy).toHaveBeenCalledWith("user-1", 2, "2026-02-01");
-		expect(upsertMany).toHaveBeenCalledWith([
-			{ contentFingerprint: computeContentFingerprint(post), decision: "keep" },
+		expect(cacheInsertMany).toHaveBeenCalledWith([
+			{
+				contentFingerprint: computeContentFingerprint(
+					post as unknown as ContentFingerprintInput,
+				),
+				decision: "keep",
+			},
 		]);
 		expect(insertMany).toHaveBeenCalledWith([
 			{
@@ -392,10 +395,18 @@ describe("classification service", () => {
 		]);
 		expect(appendMany).toHaveBeenCalledWith([
 			expect.objectContaining({
-				contentFingerprint: computeContentFingerprint(postTwo),
-				postId: postTwo.post_id,
-				providerHttpStatus: 503,
-				providerErrorCode: "upstream_unavailable",
+				contentFingerprint: computeContentFingerprint(
+					post as unknown as ContentFingerprintInput,
+				),
+				postId: post.post_id,
+				model: "openrouter/mock",
+				decision: "keep",
+				requestPayload: expect.objectContaining({ post_id: post.post_id }),
+				responsePayload: expect.objectContaining({
+					model: "openrouter/mock",
+					source: "llm",
+					decision: "keep",
+				}),
 			}),
 		]);
 
@@ -423,8 +434,10 @@ describe("classification service", () => {
 	});
 
 	it("classifyBatchStream emits cache outcomes before slow miss completes", async () => {
-		const postFingerprint = computeContentFingerprint(post);
-		const findFreshByFingerprints = mock(async () => {
+		const postFingerprint = computeContentFingerprint(
+			post as unknown as ContentFingerprintInput,
+		);
+		const findByFingerprints = mock(async () => {
 			const hits = new Map<string, ClassificationCacheRow>();
 			hits.set(postFingerprint, {
 				contentFingerprint: postFingerprint,
@@ -462,7 +475,7 @@ describe("classification service", () => {
 			llmService: createLlmService({ classifyPost }),
 			quotaService: createQuotaService({ getQuotaStatus }),
 			classificationCacheRepository: createCacheRepository({
-				findFreshByFingerprints,
+				findByFingerprints,
 			}),
 			classificationEventRepository: createEventRepository(),
 			activityRepository: createActivityRepository(),
@@ -506,7 +519,7 @@ describe("classification service", () => {
 	});
 
 	it("classifyBatchStream keeps streamed outcomes even if final flush fails", async () => {
-		const upsertMany = mock(async () => {
+		const cacheInsertMany = mock(async () => {
 			throw new Error("cache down");
 		});
 		const insertMany = mock(async () => undefined);
@@ -516,7 +529,9 @@ describe("classification service", () => {
 		const service = createClassificationService({
 			llmService: createLlmService(),
 			quotaService: createQuotaService({ incrementUsageBy }),
-			classificationCacheRepository: createCacheRepository({ upsertMany }),
+			classificationCacheRepository: createCacheRepository({
+				insertMany: cacheInsertMany,
+			}),
 			classificationEventRepository: createEventRepository(),
 			activityRepository: createActivityRepository({ insertMany }),
 			logger: { info: logInfo },
@@ -533,7 +548,7 @@ describe("classification service", () => {
 		expect(logInfo).toHaveBeenCalledWith(
 			"classification_flush_failed",
 			expect.objectContaining({
-				step: "cache_upsert_many",
+				step: "cache_insert_many",
 				error: "cache down",
 			}),
 		);
@@ -552,14 +567,14 @@ describe("classification service", () => {
 			periodStart: "2026-02-01",
 			isPro: false,
 		}));
-		const findFreshByFingerprints = mock(async () => new Map());
+		const findByFingerprints = mock(async () => new Map());
 		const classifyPost = mock(async () => ({
 			scores: fullScores,
 			source: "llm" as const,
 			model: "openrouter/mock",
 			latency: 3,
 		}));
-		const upsertMany = mock(async () => undefined);
+		const cacheInsertMany = mock(async () => undefined);
 		const insertMany = mock(async () => undefined);
 		const incrementUsageBy = mock(async () => undefined);
 		const appendMany = mock(async () => undefined);
@@ -568,8 +583,8 @@ describe("classification service", () => {
 			llmService: createLlmService({ classifyPost }),
 			quotaService: createQuotaService({ getQuotaStatus, incrementUsageBy }),
 			classificationCacheRepository: createCacheRepository({
-				findFreshByFingerprints,
-				upsertMany,
+				findByFingerprints,
+				insertMany: cacheInsertMany,
 			}),
 			classificationEventRepository: createEventRepository({ appendMany }),
 			activityRepository: createActivityRepository({ insertMany }),
@@ -580,23 +595,26 @@ describe("classification service", () => {
 		const outcomes = await collectBatchOutcomes(service, "user-1", posts);
 
 		expect(getQuotaStatus).toHaveBeenCalledTimes(1);
-		expect(findFreshByFingerprints).toHaveBeenCalledTimes(1);
-		expect(findFreshByFingerprints).toHaveBeenCalledWith(
-			posts.map((item) => computeContentFingerprint(item)),
-			expect.any(Date),
+		expect(findByFingerprints).toHaveBeenCalledTimes(1);
+		expect(findByFingerprints).toHaveBeenCalledWith(
+			posts.map((item) =>
+				computeContentFingerprint(item as unknown as ContentFingerprintInput),
+			),
 		);
 		expect(classifyPost).toHaveBeenCalledTimes(20);
 
-		expect(upsertMany).toHaveBeenCalledTimes(1);
-		const upsertManyCalls = upsertMany.mock.calls as unknown as Array<
+		expect(cacheInsertMany).toHaveBeenCalledTimes(1);
+		const cacheInsertManyCalls = cacheInsertMany.mock.calls as unknown as Array<
 			[{ contentFingerprint: string; decision: "keep" | "hide" }[]]
 		>;
-		const cacheWrites = upsertManyCalls[0]?.[0] ?? [];
+		const cacheWrites = cacheInsertManyCalls[0]?.[0] ?? [];
 		expect(cacheWrites).toHaveLength(20);
 		expect(cacheWrites).toEqual(
 			expect.arrayContaining(
 				posts.map((item) => ({
-					contentFingerprint: computeContentFingerprint(item),
+					contentFingerprint: computeContentFingerprint(
+						item as unknown as ContentFingerprintInput,
+					),
 					decision: "keep",
 				})),
 			),
@@ -626,7 +644,30 @@ describe("classification service", () => {
 		);
 		expect(incrementUsageBy).toHaveBeenCalledTimes(1);
 		expect(incrementUsageBy).toHaveBeenCalledWith("user-1", 20, "2026-02-01");
-		expect(appendMany).not.toHaveBeenCalled();
+		expect(appendMany).toHaveBeenCalledTimes(1);
+		expect(appendMany).toHaveBeenCalledWith(
+			expect.arrayContaining(
+				posts.map((item) =>
+					expect.objectContaining({
+						contentFingerprint: computeContentFingerprint(
+							item as unknown as ContentFingerprintInput,
+						),
+						postId: item.post_id,
+						model: "openrouter/mock",
+						decision: "keep",
+						requestPayload: expect.objectContaining({
+							post_id: item.post_id,
+							text: item.text,
+						}),
+						responsePayload: expect.objectContaining({
+							model: "openrouter/mock",
+							source: "llm",
+							decision: "keep",
+						}),
+					}),
+				),
+			),
+		);
 
 		expect(outcomes).toHaveLength(20);
 		expect(
@@ -653,14 +694,14 @@ describe("classification service", () => {
 				periodStart: "2026-02-01",
 				isPro: false,
 			}));
-			const findFreshByFingerprints = mock(async () => new Map());
+			const findByFingerprints = mock(async () => new Map());
 			const classifyPost = mock(async () => ({
 				scores: fullScores,
 				source: "llm" as const,
 				model: "openrouter/mock",
 				latency: 2,
 			}));
-			const upsertMany = mock(async () => undefined);
+			const cacheInsertMany = mock(async () => undefined);
 			const insertMany = mock(async () => undefined);
 			const incrementUsageBy = mock(async () => undefined);
 
@@ -668,8 +709,8 @@ describe("classification service", () => {
 				llmService: createLlmService({ classifyPost }),
 				quotaService: createQuotaService({ getQuotaStatus, incrementUsageBy }),
 				classificationCacheRepository: createCacheRepository({
-					findFreshByFingerprints,
-					upsertMany,
+					findByFingerprints,
+					insertMany: cacheInsertMany,
 				}),
 				classificationEventRepository: createEventRepository(),
 				activityRepository: createActivityRepository({ insertMany }),
@@ -681,9 +722,9 @@ describe("classification service", () => {
 			return {
 				outcomes,
 				getQuotaStatus,
-				findFreshByFingerprints,
+				findByFingerprints,
 				classifyPost,
-				upsertMany,
+				cacheInsertMany,
 				insertMany,
 				incrementUsageBy,
 			};
@@ -694,10 +735,10 @@ describe("classification service", () => {
 
 		expect(small.getQuotaStatus).toHaveBeenCalledTimes(1);
 		expect(large.getQuotaStatus).toHaveBeenCalledTimes(1);
-		expect(small.findFreshByFingerprints).toHaveBeenCalledTimes(1);
-		expect(large.findFreshByFingerprints).toHaveBeenCalledTimes(1);
-		expect(small.upsertMany).toHaveBeenCalledTimes(1);
-		expect(large.upsertMany).toHaveBeenCalledTimes(1);
+		expect(small.findByFingerprints).toHaveBeenCalledTimes(1);
+		expect(large.findByFingerprints).toHaveBeenCalledTimes(1);
+		expect(small.cacheInsertMany).toHaveBeenCalledTimes(1);
+		expect(large.cacheInsertMany).toHaveBeenCalledTimes(1);
 		expect(small.insertMany).toHaveBeenCalledTimes(1);
 		expect(large.insertMany).toHaveBeenCalledTimes(1);
 		expect(small.incrementUsageBy).toHaveBeenCalledTimes(1);
@@ -723,10 +764,10 @@ describe("classification service", () => {
 	it("classifyBatchStream merges cache-hit and llm activity into one bulk write", async () => {
 		const posts = [createPost(1), createPost(2), createPost(3), createPost(4)];
 		const cacheHitFingerprints = new Set([
-			computeContentFingerprint(posts[0]),
-			computeContentFingerprint(posts[1]),
+			computeContentFingerprint(posts[0] as unknown as ContentFingerprintInput),
+			computeContentFingerprint(posts[1] as unknown as ContentFingerprintInput),
 		]);
-		const findFreshByFingerprints = mock(async () => {
+		const findByFingerprints = mock(async () => {
 			const map = new Map<string, ClassificationCacheRow>();
 			for (const fingerprint of cacheHitFingerprints) {
 				map.set(fingerprint, {
@@ -753,7 +794,7 @@ describe("classification service", () => {
 			model: "openrouter/mock",
 			latency: 3,
 		}));
-		const upsertMany = mock(async () => undefined);
+		const cacheInsertMany = mock(async () => undefined);
 		const insertMany = mock(async () => undefined);
 		const incrementUsageBy = mock(async () => undefined);
 
@@ -761,8 +802,8 @@ describe("classification service", () => {
 			llmService: createLlmService({ classifyPost }),
 			quotaService: createQuotaService({ getQuotaStatus, incrementUsageBy }),
 			classificationCacheRepository: createCacheRepository({
-				findFreshByFingerprints,
-				upsertMany,
+				findByFingerprints,
+				insertMany: cacheInsertMany,
 			}),
 			classificationEventRepository: createEventRepository(),
 			activityRepository: createActivityRepository({ insertMany }),
@@ -773,22 +814,26 @@ describe("classification service", () => {
 		const outcomes = await collectBatchOutcomes(service, "user-1", posts);
 
 		expect(getQuotaStatus).toHaveBeenCalledTimes(1);
-		expect(findFreshByFingerprints).toHaveBeenCalledTimes(1);
+		expect(findByFingerprints).toHaveBeenCalledTimes(1);
 		expect(classifyPost).toHaveBeenCalledTimes(2);
-		expect(upsertMany).toHaveBeenCalledTimes(1);
-		const upsertManyCalls = upsertMany.mock.calls as unknown as Array<
+		expect(cacheInsertMany).toHaveBeenCalledTimes(1);
+		const cacheInsertManyCalls = cacheInsertMany.mock.calls as unknown as Array<
 			[{ contentFingerprint: string; decision: "keep" | "hide" }[]]
 		>;
-		const cacheWrites = upsertManyCalls[0]?.[0] ?? [];
+		const cacheWrites = cacheInsertManyCalls[0]?.[0] ?? [];
 		expect(cacheWrites).toHaveLength(2);
 		expect(cacheWrites).toEqual(
 			expect.arrayContaining([
 				{
-					contentFingerprint: computeContentFingerprint(posts[2]),
+					contentFingerprint: computeContentFingerprint(
+						posts[2] as unknown as ContentFingerprintInput,
+					),
 					decision: "keep",
 				},
 				{
-					contentFingerprint: computeContentFingerprint(posts[3]),
+					contentFingerprint: computeContentFingerprint(
+						posts[3] as unknown as ContentFingerprintInput,
+					),
 					decision: "keep",
 				},
 			]),

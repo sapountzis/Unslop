@@ -1,5 +1,5 @@
 /* extension/src/styles/content.css */
-/* Styles injected into LinkedIn for Unslop UI elements */
+/* Styles injected into all supported platforms for Unslop UI elements */
 
 :root {
 	--unslop-label-font:
@@ -10,17 +10,6 @@
 	--unslop-label-hide-border: #d2a3a3;
 	--unslop-label-hide-bg: #f7ecec;
 	--unslop-label-hide-fg: #c15c5c;
-}
-
-/* Pre-classification mode: keep layout intact so LinkedIn can initialize post internals (for example "...more"). */
-html[data-unslop-preclassify="true"]
-[data-finite-scroll-hotkey-item]:has(
-	.feed-shared-update-v2[role="article"]
-):not([data-unslop-processed]):not([data-id^="urn:li:aggregate:"]):not(
-	:has(.feed-shared-aggregated-content)
-):not(:has(.update-components-feed-discovery-entity)) {
-	opacity: 0 !important;
-	pointer-events: none !important;
 }
 
 /* Keep LinkedIn's outer post node in DOM; collapse it to avoid visible placeholders and costly unmount/remount behavior. */

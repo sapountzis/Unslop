@@ -16,3 +16,5 @@ Each runbook should include:
 - `docs/runbooks/quality-review.md`: manual quality score and tech-debt maintenance loop.
 - `docs/runbooks/observability.md`: local observability stack setup/use.
 - `docs/runbooks/ui-debugging.md`: frontend/UI smoke and failure triage.
+
+**Extension**: Architecture, flows, diagnostics, and module roles are in `extension/AGENTS.md` (no `extension/docs/`).

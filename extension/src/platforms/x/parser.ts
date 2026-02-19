@@ -1,7 +1,12 @@
-// X (Twitter) DOM parser
+// X (Twitter) DOM parser — semantic/attribute selectors only (no data-testid)
 import { normalizeContentText, derivePostId } from "../../lib/hash";
-import { PostData, PostNode, PostAttachment } from "../../types";
-import { SELECTORS } from "./selectors";
+import { waitForMediaHydration } from "../../lib/mediaHydration";
+import { PostData, PostAttachment } from "../../types";
+
+const TWEET_LINK = 'a[href*="/status/"]';
+const QUOTE_TWEET = '[role="link"][tabindex="0"]';
+const IMAGE_SELECTOR = "img";
+const MEDIA_HINT = 'img, video, a[href*="/photo/"]';
 
 function queryAllElements(root: HTMLElement, selector: string): HTMLElement[] {
 	const querySelectorAll = (
@@ -56,12 +61,6 @@ function readAttribute(
 	return element.getAttribute(attribute);
 }
 
-function readText(
-	element: { textContent?: string | null } | null | undefined,
-): string {
-	return normalizeContentText(element?.textContent ?? "");
-}
-
 function contains(
 	parent: Partial<HTMLElement> | null | undefined,
 	child: Partial<HTMLElement> | null | undefined,
@@ -71,23 +70,59 @@ function contains(
 	return parent.contains(child as unknown as Node);
 }
 
-// ---------------------------------------------------------------------------
-// MutationObserver-based wait utility (platform-specific, kept local)
-// ---------------------------------------------------------------------------
+function getAllDescendants(root: HTMLElement): HTMLElement[] {
+	const result: HTMLElement[] = [];
+	function traverse(node: Node | HTMLElement): void {
+		if (node instanceof HTMLElement) {
+			result.push(node);
+		}
+		// Try to traverse children - handle both real DOM nodes and test mocks
+		const children = (node as unknown as { childNodes?: NodeList }).childNodes;
+		if (children && children.length > 0) {
+			for (let i = 0; i < children.length; i++) {
+				const child = children[i];
+				if (child) {
+					traverse(child);
+				}
+			}
+		}
+	}
+	try {
+		traverse(root);
+	} catch {
+		// If traversal fails (e.g., in test mocks without proper DOM structure),
+		// return empty array - the code will fall back to querySelector-based checks
+		// for backward compatibility in test environments
+	}
+	return result;
+}
 
-const PHOTO_CONTAINER_SELECTOR = '[data-testid="tweetPhoto"]';
-const MEDIA_HINT_SELECTOR =
-	'[data-testid="tweetPhoto"], [data-testid="testCondensedMedia"], a[href*="/photo/"]';
-const DEFAULT_MEDIA_WAIT_TIMEOUT_MS = 1500;
-const MEDIA_WAIT_MIN_GRACE_MS = 120;
-const MEDIA_WAIT_QUIET_WINDOW_MS = 120;
-const MEDIA_WAIT_NO_HINT_TIMEOUT_MS = 350;
-const MEDIA_WAIT_NO_HINT_MIN_GRACE_MS = 40;
-const MEDIA_WAIT_NO_HINT_QUIET_WINDOW_MS = 40;
-const MEDIA_WAIT_POLL_INTERVAL_MS = 50;
+function isPhotoLink(element: HTMLElement): boolean {
+	const tagName = (element.tagName ?? "").toLowerCase();
+	if (tagName !== "a") return false;
+	const href = readAttribute(element, "href");
+	return href !== null && href.includes("/photo/");
+}
 
-interface WaitScope {
-	root: HTMLElement;
+function findPhotoLinks(root: HTMLElement): HTMLElement[] {
+	const allElements = getAllDescendants(root);
+	if (allElements.length > 0) {
+		return allElements.filter(isPhotoLink);
+	}
+	// Fallback for test compatibility when traversal doesn't work
+	return queryAllElements(root, 'a[href*="/photo/"]');
+}
+
+function findImagesInElement(element: HTMLElement): HTMLElement[] {
+	const allElements = getAllDescendants(element);
+	if (allElements.length > 0) {
+		return allElements.filter((el) => {
+			const tagName = (el.tagName ?? "").toLowerCase();
+			return tagName === "img";
+		});
+	}
+	// Fallback for test compatibility when traversal doesn't work
+	return queryAllElements(element, "img");
 }
 
 function parseSrcset(srcset: string | null): string | null {
@@ -131,137 +166,32 @@ function readImageSourceFromElement(
 	return null;
 }
 
-function readImageSourceFromPhotoContainer(
-	container: HTMLElement,
-): string | null {
-	const img = querySelectorElement(container, "img");
+function readImageSourceFromElementOrParent(img: HTMLElement): string | null {
 	const imgSrc = readImageSourceFromElement(img);
 	if (imgSrc) return imgSrc;
 
-	const styledDescendants = queryAllElements(
-		container,
-		'[style*="background-image"]',
-	);
-	for (const descendant of styledDescendants) {
-		const descendantSrc = readImageSourceFromElement(descendant);
-		if (descendantSrc) return descendantSrc;
-	}
+	// Check parent and ancestors for background-image
+	let current: HTMLElement | null = img.parentElement;
+	let depth = 0;
+	const maxDepth = 3; // Limit traversal to avoid going too far up
 
-	return readImageSourceFromElement(container);
-}
+	while (current && depth < maxDepth) {
+		// Check if current element has background-image
+		const currentSrc = readImageSourceFromElement(current);
+		if (currentSrc) return currentSrc;
 
-function hasHydratedPhoto(scopes: WaitScope[]): boolean {
-	for (const scope of scopes) {
-		const containers = queryAllElements(scope.root, PHOTO_CONTAINER_SELECTOR);
-		for (const container of containers) {
-			if (readImageSourceFromPhotoContainer(container)) {
-				return true;
-			}
-		}
-	}
-	return false;
-}
-
-function hasMediaHint(scopes: WaitScope[]): boolean {
-	return scopes.some(
-		(scope) => querySelectorElement(scope.root, MEDIA_HINT_SELECTOR) !== null,
-	);
-}
-
-async function waitForMediaHydration(
-	scopes: WaitScope[],
-	timeoutMs = DEFAULT_MEDIA_WAIT_TIMEOUT_MS,
-): Promise<void> {
-	if (scopes.length === 0) return;
-	if (hasHydratedPhoto(scopes)) return;
-
-	const hintedAtStart = hasMediaHint(scopes);
-	const effectiveTimeoutMs = hintedAtStart
-		? timeoutMs
-		: Math.min(timeoutMs, MEDIA_WAIT_NO_HINT_TIMEOUT_MS);
-	const minGraceMs = hintedAtStart
-		? MEDIA_WAIT_MIN_GRACE_MS
-		: MEDIA_WAIT_NO_HINT_MIN_GRACE_MS;
-	const quietWindowMs = hintedAtStart
-		? MEDIA_WAIT_QUIET_WINDOW_MS
-		: MEDIA_WAIT_NO_HINT_QUIET_WINDOW_MS;
-
-	await new Promise<void>((resolve) => {
-		let settled = false;
-		let pollTimer: ReturnType<typeof setTimeout> | null = null;
-		let timeoutTimer: ReturnType<typeof setTimeout> | null = null;
-		let observer: MutationObserver | null = null;
-		let lastMutationAt = Date.now();
-		const startedAt = Date.now();
-
-		const finish = (): void => {
-			if (settled) return;
-			settled = true;
-
-			if (pollTimer !== null) {
-				clearTimeout(pollTimer);
-				pollTimer = null;
-			}
-			if (timeoutTimer !== null) {
-				clearTimeout(timeoutTimer);
-				timeoutTimer = null;
-			}
-			observer?.disconnect();
-			resolve();
-		};
-
-		const shouldStopWithoutMedia = (): boolean => {
-			const now = Date.now();
-			const elapsed = now - startedAt;
-			if (elapsed < minGraceMs) {
-				return false;
-			}
-			if (hasMediaHint(scopes)) {
-				return false;
-			}
-			return now - lastMutationAt >= quietWindowMs;
-		};
-
-		const check = (): void => {
-			if (hasHydratedPhoto(scopes)) {
-				finish();
-				return;
-			}
-
-			if (
-				Date.now() - startedAt >= effectiveTimeoutMs ||
-				shouldStopWithoutMedia()
-			) {
-				finish();
-				return;
-			}
-
-			pollTimer = setTimeout(check, MEDIA_WAIT_POLL_INTERVAL_MS);
-		};
-
-		const MutationObserverCtor = globalThis.MutationObserver;
-		if (typeof MutationObserverCtor === "function") {
-			observer = new MutationObserverCtor(() => {
-				lastMutationAt = Date.now();
-			});
-
-			for (const scope of scopes) {
-				try {
-					observer.observe(scope.root, {
-						childList: true,
-						subtree: true,
-						attributes: true,
-						attributeFilter: ["src", "srcset", "style"],
-					});
-				} catch {
-					// Duck-typed element may not support observe.
-				}
-			}
+		// Check children of current for background-image
+		const styled = queryAllElements(current, '[style*="background-image"]');
+		for (const s of styled) {
+			const src = readImageSourceFromElement(s);
+			if (src) return src;
 		}
 
-		timeoutTimer = setTimeout(finish, effectiveTimeoutMs);
-		check();
-	});
+		current = current.parentElement;
+		depth += 1;
+	}
+
+	return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -269,7 +199,7 @@ async function waitForMediaHydration(
 // ---------------------------------------------------------------------------
 
 export function readPostIdentity(element: HTMLElement): string | null {
-	const tweetLink = element.querySelector(SELECTORS.tweetLink);
+	const tweetLink = element.querySelector(TWEET_LINK);
 	if (tweetLink) {
 		const href = tweetLink.getAttribute("href");
 		if (href && href.includes("/status/")) return href;
@@ -277,147 +207,126 @@ export function readPostIdentity(element: HTMLElement): string | null {
 	return null;
 }
 
+export function isLikelyTweetRoot(element: HTMLElement): boolean {
+	const tagName = (element.tagName ?? "").toLowerCase();
+	const hasArticleSemantics =
+		tagName === "article" || element.getAttribute("role") === "article";
+	if (!hasArticleSemantics) {
+		return false;
+	}
+
+	const hasText =
+		querySelectorElement(element, "p") !== null ||
+		querySelectorElement(element, 'a[href*="/status/"]') !== null;
+	if (hasText) return true;
+
+	const identity = readPostIdentity(element);
+	if (identity) return true;
+
+	// Check for images, videos, or photo links without selectors
+	const allDescendants = getAllDescendants(element);
+
+	// If traversal returned results, use them (production path)
+	if (allDescendants.length > 0) {
+		const hasImg = allDescendants.some(
+			(el) => (el.tagName ?? "").toLowerCase() === "img",
+		);
+		const hasVideo = allDescendants.some(
+			(el) => (el.tagName ?? "").toLowerCase() === "video",
+		);
+		const hasPhotoLink = allDescendants.some(isPhotoLink);
+		if (hasImg || hasVideo || hasPhotoLink) {
+			return true;
+		}
+	}
+
+	// Fallback to selector-based checks for test compatibility
+	// (when traversal doesn't work due to mock structure)
+	return (
+		querySelectorElement(element, "img") !== null ||
+		querySelectorElement(element, "video") !== null ||
+		querySelectorElement(element, 'a[href*="/photo/"]') !== null
+	);
+}
+
+function extractText(element: HTMLElement): string {
+	return normalizeContentText(element.textContent ?? "");
+}
+
 export async function extractPostData(
 	element: HTMLElement,
 ): Promise<PostData | null> {
-	if (!element.matches(SELECTORS.candidatePostRoot)) {
+	if (!isLikelyTweetRoot(element)) {
 		return null;
 	}
 
-	// ---------------------------------------------------------------------------
-	// 1. Identify scopes (main vs quote) - scoped parsing approach
-	// ---------------------------------------------------------------------------
-
-	const tweetTexts = queryAllElements(element, SELECTORS.tweetText);
-	if (tweetTexts.length === 0) {
-		return null;
-	}
-
-	// Check if main text is empty after normalization
-	const mainTextRaw = readText(tweetTexts[0]);
-	if (!mainTextRaw) {
-		return null;
-	}
-
-	// Identify quote scope using SELECTORS.quoteTweet (more reliable than closest('[role="link"]'))
 	const quoteScope: HTMLElement | null = querySelectorElement(
 		element,
-		SELECTORS.quoteTweet,
+		QUOTE_TWEET,
 	);
 	const mainScope: HTMLElement = element;
 
-	// ---------------------------------------------------------------------------
-	// 2. Wait for media to load (lazy-load handling)
-	// ---------------------------------------------------------------------------
-
-	const waitScopes: WaitScope[] = [{ root: mainScope }];
+	const waitScopes: { root: HTMLElement }[] = [{ root: mainScope }];
 	if (quoteScope) {
 		waitScopes.push({ root: quoteScope });
 	}
-	await waitForMediaHydration(waitScopes);
 
-	// ---------------------------------------------------------------------------
-	// 3. Extract author identity
-	// ---------------------------------------------------------------------------
+	// Find photo links without using selectors
+	const photoLinks = findPhotoLinks(element);
+	const hasPhotoLinks = photoLinks.length > 0;
 
-	let authorHandle = "unknown";
-	let authorName = "Unknown";
-
-	const userNameContainer = mainScope.querySelector(
-		'[data-testid="User-Name"]',
-	);
-	if (userNameContainer) {
-		// Handle querySelectorAll duck-type
-		const links =
-			(
-				userNameContainer as unknown as {
-					querySelectorAll?: (selector: string) => HTMLElement[];
-				}
-			)?.querySelectorAll?.('a[href^="/"]') ?? [];
-
-		for (const link of links) {
-			const href = readAttribute(link, "href");
-			if (href && href.startsWith("/") && !href.includes("/status/")) {
-				authorHandle = href.replace(/^\//, "").replace(/\/$/, "") || "unknown";
-				break;
-			}
-		}
-
-		// Fallback to single querySelector
-		if (authorHandle === "unknown") {
-			const singleLink = userNameContainer.querySelector('a[href^="/"]');
-			const href = readAttribute(singleLink, "href");
-			if (href && href.startsWith("/") && !href.includes("/status/")) {
-				authorHandle = href.replace(/^\//, "").replace(/\/$/, "") || "unknown";
-			}
-		}
-
-		const nameSpan = userNameContainer.querySelector("span");
-		if (nameSpan?.textContent) {
-			const trimmed = nameSpan.textContent.trim();
-			if (trimmed.length > 0) {
-				authorName = trimmed;
-			}
-		}
-	}
-
-	// ---------------------------------------------------------------------------
-	// 4. Extract text content using containment-based bucketing
-	// ---------------------------------------------------------------------------
-
-	// Bucket text blocks into root vs quote based on containment in quoteScope
-	const nodes: PostNode[] = [];
-	let rootText = "";
-	let quoteText = "";
-
-	for (const block of tweetTexts) {
-		if (quoteScope && contains(quoteScope, block)) {
-			quoteText = readText(block);
-		} else {
-			rootText = readText(block);
-		}
-	}
-
-	nodes.push({
-		id: "root",
-		parent_id: null,
-		kind: "root",
-		text: rootText,
+	// Wait for media hydration - use general img selector for hint, but we'll check photo links separately
+	await waitForMediaHydration(waitScopes, {
+		hintSelector: MEDIA_HINT,
 	});
 
-	if (quoteScope && quoteText) {
-		nodes.push({
-			id: "repost-0",
-			parent_id: "root",
-			kind: "repost",
-			text: quoteText,
-		});
+	// Additional check: if photo links exist, ensure their images are hydrated
+	if (hasPhotoLinks) {
+		let hasHydratedPhotoImg = false;
+		for (const link of photoLinks) {
+			const imgs = findImagesInElement(link);
+			for (const img of imgs) {
+				if (readImageSourceFromElementOrParent(img)) {
+					hasHydratedPhotoImg = true;
+					break;
+				}
+			}
+			if (hasHydratedPhotoImg) break;
+		}
+		// If no hydrated photo img found, wait a bit more (images might still be loading)
+		if (!hasHydratedPhotoImg) {
+			await new Promise((resolve) => setTimeout(resolve, 200));
+			// Check one more time after waiting
+			for (const link of photoLinks) {
+				const imgs = findImagesInElement(link);
+				for (const img of imgs) {
+					if (readImageSourceFromElementOrParent(img)) {
+						hasHydratedPhotoImg = true;
+						break;
+					}
+				}
+				if (hasHydratedPhotoImg) break;
+			}
+		}
 	}
 
-	// ---------------------------------------------------------------------------
-	// 5. Extract attachments with proper node_id assignment
-	// ---------------------------------------------------------------------------
+	const text = extractText(element);
 
 	const attachments: PostAttachment[] = [];
+	let ordinal = 0;
 
-	// Helper to extract media from a specific scope
-	function extractMediaFromScope(scope: HTMLElement, nodeId: string): void {
-		const photoContainers = queryAllElements(scope, PHOTO_CONTAINER_SELECTOR);
-		let ordinal = 0;
+	function extractMediaFromScope(scope: HTMLElement): void {
+		const imgs = queryAllElements(scope, IMAGE_SELECTOR);
 
-		for (const container of photoContainers) {
-			// If parsing root, skip containers that belong to quote scope
-			// Use direct containment check (not closest) to avoid matching image wrapper <a role="link">
-			if (quoteScope && nodeId === "root" && contains(quoteScope, container)) {
+		for (const img of imgs) {
+			if (scope === mainScope && quoteScope && contains(quoteScope, img)) {
 				continue;
 			}
 
-			const img = querySelectorElement(container, "img");
-			const src = readImageSourceFromPhotoContainer(container);
+			const src = readImageSourceFromElementOrParent(img);
 			if (!src) continue;
 
 			attachments.push({
-				node_id: nodeId,
 				kind: "image",
 				src,
 				alt: (readAttribute(img, "alt") || "").trim(),
@@ -427,31 +336,18 @@ export async function extractPostData(
 		}
 	}
 
-	extractMediaFromScope(mainScope, "root");
+	extractMediaFromScope(mainScope);
 
 	if (quoteScope) {
-		extractMediaFromScope(quoteScope, "repost-0");
+		extractMediaFromScope(quoteScope);
 	}
 
-	// ---------------------------------------------------------------------------
-	// 6. Derive post_id and return
-	// ---------------------------------------------------------------------------
-
 	const identity = readPostIdentity(element);
-	const deterministicNodeKey = nodes
-		.map(
-			(node) =>
-				`${node.id}|${node.parent_id ?? "null"}|${node.kind}|${node.text}`,
-		)
-		.join("\n");
-	const postId =
-		identity || (await derivePostId(authorHandle, deterministicNodeKey));
+	const postId = identity || (await derivePostId(text));
 
 	return {
 		post_id: postId,
-		author_id: authorHandle,
-		author_name: authorName,
-		nodes,
+		text,
 		attachments,
 	};
 }

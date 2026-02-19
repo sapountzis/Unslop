@@ -277,7 +277,7 @@ Unslop/
 ├── extension/         # Chrome Extension (MV3)
 │   └── src/
 │       ├── background/  # Service worker
-│       ├── content/     # LinkedIn content script
+│       ├── content/     # Feed content scripts (auth, classify, detection, feed, render, runtime)
 │       └── popup/       # Extension popup UI
 ├── frontend/          # Static public website
 └── docs/product-specs/ # Project specifications

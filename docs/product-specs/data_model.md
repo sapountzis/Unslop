@@ -4,13 +4,13 @@ status: verified
 last_verified: 2026-02-16
 ---
 
-# Data Model (v0.1)
+# Data Model (v0.3)
 
 ## problem
 Backend services require a clear, enforceable schema for identity, classification caching/events, feedback, usage, and billing idempotency.
 
 ## non_goals
-- Analytics-only tables and speculative storage not tied to v0.1 behavior.
+- Analytics-only tables and speculative storage not tied to current behavior.
 - Ambiguous schema ownership outside `backend/src/db/schema.ts`.
 
 ## acceptance_criteria

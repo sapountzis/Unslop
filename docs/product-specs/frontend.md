@@ -1,10 +1,10 @@
 ---
 owner: unslop
 status: verified
-last_verified: 2026-02-15
+last_verified: 2026-02-19
 ---
 
-# Frontend (Public Site) Spec (v0.1)
+# Frontend (Public Site) Spec (v0.3)
 
 ## problem
 The product requires a trustworthy public web presence with stable policy/support pages and install CTA, without becoming an app surface.
@@ -74,8 +74,7 @@ Must describe (plain language):
 - Account:
   - email (for magic-link login)
 - Content for classification:
-  - `post_id`, `author_id`, `author_name`
-  - `nodes[]` text graph (`id`, `parent_id`, `kind`, `text`) used to preserve root/repost context
+  - `post_id`, `text` (whole post content)
   - `attachments[]` classification inputs (e.g., image `sha256`, `mime_type`, `base64`; pdf `source_url`, `excerpt_text`)
   - decision/event metadata used for cache and attempt history (`decision`, `source`, timestamps, provider error/status metadata)
 - Feedback (if user submits it):
@@ -85,11 +84,11 @@ Must describe (plain language):
 - Provide filtering decisions
 - Prevent duplicate LLM calls (cache)
 - Enforce quotas
-- Improve future versions (data collection only; no training in v0.1)
+- Improve future versions (data collection only; no model training)
 
 **Where it goes (processors)**
 - LLM inference provider (e.g. OpenRouter): receives post content for classification
-- Hosting provider for backend (Railway)
+- Hosting provider for backend (Cloudflare Workers)
 - Database provider (Neon)
 - Billing provider (Polar)
 

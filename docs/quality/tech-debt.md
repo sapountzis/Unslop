@@ -14,7 +14,7 @@ Track debt as explicit, owned, reviewable tasks.
 | ID | Item | Domain | Owner | Priority | Status | Verification |
 | --- | --- | --- | --- | --- | --- | --- |
 | TD-001 | Replace duplicated classification payload shaping with a shared helper. | backend/classification | backend | med | open | backend tests for classification paths |
-| TD-002 | Add extension runbook for cross-platform parser regressions. | extension/platform-plugins | extension | med | open | parser + plugin compliance tests |
+| TD-002 | Add runbook for cross-platform parser regressions (in `docs/runbooks/`; extension debugging lives in `extension/AGENTS.md`). | extension/platform-plugins | extension | med | open | parser + plugin compliance tests |
 | TD-003 | Add frontend performance budget checks to CI. | frontend/site | frontend | low | open | CI gate for frontend perf budget |
 
 ## Template

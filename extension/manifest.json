@@ -39,7 +39,7 @@
 		},
 		{
 			"matches": ["https://api.getunslop.com/*", "http://localhost:3000/*"],
-			"js": ["src/content/auth.ts"],
+			"js": ["src/content/auth/auth.ts"],
 			"run_at": "document_idle"
 		}
 	],

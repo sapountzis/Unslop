@@ -1,7 +1,7 @@
 ---
 owner: unslop
 status: verified
-last_verified: 2026-02-15
+last_verified: 2026-02-19
 ---
 
 # Agent Workflow Enforcement

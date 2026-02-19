@@ -1,8 +1,6 @@
 // Reddit content script entry point
-import { createPlatformRuntime } from "../../content/runtime";
-import { registerContentDiagnosticsHost } from "../../content/diagnostics-host";
+import { createPlatformRuntime } from "../../content/index";
 import { redditPlugin } from "./plugin";
 import "../../styles/content.css";
 
-registerContentDiagnosticsHost(redditPlugin);
 createPlatformRuntime(redditPlugin);

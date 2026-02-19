@@ -1,7 +1,10 @@
-// Reddit DOM parser
+// Reddit DOM parser — semantic/attribute selectors only
 import { normalizeContentText, derivePostId } from "../../lib/hash";
-import { PostAttachment, PostData, PostNode } from "../../types";
-import { SELECTORS } from "./selectors";
+import { waitForMediaHydration } from "../../lib/mediaHydration";
+import { PostAttachment, PostData } from "../../types";
+
+const IMAGE_SELECTOR = "img";
+const PERMALINK_SELECTOR = 'a[href*="/comments/"]';
 
 function queryAllElements(root: HTMLElement, selector: string): HTMLElement[] {
 	const querySelectorAll = (
@@ -75,16 +78,16 @@ function readAttributeFromSelfOrNested(
 	return readAttribute(nestedPost, attribute);
 }
 
-function readText(
-	element: { textContent?: string | null } | null | undefined,
-): string {
-	return normalizeContentText(element?.textContent ?? "");
-}
-
 function parseSrcset(srcset: string | null): string | null {
 	if (!srcset) return null;
 	const firstCandidate = srcset.split(",", 1)[0]?.trim().split(/\s+/, 1)[0];
 	return firstCandidate || null;
+}
+
+function parseBackgroundImageUrl(style: string | null): string | null {
+	if (!style?.includes("background-image")) return null;
+	const m = style.match(/url\((['"]?)(.*?)\1\)/i);
+	return m?.[2]?.trim() ?? null;
 }
 
 function readImageSource(element: HTMLElement): string | null {
@@ -100,132 +103,36 @@ function readImageSource(element: HTMLElement): string | null {
 		return currentSrc.trim();
 	}
 
-	return parseSrcset(readAttribute(element, "srcset"));
-}
+	const srcset = parseSrcset(readAttribute(element, "srcset"));
+	if (srcset) return srcset;
 
-function normalizeAuthorId(value: string): string {
-	return value.trim().replace(/^u\//i, "");
-}
+	const bg = parseBackgroundImageUrl(readAttribute(element, "style"));
+	if (bg) return bg;
 
-function normalizeSubreddit(value: string): string {
-	return value
-		.trim()
-		.replace(/^\/?r\//i, "")
-		.replace(/\/+$/, "");
-}
-
-function extractTitle(element: HTMLElement): string {
-	const titleAttr = readAttributeFromSelfOrNested(element, "post-title");
-	if (titleAttr) return normalizeContentText(titleAttr);
-
-	return readText(querySelectorElement(element, SELECTORS.postTitle));
-}
-
-function extractBodyText(element: HTMLElement): string {
-	const blocks = queryAllElements(element, SELECTORS.postBody)
-		.map((block) => readText(block))
-		.filter(Boolean);
-
-	if (blocks.length === 0) {
-		return readText(querySelectorElement(element, SELECTORS.postBody));
-	}
-
-	return normalizeContentText(blocks.join("\n\n"));
-}
-
-function extractAuthor(element: HTMLElement): { id: string; name: string } {
-	const authorAttr = readAttributeFromSelfOrNested(element, "author");
-	if (authorAttr) {
-		const normalized = normalizeAuthorId(authorAttr);
-		return {
-			id: normalized || "unknown",
-			name: normalized || "Unknown",
-		};
-	}
-
-	const authorEl = querySelectorElement(element, SELECTORS.authorName);
-	const authorHref = readAttribute(authorEl, "href");
-	if (authorHref) {
-		const match = authorHref.match(/\/user\/([^/?#]+)/i);
-		if (match?.[1]) {
-			const authorId = normalizeAuthorId(match[1]);
-			return {
-				id: authorId || "unknown",
-				name: authorId || "Unknown",
-			};
+	const parent = element.parentElement;
+	if (parent) {
+		const styled = queryAllElements(parent, '[style*="background-image"]');
+		for (const s of styled) {
+			const u = parseBackgroundImageUrl(readAttribute(s, "style"));
+			if (u) return u;
 		}
+		const parentBg = parseBackgroundImageUrl(readAttribute(parent, "style"));
+		if (parentBg) return parentBg;
 	}
-
-	const authorText = authorEl?.textContent?.trim() ?? "";
-	if (authorText) {
-		const normalized = normalizeAuthorId(authorText);
-		return {
-			id: normalized || "unknown",
-			name: normalized || "Unknown",
-		};
-	}
-
-	return { id: "unknown", name: "Unknown" };
-}
-
-function extractSubreddit(element: HTMLElement): string | null {
-	const subredditAttr = readAttributeFromSelfOrNested(
-		element,
-		"subreddit-name",
-	);
-	if (subredditAttr) {
-		const normalized = normalizeSubreddit(subredditAttr);
-		return normalized || null;
-	}
-
-	const subredditEl = querySelectorElement(element, SELECTORS.subredditName);
-	const subredditFromText = normalizeSubreddit(subredditEl?.textContent ?? "");
-	if (subredditFromText) {
-		return subredditFromText;
-	}
-
-	const href = readAttribute(subredditEl, "href");
-	if (!href) return null;
-
-	const match = href.match(/\/r\/([^/?#]+)/i);
-	if (!match?.[1]) return null;
-	return normalizeSubreddit(match[1]) || null;
-}
-
-function extractDomain(element: HTMLElement): string | null {
-	const explicitDomain = readAttributeFromSelfOrNested(element, "domain");
-	if (explicitDomain) return explicitDomain;
-
-	const contentHref = readAttributeFromSelfOrNested(element, "content-href");
-	if (!contentHref) return null;
-
-	try {
-		return new URL(contentHref, "https://www.reddit.com").hostname;
-	} catch {
-		return contentHref;
-	}
-}
-
-function extractPostType(element: HTMLElement): string | null {
-	const postType = readAttributeFromSelfOrNested(element, "post-type");
-	if (postType) return postType;
-
-	const adType = readAttributeFromSelfOrNested(element, "ad-type");
-	if (adType) return `ad:${adType}`;
-
 	return null;
 }
 
-function isAdPost(element: HTMLElement): boolean {
-	if (element.matches("shreddit-ad-post")) {
-		return true;
-	}
-
-	return readAttributeFromSelfOrNested(element, "ad-type") !== null;
+function extractText(element: HTMLElement): string {
+	return normalizeContentText(element.textContent ?? "");
 }
 
-function isRedditPost(element: HTMLElement): boolean {
-	if (element.matches(SELECTORS.candidatePostRoot)) {
+export function isLikelyRedditPostRoot(element: HTMLElement): boolean {
+	const tagName = (element.tagName ?? "").toLowerCase();
+	if (
+		tagName === "shreddit-post" ||
+		tagName === "shreddit-ad-post" ||
+		tagName === "article"
+	) {
 		return true;
 	}
 
@@ -233,20 +140,37 @@ function isRedditPost(element: HTMLElement): boolean {
 		return true;
 	}
 
-	return querySelectorElement(element, SELECTORS.postTitle) !== null;
+	return (
+		querySelectorElement(
+			element,
+			'[post-title], h2 a, h3 a, a[href*="/comments/"]',
+		) !== null
+	);
 }
+
+const BLOCKED_IMAGE_DOMAINS = [
+	"styles.redditmedia.com",
+	"emoji.redditmedia.com",
+	"thumbs.redditmedia.com",
+];
 
 function extractAttachmentRefs(element: HTMLElement): PostAttachment[] {
 	const attachments: PostAttachment[] = [];
 	const seen = new Set<string>();
 
-	for (const imageNode of queryAllElements(element, SELECTORS.imageNodes)) {
+	for (const imageNode of queryAllElements(element, IMAGE_SELECTOR)) {
 		const src = readImageSource(imageNode);
 		if (!src || seen.has(src)) continue;
 
+		try {
+			const url = new URL(src);
+			if (BLOCKED_IMAGE_DOMAINS.some((d) => url.hostname.includes(d))) continue;
+		} catch {
+			/* ignore invalid URLs */
+		}
+
 		seen.add(src);
 		attachments.push({
-			node_id: "root",
 			kind: "image",
 			src,
 			alt: (readAttribute(imageNode, "alt") || "").trim(),
@@ -255,35 +179,6 @@ function extractAttachmentRefs(element: HTMLElement): PostAttachment[] {
 	}
 
 	return attachments;
-}
-
-function buildRootNodeText(
-	title: string,
-	bodyText: string,
-	subreddit: string | null,
-	postType: string | null,
-	domain: string | null,
-	adPost: boolean,
-): string {
-	const segments: string[] = [];
-
-	if (title) {
-		segments.push(title);
-	}
-	if (bodyText) {
-		segments.push(bodyText);
-	}
-	if (subreddit) {
-		segments.push(`subreddit r/${subreddit}`);
-	}
-	if (postType) {
-		segments.push(`post type ${postType}`);
-	}
-	if (domain) {
-		segments.push(`${adPost ? "sponsored" : "link"} domain ${domain}`);
-	}
-
-	return normalizeContentText(segments.join("\n\n"));
 }
 
 export function readPostIdentity(element: HTMLElement): string | null {
@@ -307,7 +202,7 @@ export function readPostIdentity(element: HTMLElement): string | null {
 		return permalink;
 	}
 
-	const commentLink = querySelectorElement(element, SELECTORS.permalinkLink);
+	const commentLink = querySelectorElement(element, PERMALINK_SELECTOR);
 	const commentHref = readAttribute(commentLink, "href");
 	if (commentHref) {
 		return commentHref;
@@ -331,54 +226,23 @@ export function readPostIdentity(element: HTMLElement): string | null {
 export async function extractPostData(
 	element: HTMLElement,
 ): Promise<PostData | null> {
-	if (!isRedditPost(element)) {
+	if (!isLikelyRedditPostRoot(element)) {
 		return null;
 	}
 
-	const title = extractTitle(element);
-	const bodyText = extractBodyText(element);
-	if (!title && !bodyText) {
-		return null;
-	}
+	await waitForMediaHydration([{ root: element }]);
 
-	const author = extractAuthor(element);
-	const subreddit = extractSubreddit(element);
-	const postType = extractPostType(element);
-	const domain = extractDomain(element);
-	const adPost = isAdPost(element);
-
-	const nodes: PostNode[] = [
-		{
-			id: "root",
-			parent_id: null,
-			kind: "root",
-			text: buildRootNodeText(
-				title,
-				bodyText,
-				subreddit,
-				postType,
-				domain,
-				adPost,
-			),
-		},
-	];
-
+	const text = extractText(element);
 	const attachments = extractAttachmentRefs(element);
+	if (!text && attachments.length === 0) {
+		return null;
+	}
 	const identity = readPostIdentity(element);
-	const deterministicNodeKey = nodes
-		.map(
-			(node) =>
-				`${node.id}|${node.parent_id ?? "null"}|${node.kind}|${node.text}`,
-		)
-		.join("\n");
-	const postId =
-		identity || (await derivePostId(author.id, deterministicNodeKey));
+	const postId = identity || (await derivePostId(text));
 
 	return {
 		post_id: postId,
-		author_id: author.id,
-		author_name: author.name,
-		nodes,
+		text,
 		attachments,
 	};
 }

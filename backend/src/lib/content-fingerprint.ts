@@ -1,15 +1,6 @@
 import { createHash } from "crypto";
 
-export interface ContentNode {
-	id: string;
-	parent_id: string | null;
-	kind: string;
-	text: string;
-	ordinal?: number;
-}
-
 export interface ContentAttachment {
-	node_id: string;
 	kind: string;
 	ordinal?: number;
 	[key: string]: string | number | boolean | null | undefined;
@@ -17,9 +8,7 @@ export interface ContentAttachment {
 
 export interface ContentFingerprintInput {
 	post_id: string;
-	author_id: string;
-	author_name: string;
-	nodes: ContentNode[];
+	text: string;
 	attachments: ContentAttachment[];
 }
 
@@ -42,18 +31,6 @@ function normalizeText(text: string): string {
 	return text.toLowerCase().replace(/\s+/g, " ").trim();
 }
 
-function sortNodes(nodes: ContentNode[]): ContentNode[] {
-	return nodes
-		.map((node, index) => ({ ...node, ordinal: node.ordinal ?? index }))
-		.sort((left, right) => {
-			if (left.ordinal !== right.ordinal) {
-				return left.ordinal - right.ordinal;
-			}
-
-			return left.id.localeCompare(right.id);
-		});
-}
-
 function sortAttachments(
 	attachments: ContentAttachment[],
 ): ContentAttachment[] {
@@ -63,13 +40,8 @@ function sortAttachments(
 			ordinal: attachment.ordinal ?? index,
 		}))
 		.sort((left, right) => {
-			const byNodeId = left.node_id.localeCompare(right.node_id);
-			if (byNodeId !== 0) {
-				return byNodeId;
-			}
-
 			if (left.ordinal !== right.ordinal) {
-				return left.ordinal - right.ordinal;
+				return (left.ordinal ?? 0) - (right.ordinal ?? 0);
 			}
 
 			const byKind = left.kind.localeCompare(right.kind);
@@ -162,16 +134,11 @@ function stableStringify(value: CanonicalJsonValue): string {
 export function canonicalizeContentFingerprintInput(
 	input: ContentFingerprintInput,
 ): CanonicalJsonObject {
-	const sortedNodes = sortNodes(input.nodes).map((node) => ({
-		...node,
-		text: normalizeText(node.text),
-	}));
-
 	const sortedAttachments = sortAttachments(input.attachments);
 
 	const canonical = toCanonicalJson({
-		...input,
-		nodes: sortedNodes,
+		post_id: input.post_id,
+		text: normalizeText(input.text),
 		attachments: sortedAttachments,
 	});
 

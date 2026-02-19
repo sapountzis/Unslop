@@ -20,12 +20,8 @@ export async function sha256(text: string): Promise<string> {
 }
 
 /**
- * Derive post_id from author_id and content_text
+ * Derive post_id from content text when no platform identity exists
  */
-export async function derivePostId(
-	authorId: string,
-	contentText: string,
-): Promise<string> {
-	const combined = `${authorId}\n${contentText}`;
-	return await sha256(combined);
+export async function derivePostId(text: string): Promise<string> {
+	return await sha256(normalizeContentText(text));
 }

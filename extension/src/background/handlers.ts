@@ -4,26 +4,22 @@ import {
 	getUserInfoWithUsage,
 	startAuthFlow,
 } from "./api";
-import { streamClassifyBatch } from "./classify-pipeline";
-import { ClassificationService } from "./classification-service";
-import { DiagnosticsEngine } from "./diagnostics-engine";
-import { createStorageFacade, type StorageFacade } from "./storage-facade";
-import { isSupportedPlatformUrl } from "../platforms/registry";
+import { streamClassifyBatch } from "./classifyPipeline";
+import { ClassificationService } from "./classificationService";
+import { DiagnosticsEngine } from "./diagnosticsEngine";
+import { createStorageFacade, type StorageFacade } from "./storageFacade";
 import {
 	MESSAGE_TYPES,
 	type ClassifyBatchMessage,
-	type ReloadActiveTabMessage,
 	type RuntimeRequest,
 	type StartAuthMessage,
 	type SetJwtMessage,
 } from "../lib/messages";
-import type { RuntimeMessageHandlers } from "./message-router";
+import type { RuntimeMessageHandlers } from "./messageRouter";
 
 type QueryTabs = (
 	queryInfo: chrome.tabs.QueryInfo,
 ) => Promise<chrome.tabs.Tab[]>;
-type GetTab = (tabId: number) => Promise<chrome.tabs.Tab | null>;
-type ReloadTab = (tabId: number) => Promise<void>;
 type SendTabMessage = (tabId: number, message: unknown) => Promise<void>;
 
 type BackgroundHandlerDependencies = {
@@ -36,8 +32,6 @@ type BackgroundHandlerDependencies = {
 	getStatsFn?: typeof getStats;
 	streamClassifyBatchFn?: typeof streamClassifyBatch;
 	queryTabsFn?: QueryTabs;
-	getTabFn?: GetTab;
-	reloadTabFn?: ReloadTab;
 	sendTabMessageFn?: SendTabMessage;
 };
 
@@ -55,12 +49,6 @@ function getSetJwtMessage(message: RuntimeRequest): SetJwtMessage {
 	return message as SetJwtMessage;
 }
 
-function getReloadActiveTabMessage(
-	message: RuntimeRequest,
-): ReloadActiveTabMessage {
-	return message as ReloadActiveTabMessage;
-}
-
 export function createBackgroundMessageHandlers(
 	dependencies: BackgroundHandlerDependencies = {},
 ): RuntimeMessageHandlers {
@@ -75,14 +63,6 @@ export function createBackgroundMessageHandlers(
 	const queryTabsFn =
 		dependencies.queryTabsFn ??
 		(async (queryInfo) => await chrome.tabs.query(queryInfo));
-	const getTabFn =
-		dependencies.getTabFn ??
-		(async (tabId) => await chrome.tabs.get(tabId).catch(() => null));
-	const reloadTabFn =
-		dependencies.reloadTabFn ??
-		(async (tabId) => {
-			await chrome.tabs.reload(tabId);
-		});
 	const sendTabMessageFn =
 		dependencies.sendTabMessageFn ??
 		(async (tabId, message) => {
@@ -155,17 +135,6 @@ export function createBackgroundMessageHandlers(
 
 		async [MESSAGE_TYPES.TOGGLE_ENABLED]() {
 			return { enabled: await storageFacade.toggleEnabled() };
-		},
-
-		async [MESSAGE_TYPES.RELOAD_ACTIVE_TAB](message) {
-			const reloadActiveTabMessage = getReloadActiveTabMessage(message);
-			const tab = await getTabFn(reloadActiveTabMessage.tabId);
-			if (!tab?.id || !tab.url || !isSupportedPlatformUrl(tab.url)) {
-				return { status: "ignored" };
-			}
-
-			await reloadTabFn(tab.id);
-			return { status: "reloaded" };
 		},
 
 		async [MESSAGE_TYPES.GET_STATS]() {

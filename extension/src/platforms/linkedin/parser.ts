@@ -1,14 +1,20 @@
-// LinkedIn DOM parser — extracted from content/linkedin-parser.ts
+// LinkedIn DOM parser — semantic/attribute selectors only (no classes)
 import { normalizeContentText, derivePostId } from "../../lib/hash";
-import { PostAttachment, PostData, PostNode } from "../../types";
-import { SELECTORS, AUTHOR_PATTERNS } from "./selectors";
+import { PostAttachment, PostData } from "../../types";
+
+const URN_SELECTOR =
+	'[data-urn^="urn:li:activity:"], [data-urn^="urn:li:share:"]';
+const IMAGE_SELECTOR = "img";
+const DOCUMENT_IFRAME = "iframe";
+const DOCUMENT_HINTS =
+	'[href*="feedshare-document"], [src*="feedshare-document"], [data-url], [data-source-url]';
 
 export function isLikelyFeedPostRoot(element: HTMLElement): boolean {
-	if (!element.matches(SELECTORS.candidatePostRoot)) {
-		return false;
-	}
-
-	if (!element.classList.contains("feed-shared-update-v2")) {
+	const hasArticleRole = element.getAttribute("role") === "article";
+	const hasUrn =
+		element.getAttribute("data-urn")?.startsWith("urn:li:activity:") ||
+		element.getAttribute("data-urn")?.startsWith("urn:li:share:");
+	if (!hasArticleRole && !hasUrn) {
 		return false;
 	}
 
@@ -20,14 +26,18 @@ export function isLikelyFeedPostRoot(element: HTMLElement): boolean {
 		return false;
 	}
 
-	if (element.querySelector(SELECTORS.recommendationEntity) !== null) {
+	if (element.querySelector('[data-urn^="urn:li:aggregate:"]') !== null) {
 		return false;
 	}
 
 	return (
-		element.matches(SELECTORS.postUrn) ||
-		element.querySelector(SELECTORS.postUrn) !== null ||
-		element.querySelector(SELECTORS.postContent) !== null
+		element.matches(
+			'[data-urn^="urn:li:activity:"], [data-urn^="urn:li:share:"]',
+		) ||
+		element.querySelector(
+			'[data-urn^="urn:li:activity:"], [data-urn^="urn:li:share:"]',
+		) !== null ||
+		element.querySelector('p, [role="text"]') !== null
 	);
 }
 
@@ -38,7 +48,7 @@ export function readPostIdentity(element: HTMLElement): string | null {
 	const directUrn = element.getAttribute("data-urn");
 	if (directUrn) return directUrn;
 
-	const urnNode = element.querySelector(SELECTORS.postUrn);
+	const urnNode = element.querySelector(URN_SELECTOR);
 	if (urnNode && typeof urnNode.getAttribute === "function") {
 		const nestedUrn = urnNode.getAttribute("data-urn");
 		if (nestedUrn) return nestedUrn;
@@ -50,7 +60,10 @@ export function readPostIdentity(element: HTMLElement): string | null {
 function isFeedPost(element: HTMLElement): boolean {
 	return (
 		isLikelyFeedPostRoot(element) ||
-		element.querySelector(SELECTORS.postUrn) !== null
+		element.querySelector(
+			'[data-urn^="urn:li:activity:"], [data-urn^="urn:li:share:"]',
+		) !== null ||
+		element.querySelector('p, [role="text"]') !== null
 	);
 }
 
@@ -95,60 +108,20 @@ function readAttribute(
 	return element.getAttribute(attribute);
 }
 
-function extractRootText(element: HTMLElement): string {
-	const contentNodes = queryAllElements(element, SELECTORS.postContent);
-
-	for (const node of contentNodes) {
-		const closest = (
-			node as unknown as {
-				closest?: (selector: string) => Element | null;
-			}
-		).closest;
-		if (
-			typeof closest === "function" &&
-			closest.call(node, SELECTORS.nestedRepostLinkContainer)
-		) {
-			continue;
-		}
-
-		const text = readText(node);
-		if (text) {
-			return text;
-		}
-	}
-
-	return readText(element.querySelector(SELECTORS.postContent));
-}
-
-function extractRepostTexts(element: HTMLElement): string[] {
-	const repostBlocks = queryAllElements(
-		element,
-		`${SELECTORS.nestedRepostLinkContainer} .feed-shared-update-v2__description .update-components-text`,
-	);
-
-	const normalized = repostBlocks.map(readText).filter(Boolean);
-	if (normalized.length > 0) {
-		return normalized;
-	}
-
-	const fallbackRepostBlocks = queryAllElements(
-		element,
-		SELECTORS.nestedRepostLinkContainer,
-	);
-	return fallbackRepostBlocks.map(readText).filter(Boolean);
+function extractText(element: HTMLElement): string {
+	return normalizeContentText(element.textContent ?? "");
 }
 
 function extractAttachmentRefs(element: HTMLElement): PostAttachment[] {
 	const attachments: PostAttachment[] = [];
 
-	const imageNodes = queryAllElements(element, SELECTORS.imageNodes);
+	const imageNodes = queryAllElements(element, IMAGE_SELECTOR);
 	let imageOrdinal = 0;
 	for (const imageNode of imageNodes) {
 		const src = readAttribute(imageNode, "src");
 		if (!src) continue;
 
 		attachments.push({
-			node_id: "root",
 			kind: "image",
 			src,
 			alt: (readAttribute(imageNode, "alt") || "").trim(),
@@ -159,19 +132,18 @@ function extractAttachmentRefs(element: HTMLElement): PostAttachment[] {
 
 	const documentContainers = queryAllElements(
 		element,
-		SELECTORS.documentContainer,
+		"[data-url], [data-source-url]",
 	);
-	const documentIframes = queryAllElements(element, SELECTORS.documentIframe);
-	const documentHints = queryAllElements(
-		element,
-		SELECTORS.documentSourceHints,
-	).map((hintNode) => {
-		return (
-			readAttribute(hintNode, "href") ||
-			readAttribute(hintNode, "src") ||
-			readText(hintNode)
-		);
-	});
+	const documentIframes = queryAllElements(element, DOCUMENT_IFRAME);
+	const documentHints = queryAllElements(element, DOCUMENT_HINTS).map(
+		(hintNode) => {
+			return (
+				readAttribute(hintNode, "href") ||
+				readAttribute(hintNode, "src") ||
+				readText(hintNode)
+			);
+		},
+	);
 
 	const pdfCount = Math.max(
 		documentContainers.length,
@@ -188,7 +160,7 @@ function extractAttachmentRefs(element: HTMLElement): PostAttachment[] {
 		)?.querySelector;
 		const nestedIframe =
 			typeof nestedQuerySelector === "function"
-				? nestedQuerySelector.call(container, SELECTORS.documentIframe)
+				? nestedQuerySelector.call(container, DOCUMENT_IFRAME)
 				: null;
 		const iframe = nestedIframe ?? documentIframes[ordinal] ?? null;
 
@@ -204,7 +176,6 @@ function extractAttachmentRefs(element: HTMLElement): PostAttachment[] {
 		}
 
 		attachments.push({
-			node_id: "root",
 			kind: "pdf",
 			iframe_src: iframeSrc,
 			container_data_url: containerDataUrl,
@@ -216,71 +187,6 @@ function extractAttachmentRefs(element: HTMLElement): PostAttachment[] {
 	return attachments;
 }
 
-function buildNodes(element: HTMLElement): PostNode[] {
-	const rootText = extractRootText(element);
-	const repostTexts = extractRepostTexts(element);
-
-	const nodes: PostNode[] = [
-		{
-			id: "root",
-			parent_id: null,
-			kind: "root",
-			text: rootText,
-		},
-	];
-
-	repostTexts.forEach((text, index) => {
-		nodes.push({
-			id: `repost-${index}`,
-			parent_id: "root",
-			kind: "repost",
-			text,
-		});
-	});
-
-	return nodes;
-}
-
-function extractAuthorId(href: string): string {
-	const profileMatch = href.match(AUTHOR_PATTERNS.profile);
-	if (profileMatch?.[1]) {
-		return profileMatch[1];
-	}
-
-	const companyMatch = href.match(AUTHOR_PATTERNS.company);
-	if (companyMatch?.[1]) {
-		return `company-${companyMatch[1]}`;
-	}
-
-	return href || "unresolved";
-}
-
-function extractAuthorName(element: HTMLElement): string {
-	const nameSpan = element.querySelector(SELECTORS.authorName);
-
-	if (nameSpan?.textContent) {
-		const trimmed = nameSpan.textContent.trim();
-		if (
-			trimmed &&
-			trimmed.length > 0 &&
-			/^[A-Za-z\u00C0-\u00FF\s.\-]+$/.test(trimmed)
-		) {
-			return trimmed;
-		}
-	}
-
-	const authorLink = element.querySelector(SELECTORS.authorLink);
-	const ariaLabel = authorLink?.getAttribute("aria-label");
-	if (ariaLabel) {
-		const match = ariaLabel.match(/View:\s*([^•]+)/);
-		if (match?.[1]) {
-			return match[1].trim();
-		}
-	}
-
-	return "Unknown";
-}
-
 export async function extractPostData(
 	element: HTMLElement,
 ): Promise<PostData | null> {
@@ -288,32 +194,19 @@ export async function extractPostData(
 		return null;
 	}
 
-	const urnElement = element.querySelector(SELECTORS.postUrn) || element;
+	const urnElement = element.querySelector(URN_SELECTOR) || element;
 	const postId = urnElement.getAttribute("data-urn");
 
-	const authorLink = element.querySelector(SELECTORS.authorLink);
-	const href = authorLink?.getAttribute("href") || "";
-	const authorId = extractAuthorId(href);
-	const authorName = extractAuthorName(element);
-
-	const nodes = buildNodes(element);
+	const text = extractText(element);
 	const attachments = extractAttachmentRefs(element);
-
-	const deterministicNodeKey = nodes
-		.map(
-			(node) =>
-				`${node.id}|${node.parent_id ?? "null"}|${node.kind}|${node.text}`,
-		)
-		.join("\n");
-
-	const finalPostId =
-		postId || (await derivePostId(authorId, deterministicNodeKey));
+	if (!text && attachments.length === 0) {
+		return null;
+	}
+	const finalPostId = postId || (await derivePostId(text));
 
 	return {
 		post_id: finalPostId,
-		author_id: authorId,
-		author_name: authorName,
-		nodes,
+		text,
 		attachments,
 	};
 }
