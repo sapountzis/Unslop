@@ -4,10 +4,11 @@ compatibility_date = "2026-02-12"
 compatibility_flags = ["nodejs_compat"]
 workers_dev = false
 preview_urls = false
+keep_vars = true
 
 [vars]
 APP_URL = "https://unslop-api.datable-as.workers.dev"
-MAGIC_LINK_BASE_URL = "https://getunslop.com"
+MAGIC_LINK_BASE_URL = "https://api.getunslop.com/v1/auth/callback"
 POLAR_ENV = "production"
 
 [dev]
