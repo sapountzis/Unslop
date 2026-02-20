@@ -1,24 +1,35 @@
 // extension/src/popup/App.ts
 import { UserInfoWithUsage } from "../types";
 import { MESSAGE_TYPES } from "../lib/messages";
-import { resolveEnabled } from "../lib/enabled-state";
+import { resolveEnabled } from "../lib/enabledState";
+import type { DiagnosticsReport } from "../lib/diagnostics";
 import type { HideRenderMode } from "../lib/config";
+import { DEV_MODE_STORAGE_KEY, resolveDevMode } from "../lib/devMode";
 import {
 	HIDE_RENDER_MODE_STORAGE_KEY,
 	resolveHideRenderMode,
-} from "../lib/hide-render-mode";
+} from "../lib/hideRenderMode";
+import { DiagnosticsClient } from "./diagnosticsClient";
 
 export class App {
 	private container: HTMLElement;
 	private readonly logoUrl: string;
+	private readonly diagnosticsClient: DiagnosticsClient;
+	private diagnosticsReport: DiagnosticsReport | null = null;
+	private diagnosticsRunning = false;
+	private devModeEnabled = false;
 
-	constructor(containerId: string) {
+	constructor(
+		containerId: string,
+		diagnosticsClient: DiagnosticsClient = new DiagnosticsClient(),
+	) {
 		const container = document.getElementById(containerId);
 		if (!container) {
 			throw new Error(`Container ${containerId} not found`);
 		}
 		this.container = container;
 		this.logoUrl = chrome.runtime.getURL("icons/logo.svg");
+		this.diagnosticsClient = diagnosticsClient;
 	}
 
 	async render(): Promise<void> {
@@ -26,13 +37,17 @@ export class App {
 			"jwt",
 			"enabled",
 			HIDE_RENDER_MODE_STORAGE_KEY,
+			DEV_MODE_STORAGE_KEY,
 		]);
 		const hideRenderMode = resolveHideRenderMode(
 			storage[HIDE_RENDER_MODE_STORAGE_KEY],
 		);
+		this.devModeEnabled = resolveDevMode(
+			storage[DEV_MODE_STORAGE_KEY] as boolean | null | undefined,
+		);
 
 		if (!storage.jwt) {
-			this.renderSignIn();
+			this.renderSignIn(this.devModeEnabled);
 			return;
 		}
 
@@ -42,9 +57,10 @@ export class App {
 				userInfo,
 				resolveEnabled(storage.enabled),
 				hideRenderMode,
+				this.devModeEnabled,
 			);
 		} else {
-			this.renderSignIn();
+			this.renderSignIn(this.devModeEnabled);
 		}
 	}
 
@@ -63,23 +79,27 @@ export class App {
 		}
 	}
 
-	private renderSignIn(): void {
+	private renderSignIn(devModeEnabled: boolean): void {
 		this.container.innerHTML = `
-      <div class="text-center">
-        ${this.renderBrand()}
-        <p>Sign in to filter your LinkedIn feed</p>
-        <form id="signin-form">
-          <input
-            type="email"
-            id="email-input"
-            placeholder="your@email.com"
-            required
-          />
-          <button type="submit" class="primary">Send Sign In Link</button>
-        </form>
-        <p id="status" class="status"></p>
-      </div>
-    `;
+		      <div>
+		        <div class="text-center">
+		          ${this.renderBrand()}
+		          <p>Sign in to filter your social feeds</p>
+	          <form id="signin-form">
+	            <input
+	              type="email"
+	              id="email-input"
+	              placeholder="your@email.com"
+	              required
+	            />
+	            <button type="submit" class="primary">Send Sign In Link</button>
+		          </form>
+		          <p id="status" class="status"></p>
+		        </div>
+		        ${this.renderDevModeCard(devModeEnabled)}
+		        ${devModeEnabled ? this.renderDiagnosticsCard() : ""}
+		      </div>
+		    `;
 
 		const form = this.container.querySelector("#signin-form");
 		const emailInput = this.container.querySelector(
@@ -105,12 +125,16 @@ export class App {
 				status.textContent = "Failed to send email. Please try again.";
 			}
 		});
+
+		this.bindDevModeControl();
+		this.bindDiagnosticsControls();
 	}
 
 	private renderDashboard(
 		userInfo: UserInfoWithUsage,
 		enabled: boolean,
 		hideRenderMode: HideRenderMode,
+		devModeEnabled: boolean,
 	): void {
 		const isPro = userInfo.plan === "pro" && userInfo.plan_status === "active";
 
@@ -172,19 +196,21 @@ export class App {
           <div><strong>Plan:</strong> ${isPro ? "Pro" : "Free"}</div>
         </div>
 
-        ${
-					!isPro
-						? `
-          <button id="upgrade-btn" class="primary mb-8">Upgrade to Pro ($5/mo)</button>
-        `
-						: ""
-				}
+	        ${
+						!isPro
+							? `
+	          <button id="upgrade-btn" class="primary mb-8">Upgrade to Pro ($5/mo)</button>
+	        `
+							: ""
+					}
 
-        <button id="stats-btn" class="secondary mb-8">View Statistics</button>
+		        <button id="stats-btn" class="secondary mb-8">View Statistics</button>
+		        ${this.renderDevModeCard(devModeEnabled)}
+		        ${devModeEnabled ? this.renderDiagnosticsCard() : ""}
 
-        <button id="signout-btn" class="ghost">Sign Out</button>
-      </div>
-    `;
+		        <button id="signout-btn" class="ghost">Sign Out</button>
+		      </div>
+		    `;
 
 		// Event listeners
 		const enabledToggle = this.container.querySelector(
@@ -206,17 +232,6 @@ export class App {
 				[HIDE_RENDER_MODE_STORAGE_KEY]: nextMode,
 			});
 			hideRenderModeSelect.value = nextMode;
-
-			const [activeTab] = await chrome.tabs.query({
-				active: true,
-				currentWindow: true,
-			});
-			if (typeof activeTab?.id === "number") {
-				await chrome.runtime.sendMessage({
-					type: MESSAGE_TYPES.RELOAD_ACTIVE_TAB,
-					tabId: activeTab.id,
-				});
-			}
 		});
 
 		const upgradeBtn = this.container.querySelector("#upgrade-btn");
@@ -238,6 +253,197 @@ export class App {
 		signoutBtn?.addEventListener("click", async () => {
 			await chrome.runtime.sendMessage({ type: MESSAGE_TYPES.CLEAR_JWT });
 			this.render();
+		});
+
+		this.bindDevModeControl();
+		this.bindDiagnosticsControls();
+	}
+
+	private escapeHtml(value: string): string {
+		return value
+			.replace(/&/g, "&amp;")
+			.replace(/</g, "&lt;")
+			.replace(/>/g, "&gt;")
+			.replace(/"/g, "&quot;")
+			.replace(/'/g, "&#39;");
+	}
+
+	private async runDiagnostics(): Promise<void> {
+		if (this.diagnosticsRunning) return;
+		this.diagnosticsRunning = true;
+		this.updateDiagnosticsUi();
+
+		try {
+			this.diagnosticsReport = await this.diagnosticsClient.run();
+		} catch (error) {
+			console.error("[Unslop] diagnostics run failed", error);
+		}
+		this.diagnosticsRunning = false;
+		this.updateDiagnosticsUi();
+	}
+
+	private renderDiagnosticsCard(): string {
+		return `
+	      <div class="card mb-8 diagnostics-card">
+	        <div class="diagnostics-head">
+	          <strong>Run Diagnostics</strong>
+	          <span class="diagnostics-subtitle">Checks content runtime, selectors, storage, and messaging.</span>
+	        </div>
+	        <button id="run-diagnostics-btn" type="button" class="secondary diagnostics-run-btn">Run Diagnostics</button>
+	        <button id="copy-diagnostics-btn" type="button" class="ghost diagnostics-run-btn">Copy Diagnostics JSON</button>
+	        <div id="diagnostics-results" class="diagnostics-results">${this.renderDiagnosticsResults()}</div>
+	      </div>
+	    `;
+	}
+
+	private renderDiagnosticsResults(): string {
+		if (this.diagnosticsRunning && !this.diagnosticsReport) {
+			return `<p class="status diagnostics-inline-status">Running diagnostics...</p>`;
+		}
+
+		if (!this.diagnosticsReport) {
+			return `<p class="status diagnostics-inline-status">Open a supported feed (LinkedIn, X, Reddit), then click Run Diagnostics.</p>`;
+		}
+
+		const report = this.diagnosticsReport;
+		const generatedAt = new Date(report.generatedAtIso).toLocaleTimeString(
+			"en-US",
+			{
+				hour: "2-digit",
+				minute: "2-digit",
+				second: "2-digit",
+			},
+		);
+		const summary = `${report.summary.pass} passed · ${report.summary.warn} warnings · ${report.summary.fail} failed`;
+		const checksMarkup = report.checks
+			.map((check) => {
+				const label = this.escapeHtml(check.label);
+				const evidence = this.escapeHtml(check.evidence);
+				const nextAction = this.escapeHtml(check.nextAction);
+				return `
+	          <div class="diagnostics-row diagnostics-row--${check.status}">
+	            <div class="diagnostics-row-head">
+	              <span class="diagnostics-status-pill">${check.status.toUpperCase()}</span>
+	              <span class="diagnostics-row-label">${label}</span>
+	            </div>
+	            <div class="diagnostics-row-evidence">${evidence}</div>
+	            <div class="diagnostics-row-next">${nextAction}</div>
+	          </div>
+	        `;
+			})
+			.join("");
+
+		return `
+	      <div class="diagnostics-summary diagnostics-summary--${report.overallStatus}">
+	        <span>${this.escapeHtml(summary)}</span>
+	        <span class="diagnostics-timestamp">${this.escapeHtml(generatedAt)}</span>
+	      </div>
+	      <div class="diagnostics-list">${checksMarkup}</div>
+	    `;
+	}
+
+	private updateDiagnosticsUi(): void {
+		const runButton = this.container.querySelector(
+			"#run-diagnostics-btn",
+		) as HTMLButtonElement | null;
+		if (runButton) {
+			runButton.disabled = this.diagnosticsRunning;
+			runButton.textContent = this.diagnosticsRunning
+				? "Running Diagnostics..."
+				: "Run Diagnostics";
+		}
+		const copyButton = this.container.querySelector(
+			"#copy-diagnostics-btn",
+		) as HTMLButtonElement | null;
+		if (copyButton) {
+			copyButton.disabled = this.diagnosticsRunning || !this.diagnosticsReport;
+		}
+
+		const resultsContainer = this.container.querySelector(
+			"#diagnostics-results",
+		);
+		if (resultsContainer) {
+			resultsContainer.innerHTML = this.renderDiagnosticsResults();
+		}
+	}
+
+	private bindDiagnosticsControls(): void {
+		if (!this.devModeEnabled) {
+			return;
+		}
+		const runButton = this.container.querySelector(
+			"#run-diagnostics-btn",
+		) as HTMLButtonElement | null;
+		const copyButton = this.container.querySelector(
+			"#copy-diagnostics-btn",
+		) as HTMLButtonElement | null;
+
+		runButton?.addEventListener("click", () => {
+			void this.runDiagnostics();
+		});
+		copyButton?.addEventListener("click", () => {
+			void this.copyDiagnosticsReport();
+		});
+
+		this.updateDiagnosticsUi();
+	}
+
+	private async copyDiagnosticsReport(): Promise<void> {
+		if (!this.diagnosticsReport) return;
+		const serialized = JSON.stringify(this.diagnosticsReport, null, 2);
+
+		try {
+			if (typeof navigator !== "undefined" && navigator.clipboard) {
+				await navigator.clipboard.writeText(serialized);
+				return;
+			}
+		} catch (error) {
+			console.error("[Unslop] failed to write diagnostics to clipboard", error);
+		}
+
+		// Fallback for environments where clipboard API is unavailable.
+		const textarea = document.createElement("textarea");
+		textarea.value = serialized;
+		textarea.setAttribute("readonly", "true");
+		textarea.style.position = "fixed";
+		textarea.style.left = "-9999px";
+		document.body.appendChild(textarea);
+		textarea.select();
+		try {
+			document.execCommand("copy");
+		} finally {
+			textarea.remove();
+		}
+	}
+
+	private renderDevModeCard(devModeEnabled: boolean): string {
+		return `
+	      <div class="card mb-8">
+	        <label class="toggle-label">
+	          <input type="checkbox" id="dev-mode-toggle" ${devModeEnabled ? "checked" : ""} />
+	          <div class="toggle"></div>
+	          <span class="toggle-text">Developer mode</span>
+	        </label>
+	      </div>
+	    `;
+	}
+
+	private bindDevModeControl(): void {
+		const devModeToggle = this.container.querySelector(
+			"#dev-mode-toggle",
+		) as HTMLInputElement | null;
+		if (!devModeToggle) return;
+
+		devModeToggle.addEventListener("change", async () => {
+			await chrome.storage.sync.set({
+				[DEV_MODE_STORAGE_KEY]: devModeToggle.checked,
+			});
+			this.devModeEnabled = devModeToggle.checked;
+			if (!this.devModeEnabled) {
+				this.diagnosticsReport = null;
+				this.diagnosticsRunning = false;
+			}
+			await this.render();
 		});
 	}
 

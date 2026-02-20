@@ -73,17 +73,7 @@ function createOpenAiCapture() {
 function makeTextPost(): PostInput {
 	return {
 		post_id: "post-1",
-		author_id: "author-1",
-		author_name: "Ada Lovelace",
-		nodes: [
-			{ id: "root", parent_id: null, kind: "root", text: "Root post text." },
-			{
-				id: "repost-1",
-				parent_id: "root",
-				kind: "repost",
-				text: "Repost context.",
-			},
-		],
+		text: "Root post text. Repost context.",
 		attachments: [],
 	};
 }
@@ -91,21 +81,17 @@ function makeTextPost(): PostInput {
 function makeMultimodalPost(): PostInput {
 	return {
 		post_id: "post-2",
-		author_id: "author-2",
-		author_name: "Grace Hopper",
-		nodes: [
-			{ id: "root", parent_id: null, kind: "root", text: "Main post body." },
-		],
+		text: "Main post body.",
 		attachments: [
 			{
-				node_id: "root",
+				ordinal: 0,
 				kind: "image",
 				sha256: "a".repeat(64),
 				mime_type: "image/jpeg",
 				base64: "/9j/4AAQSkZJRgABAQAAAQABAAD",
 			},
 			{
-				node_id: "root",
+				ordinal: 1,
 				kind: "pdf",
 				source_url: "https://example.com/guide.pdf",
 				excerpt_text: "Important PDF excerpt.",
@@ -117,19 +103,10 @@ function makeMultimodalPost(): PostInput {
 function makePdfOnlyPost(): PostInput {
 	return {
 		post_id: "post-3",
-		author_id: "author-3",
-		author_name: "Alan Turing",
-		nodes: [
-			{
-				id: "root",
-				parent_id: null,
-				kind: "root",
-				text: "PDF backed text context.",
-			},
-		],
+		text: "PDF backed text context.",
 		attachments: [
 			{
-				node_id: "root",
+				ordinal: 0,
 				kind: "pdf",
 				source_url: "https://example.com/report.pdf",
 				excerpt_text: "PDF excerpt only.",
@@ -162,13 +139,12 @@ async function skipIfNoRealLlmKey(): Promise<boolean> {
 }
 
 describe("LLM Service (integration)", () => {
-	it("single prompt includes root/repost context", () => {
+	it("single prompt includes post text context", () => {
 		const prompt = constructUserPrompt(makeTextPost());
 
 		expect(prompt).toContain("POST TO ANALYZE:");
-		expect(prompt).toContain("ROOT POST:");
+		expect(prompt).toContain("POST:");
 		expect(prompt).toContain("Root post text.");
-		expect(prompt).toContain("REPOSTS:");
 		expect(prompt).toContain("Repost context.");
 		expect(prompt).not.toContain("ATTACHMENTS:");
 	});
@@ -178,8 +154,8 @@ describe("LLM Service (integration)", () => {
 
 		expect(prompt).toContain("POST TO ANALYZE:");
 		expect(prompt).toContain("ATTACHMENTS:");
-		expect(prompt).toContain("[image]");
-		expect(prompt).toContain("[pdf]");
+		expect(prompt).toContain("[image 1]");
+		expect(prompt).toContain("[pdf 2]");
 		expect(prompt).toContain("Important PDF excerpt.");
 	});
 
@@ -319,16 +295,7 @@ describe("LLM Service (integration)", () => {
 
 		const result = await llmService.classifyPost({
 			post_id: "test-post-1",
-			author_id: "author-1",
-			author_name: "Test Author",
-			nodes: [
-				{
-					id: "root",
-					parent_id: null,
-					kind: "root",
-					text: "Just published my new course on how to 10x your productivity! Link in bio. #hustle #grindset",
-				},
-			],
+			text: "Just published my new course on how to 10x your productivity! Link in bio. #hustle #grindset",
 			attachments: [],
 		});
 

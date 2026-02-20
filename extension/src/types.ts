@@ -15,24 +15,16 @@ export interface CachedDecision {
 	timestamp: number;
 }
 
-export interface PostNode {
-	id: string;
-	parent_id: string | null;
-	kind: "root" | "repost";
-	text: string;
-}
-
 export interface ImageAttachmentRef {
-	node_id: string;
 	kind: "image";
 	src: string;
 	alt: string;
-	ordinal: number;
+	ordinal?: number;
 }
 
 export interface ResolvedImageAttachment {
-	node_id: string;
 	kind: "image";
+	ordinal?: number;
 	sha256: string;
 	mime_type: string;
 	base64: string;
@@ -41,19 +33,18 @@ export interface ResolvedImageAttachment {
 export type ImageAttachment = ImageAttachmentRef | ResolvedImageAttachment;
 
 export interface PdfAttachmentRef {
-	node_id: string;
 	kind: "pdf";
 	source_url?: string;
 	iframe_src?: string;
 	container_data_url?: string;
 	source_hint?: string;
-	ordinal: number;
+	ordinal?: number;
 	excerpt_text?: string;
 }
 
 export interface ResolvedPdfAttachment {
-	node_id: string;
 	kind: "pdf";
+	ordinal?: number;
 	source_url: string;
 	excerpt_text: string;
 }
@@ -64,9 +55,7 @@ export type PostAttachment = ImageAttachment | PdfAttachment;
 
 export interface PostData {
 	post_id: string;
-	author_id: string;
-	author_name: string;
-	nodes: PostNode[];
+	text: string;
 	attachments: PostAttachment[];
 }
 

@@ -12,6 +12,8 @@ Update trigger: any change to docs structure, workflow, or quality maintenance p
 ## Steps
 1. Identify impacted domains from the code diff.
 2. Update governing product specs in `docs/product-specs/` and refresh `last_verified`.
+   - When extension or backend structure changes, update `extension/AGENTS.md` or `backend/AGENTS.md` accordingly.
+   - **Extension docs**: `extension/docs/` has been removed. All extension architecture, flows, entry points, and module roles live in `extension/AGENTS.md`. Do not create extension-specific docs under `extension/`.
 3. Update linked runbooks if operational behavior changed.
 4. Update plan context/verification in `docs/exec-plans/active/`.
 5. Capture at least one `edit -> make check -> review` loop entry in the plan's Iteration Log.

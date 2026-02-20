@@ -12,11 +12,9 @@ import {
 	CONTENT_TEXT_MAX_CHARS,
 	MULTIMODAL_MAX_ATTACHMENTS,
 	MULTIMODAL_MAX_IMAGE_BYTES,
-	MULTIMODAL_MAX_NODE_COUNT,
-	MULTIMODAL_MAX_NODE_DEPTH,
 	MULTIMODAL_MAX_PDF_EXCERPT_CHARS,
 } from "../lib/policy-constants";
-import type { MultimodalPostNode } from "../types/multimodal";
+
 export interface ClassifyRoutesDeps {
 	authMiddleware: MiddlewareHandler;
 	classificationService: ClassificationService;
@@ -26,122 +24,12 @@ const BASE64_PATTERN =
 	/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
 const SHA256_HEX_PATTERN = /^[a-f0-9]{64}$/i;
 
-type NodeValidationIssue = {
-	message: string;
-	path: (string | number)[];
-};
-
 function decodedBase64ByteLength(value: string): number {
 	return Buffer.from(value, "base64").byteLength;
 }
 
 function maxBase64Length(maxBytes: number): number {
 	return Math.ceil(maxBytes / 3) * 4;
-}
-
-function validateNodeGraph(nodes: MultimodalPostNode[]): NodeValidationIssue[] {
-	const issues: NodeValidationIssue[] = [];
-	const nodeById = new Map<string, MultimodalPostNode>();
-
-	nodes.forEach((node, index) => {
-		if (nodeById.has(node.id)) {
-			issues.push({
-				message: "nodes.id must be unique",
-				path: [index, "id"],
-			});
-			return;
-		}
-
-		nodeById.set(node.id, node);
-
-		if (node.kind === "root" && node.parent_id !== null) {
-			issues.push({
-				message: "root node parent_id must be null",
-				path: [index, "parent_id"],
-			});
-		}
-
-		if (node.kind === "repost" && node.parent_id === null) {
-			issues.push({
-				message: "repost node parent_id is required",
-				path: [index, "parent_id"],
-			});
-		}
-	});
-
-	const rootNodes = nodes.filter((node) => node.kind === "root");
-	if (rootNodes.length !== 1) {
-		issues.push({
-			message: "nodes must include exactly one root node",
-			path: [],
-		});
-	}
-
-	const memo = new Map<string, number>();
-	const computeDepth = (
-		nodeId: string,
-		visiting: Set<string>,
-	): number | null => {
-		const cached = memo.get(nodeId);
-		if (cached !== undefined) {
-			return cached;
-		}
-
-		if (visiting.has(nodeId)) {
-			return null;
-		}
-
-		const node = nodeById.get(nodeId);
-		if (!node) {
-			return null;
-		}
-
-		visiting.add(nodeId);
-
-		if (node.parent_id === null) {
-			memo.set(nodeId, 0);
-			visiting.delete(nodeId);
-			return 0;
-		}
-
-		const parentDepth = computeDepth(node.parent_id, visiting);
-		if (parentDepth === null) {
-			visiting.delete(nodeId);
-			return null;
-		}
-
-		const depth = parentDepth + 1;
-		memo.set(nodeId, depth);
-		visiting.delete(nodeId);
-		return depth;
-	};
-
-	nodes.forEach((node, index) => {
-		if (node.parent_id !== null && !nodeById.has(node.parent_id)) {
-			issues.push({
-				message: "node parent_id must reference an existing node id",
-				path: [index, "parent_id"],
-			});
-		}
-
-		const depth = computeDepth(node.id, new Set());
-		if (depth === null) {
-			issues.push({
-				message: "nodes graph must be acyclic and connected to root",
-				path: [index],
-			});
-			return;
-		}
-
-		if (depth > MULTIMODAL_MAX_NODE_DEPTH) {
-			issues.push({
-				message: `nodes depth must be <= ${MULTIMODAL_MAX_NODE_DEPTH}`,
-				path: [index],
-			});
-		}
-	});
-
-	return issues;
 }
 
 function isQuotaExceededError(error: unknown): boolean {
@@ -153,19 +41,10 @@ function isQuotaExceededError(error: unknown): boolean {
 	);
 }
 
-const classifyNodeSchema = z
-	.object({
-		id: z.string().min(1),
-		parent_id: z.string().min(1).nullable(),
-		kind: z.enum(["root", "repost"]),
-		text: z.string().max(CONTENT_TEXT_MAX_CHARS),
-	})
-	.strict();
-
 const classifyImageAttachmentSchema = z
 	.object({
-		node_id: z.string().min(1),
 		kind: z.literal("image"),
+		ordinal: z.number().int().min(0).optional(),
 		sha256: z.string().regex(SHA256_HEX_PATTERN),
 		mime_type: z.string().min(1),
 		base64: z
@@ -192,8 +71,8 @@ const classifyImageAttachmentSchema = z
 
 const classifyPdfAttachmentSchema = z
 	.object({
-		node_id: z.string().min(1),
 		kind: z.literal("pdf"),
+		ordinal: z.number().int().min(0).optional(),
 		source_url: z.string().url(),
 		excerpt_text: z.string().max(MULTIMODAL_MAX_PDF_EXCERPT_CHARS).optional(),
 	})
@@ -204,44 +83,15 @@ const classifyAttachmentSchema = z.discriminatedUnion("kind", [
 	classifyPdfAttachmentSchema,
 ]);
 
-const classifyNodesSchema = z
-	.array(classifyNodeSchema)
-	.min(1)
-	.max(MULTIMODAL_MAX_NODE_COUNT)
-	.superRefine((nodes, ctx) => {
-		for (const issue of validateNodeGraph(nodes as MultimodalPostNode[])) {
-			ctx.addIssue({
-				code: z.ZodIssueCode.custom,
-				message: issue.message,
-				path: issue.path,
-			});
-		}
-	});
-
 export const classifyPostSchema = z
 	.object({
 		post_id: z.string().min(1),
-		author_id: z.string().min(1),
-		author_name: z.string().min(1),
-		nodes: classifyNodesSchema,
+		text: z.string().max(CONTENT_TEXT_MAX_CHARS),
 		attachments: z
 			.array(classifyAttachmentSchema)
 			.max(MULTIMODAL_MAX_ATTACHMENTS),
 	})
-	.strict()
-	.superRefine((post, ctx) => {
-		const nodeIds = new Set(post.nodes.map((node) => node.id));
-
-		post.attachments.forEach((attachment, index) => {
-			if (!nodeIds.has(attachment.node_id)) {
-				ctx.addIssue({
-					code: z.ZodIssueCode.custom,
-					message: "attachment node_id must reference an existing node id",
-					path: ["attachments", index, "node_id"],
-				});
-			}
-		});
-	});
+	.strict();
 
 export const classifySchema = z
 	.object({

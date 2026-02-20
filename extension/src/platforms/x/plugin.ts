@@ -1,34 +1,17 @@
 // X platform plugin
 import type { PlatformPlugin } from "../platform";
-import { SELECTORS } from "./selectors";
-import {
-	routeKeyFromUrl,
-	shouldFilterRoute,
-	shouldFilterRouteKey,
-} from "./route-detector";
-import { resolvePostSurface } from "./surface";
+import { routeKeyFromUrl, shouldFilterRouteKey } from "./routeDetector";
 import { extractPostData, readPostIdentity } from "./parser";
+import { xDetectionProfile } from "./detectionProfile";
 
 export const xPlugin: PlatformPlugin = {
 	id: "x",
-
-	selectors: {
-		feed: SELECTORS.feed,
-		candidatePostRoot: SELECTORS.candidatePostRoot,
-		renderPostRoot: SELECTORS.renderPostRoot,
-	},
-
-	preclassifyCssSelector: `[data-testid="cellInnerDiv"]:has(article[data-testid="tweet"]):not([data-unslop-processed])`,
-
-	shouldFilterRoute,
+	detectionProfile: xDetectionProfile,
 	routeKeyFromUrl,
 	shouldFilterRouteKey,
-
 	findFeedRoot(): Element | null {
-		return document.querySelector(SELECTORS.feed);
+		return document.querySelector("main");
 	},
-
-	resolvePostSurface,
 	extractPostData,
 	readPostIdentity,
 };

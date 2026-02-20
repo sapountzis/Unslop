@@ -4,44 +4,41 @@ import {
 } from "../lib/content-fingerprint";
 import type {
 	ClassificationCacheRepository,
-	UpsertClassificationCacheInput,
+	InsertClassificationCacheInput,
 } from "../repositories/classification-cache-repository";
 import type {
 	ActivityInsert,
 	ActivityRepository,
 } from "../repositories/activity-repository";
 import type {
-	AppendClassificationErrorEventInput,
+	AppendClassificationSuccessEventInput,
 	ClassificationEventRepository,
 } from "../repositories/classification-event-repository";
 import type { AppLogger } from "../lib/logger-types";
 import type { MultimodalClassifyPost } from "../types/multimodal";
-import type { Decision } from "../types/classification";
+import type { Decision, ScoreResult } from "../types/classification";
 import type { LlmService, PostInput as LlmPostInput } from "./llm";
 import type { QuotaService, QuotaStatus } from "./quota";
 import type { ScoringEngine as ScoringEngineType } from "./scoring";
 
-const CACHE_LOOKBACK_DAYS = 30;
 const MIN_SOFT_QUOTA_BURST = 1;
-
-type LlmResult = Awaited<ReturnType<LlmService["classifyPost"]>>;
 
 type NormalizedPost = ClassifyInputPost & {
 	fingerprint: string;
 };
 
 interface ClassificationBuffers {
-	cacheWrites: UpsertClassificationCacheInput[];
+	cacheWrites: InsertClassificationCacheInput[];
 	activityWrites: ActivityInsert[];
-	errorEvents: AppendClassificationErrorEventInput[];
+	successEvents: AppendClassificationSuccessEventInput[];
 	usageIncrementCount: number;
 }
 
 interface MissClassificationResult {
 	outcome: ClassificationResponse;
-	cacheWrite?: UpsertClassificationCacheInput;
+	cacheWrite?: InsertClassificationCacheInput;
 	activityWrite?: ActivityInsert;
-	errorEvent?: AppendClassificationErrorEventInput;
+	successEvent?: AppendClassificationSuccessEventInput;
 	usageIncrementCount: number;
 }
 
@@ -92,9 +89,7 @@ export class QuotaExceededError extends Error {
 function normalizePost(post: ClassifyInputPost): NormalizedPost {
 	const fingerprintInput: ContentFingerprintInput = {
 		post_id: post.post_id,
-		author_id: post.author_id,
-		author_name: post.author_name,
-		nodes: post.nodes.map((node) => ({ ...node })),
+		text: post.text,
 		attachments: post.attachments.map((attachment) => ({ ...attachment })),
 	};
 
@@ -102,35 +97,6 @@ function normalizePost(post: ClassifyInputPost): NormalizedPost {
 		...post,
 		fingerprint: computeContentFingerprint(fingerprintInput),
 	};
-}
-
-function getCacheExpiry(): Date {
-	const cacheExpiry = new Date();
-	cacheExpiry.setDate(cacheExpiry.getDate() - CACHE_LOOKBACK_DAYS);
-	return cacheExpiry;
-}
-
-function resolveProviderErrorMessage(llmResult: LlmResult): string | undefined {
-	if (
-		llmResult.provider_error_message &&
-		llmResult.provider_error_message.length > 0
-	) {
-		return llmResult.provider_error_message;
-	}
-
-	if (llmResult.source === "error") {
-		return `llm_error:${llmResult.model}`;
-	}
-
-	return undefined;
-}
-
-function resolveUnexpectedErrorMessage(error: unknown): string {
-	if (error instanceof Error && error.message.trim().length > 0) {
-		return error.message;
-	}
-
-	return "llm_error:unknown";
 }
 
 function toActivityInsert(
@@ -150,10 +116,59 @@ function toActivityInsert(
 function toLlmInput(post: NormalizedPost): LlmPostInput {
 	return {
 		post_id: post.post_id,
-		author_id: post.author_id,
-		author_name: post.author_name,
-		nodes: post.nodes.map((node) => ({ ...node })),
+		text: post.text,
 		attachments: post.attachments.map((attachment) => ({ ...attachment })),
+	};
+}
+
+function toRequestPayload(post: NormalizedPost): Record<string, unknown> {
+	return {
+		post_id: post.post_id,
+		text: post.text,
+		attachments: post.attachments.map((a) => {
+			if (a.kind === "image") {
+				return {
+					kind: "image",
+					ordinal: a.ordinal,
+					base64: a.base64,
+					mime_type: a.mime_type,
+				};
+			}
+			return {
+				kind: "pdf",
+				ordinal: a.ordinal,
+				source_url: a.source_url,
+				excerpt_text: a.excerpt_text,
+			};
+		}),
+	};
+}
+
+function convertScoreResultToRecord(
+	scores: ScoreResult | null,
+): Record<string, number> | null {
+	if (!scores) return null;
+	const result: Record<string, number> = {};
+	for (const [key, value] of Object.entries(scores)) {
+		if (typeof value === "number") {
+			result[key] = value;
+		}
+	}
+	return result;
+}
+
+function toResponsePayload(
+	model: string,
+	scores: Record<string, number> | null,
+	latency: number,
+	decision: string,
+): Record<string, unknown> {
+	return {
+		model,
+		scores: scores ?? {},
+		source: "llm",
+		latency,
+		decision,
 	};
 }
 
@@ -161,7 +176,7 @@ function createEmptyBuffers(): ClassificationBuffers {
 	return {
 		cacheWrites: [],
 		activityWrites: [],
-		errorEvents: [],
+		successEvents: [],
 		usageIncrementCount: 0,
 	};
 }
@@ -176,8 +191,8 @@ function addMissResultToBuffers(
 	if (result.activityWrite) {
 		buffers.activityWrites.push(result.activityWrite);
 	}
-	if (result.errorEvent) {
-		buffers.errorEvents.push(result.errorEvent);
+	if (result.successEvent) {
+		buffers.successEvents.push(result.successEvent);
 	}
 	buffers.usageIncrementCount += result.usageIncrementCount;
 }
@@ -252,6 +267,19 @@ export function createClassificationService(
 						scored.decision,
 						"llm",
 					),
+					successEvent: {
+						contentFingerprint: post.fingerprint,
+						postId: post.post_id,
+						model: llmResult.model,
+						decision: scored.decision,
+						requestPayload: toRequestPayload(post),
+						responsePayload: toResponsePayload(
+							llmResult.model,
+							convertScoreResultToRecord(llmResult.scores),
+							llmResult.latency,
+							scored.decision,
+						),
+					},
 					usageIncrementCount: 1,
 				};
 			}
@@ -262,20 +290,6 @@ export function createClassificationService(
 					decision: scored.decision,
 					source: "error",
 				},
-				errorEvent: {
-					contentFingerprint: post.fingerprint,
-					postId: post.post_id,
-					...(llmResult.provider_http_status !== undefined
-						? { providerHttpStatus: llmResult.provider_http_status }
-						: {}),
-					...(llmResult.provider_error_code !== undefined
-						? { providerErrorCode: llmResult.provider_error_code }
-						: {}),
-					...(llmResult.provider_error_type !== undefined
-						? { providerErrorType: llmResult.provider_error_type }
-						: {}),
-					providerErrorMessage: resolveProviderErrorMessage(llmResult),
-				},
 				usageIncrementCount: 1,
 			};
 		} catch (error) {
@@ -284,11 +298,6 @@ export function createClassificationService(
 					post_id: post.post_id,
 					decision: "keep",
 					source: "error",
-				},
-				errorEvent: {
-					contentFingerprint: post.fingerprint,
-					postId: post.post_id,
-					providerErrorMessage: resolveUnexpectedErrorMessage(error),
 				},
 				usageIncrementCount: 1,
 			};
@@ -303,9 +312,9 @@ export function createClassificationService(
 		const flushSteps: Array<{ name: string; run: () => Promise<void> }> = [];
 		if (buffers.cacheWrites.length > 0) {
 			flushSteps.push({
-				name: "cache_upsert_many",
+				name: "cache_insert_many",
 				run: async () => {
-					await deps.classificationCacheRepository.upsertMany(
+					await deps.classificationCacheRepository.insertMany(
 						buffers.cacheWrites,
 					);
 				},
@@ -331,12 +340,12 @@ export function createClassificationService(
 				},
 			});
 		}
-		if (buffers.errorEvents.length > 0) {
+		if (buffers.successEvents.length > 0) {
 			flushSteps.push({
-				name: "classification_error_events_append_many",
+				name: "classification_success_events_append_many",
 				run: async () => {
 					await deps.classificationEventRepository.appendMany(
-						buffers.errorEvents,
+						buffers.successEvents,
 					);
 				},
 			});
@@ -350,12 +359,18 @@ export function createClassificationService(
 				try {
 					await step.run();
 				} catch (error) {
+					const err = error instanceof Error ? error : new Error(String(error));
+					const cause =
+						"cause" in err && err.cause instanceof Error
+							? err.cause.message
+							: undefined;
 					deps.logger.info("classification_flush_failed", {
 						step: step.name,
-						error: error instanceof Error ? error.message : String(error),
+						error: err.message,
+						...(cause !== undefined && { cause }),
 						cacheWriteCount: buffers.cacheWrites.length,
 						activityWriteCount: buffers.activityWrites.length,
-						errorEventCount: buffers.errorEvents.length,
+						successEventCount: buffers.successEvents.length,
 						usageIncrementCount: buffers.usageIncrementCount,
 					});
 				}
@@ -368,11 +383,9 @@ export function createClassificationService(
 		post: ClassifyInputPost,
 	): Promise<ClassificationResponse> {
 		const normalized = normalizePost(post);
-		const cached =
-			await deps.classificationCacheRepository.findFreshByFingerprint(
-				normalized.fingerprint,
-				getCacheExpiry(),
-			);
+		const cached = await deps.classificationCacheRepository.findByFingerprint(
+			normalized.fingerprint,
+		);
 		const buffers = createEmptyBuffers();
 
 		if (cached) {
@@ -410,9 +423,8 @@ export function createClassificationService(
 	): Promise<void> {
 		const normalizedPosts = posts.map(normalizePost);
 		const [cachedByFingerprint, quotaStatus] = await Promise.all([
-			deps.classificationCacheRepository.findFreshByFingerprints(
+			deps.classificationCacheRepository.findByFingerprints(
 				normalizedPosts.map((postItem) => postItem.fingerprint),
-				getCacheExpiry(),
 			),
 			deps.quotaService.getQuotaStatus(userId),
 		]);

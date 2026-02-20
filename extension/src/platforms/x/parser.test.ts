@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { extractPostData, readPostIdentity } from "./parser";
-import { SELECTORS } from "./selectors";
+
+const QUOTE_TWEET = '[role="link"][tabindex="0"]';
 
 function makeElement(
 	overrides: Partial<{
@@ -10,15 +11,19 @@ function makeElement(
 		getAttribute: (s: string) => string | null;
 		closest: (s: string) => any;
 		contains: (e: any) => boolean;
+		tagName: string;
+		textContent: string;
 	}> = {},
 ): HTMLElement {
 	return {
+		tagName: overrides.tagName ?? "ARTICLE",
 		matches: overrides.matches ?? (() => false),
 		querySelector: overrides.querySelector ?? (() => null),
 		querySelectorAll: overrides.querySelectorAll ?? (() => []),
 		getAttribute: overrides.getAttribute ?? (() => null),
 		closest: overrides.closest ?? (() => null),
 		contains: overrides.contains ?? (() => false),
+		textContent: overrides.textContent ?? "",
 	} as unknown as HTMLElement;
 }
 
@@ -111,25 +116,17 @@ describe("x parser", () => {
 					return null;
 				},
 				querySelectorAll: (s) => {
-					// Tweet text query
-					if (s === '[data-testid="tweetText"]') {
-						return [textEl];
-					}
-					// No quote tweets
-					if (s === '[data-testid="tweetPhoto"]') {
-						return [];
-					}
+					if (s === "p") return [textEl];
+					if (s === "img") return [];
 					return [];
 				},
+				textContent: "test tweet content",
 			});
 
 			const result = await extractPostData(el);
 			expect(result).not.toBeNull();
 			expect(result!.post_id).toBe("/alice/status/999");
-			expect(result!.author_id).toBe("alice");
-			expect(result!.author_name).toBe("Alice");
-			expect(result!.nodes[0].text).toBe("test tweet content");
-			expect(result!.nodes[0].kind).toBe("root");
+			expect(result!.text).toBe("test tweet content");
 		});
 
 		it("extracts quote tweet as repost node", async () => {
@@ -150,13 +147,11 @@ describe("x parser", () => {
 				matches: (s) => s === 'article[data-testid="tweet"]',
 				querySelector: (s) => {
 					// Quote tweet selector
-					if (s === SELECTORS.quoteTweet) {
+					if (s === QUOTE_TWEET) {
 						return quoteWrapper;
 					}
-					// First tweet text element (main tweet)
-					if (s === '[data-testid="tweetText"]') {
-						return mainTextEl;
-					}
+					// Semantic detection: p or a[href*="/status/"]
+					if (s === "p") return mainTextEl;
 					if (s === '[data-testid="User-Name"]') {
 						return {
 							querySelector: (inner: string) => {
@@ -175,48 +170,41 @@ describe("x parser", () => {
 					return null;
 				},
 				querySelectorAll: (s) => {
-					// Both text elements
-					if (s === '[data-testid="tweetText"]') {
-						return [mainTextEl, quoteTextEl];
-					}
-					// No images
-					if (s === '[data-testid="tweetPhoto"]') {
-						return [];
-					}
+					if (s === "p") return [mainTextEl, quoteTextEl];
+					if (s === "img") return [];
 					return [];
 				},
 				contains: (e: unknown) => e === quoteWrapper,
+				textContent: "Main tweet Quoted content here",
 			});
 
 			const result = await extractPostData(el);
 			expect(result).not.toBeNull();
-			expect(result!.nodes).toHaveLength(2);
-			expect(result!.nodes[0].kind).toBe("root");
-			expect(result!.nodes[0].text).toBe("main tweet");
-			expect(result!.nodes[1].kind).toBe("repost");
-			expect(result!.nodes[1].text).toBe("quoted content here");
+			expect(result!.text).toContain("main tweet");
+			expect(result!.text).toContain("quoted content here");
 		});
 
-		it("returns unknown author when User-Name not found", async () => {
+		it("extracts tweet text when User-Name not found", async () => {
 			const textEl = { textContent: "orphan tweet" };
 
 			const el = makeElement({
 				matches: (s) => s === 'article[data-testid="tweet"]',
 				querySelector: (s) => {
+					if (s === "p") return textEl;
 					if (s === '[data-testid="tweetText"]') return textEl;
 					return null;
 				},
 				querySelectorAll: (s) => {
-					if (s === '[data-testid="tweetText"]') return [textEl];
-					if (s === '[data-testid="tweetPhoto"]') return [];
+					if (s === "p") return [textEl];
+					if (s === "img") return [];
 					return [];
 				},
+				textContent: "orphan tweet",
 			});
 
 			const result = await extractPostData(el);
 			expect(result).not.toBeNull();
-			expect(result!.author_id).toBe("unknown");
-			expect(result!.author_name).toBe("Unknown");
+			expect(result!.text).toBe("orphan tweet");
 		});
 
 		// Image attachment extraction
@@ -281,18 +269,9 @@ describe("x parser", () => {
 					return null;
 				},
 				querySelectorAll: (s) => {
-					// Tweet text query
-					if (s === '[data-testid="tweetText"]') {
-						return [textEl];
-					}
-					// Photo containers query
-					if (s === '[data-testid="tweetPhoto"]') {
-						return [photoContainer];
-					}
-					// Quote tweet query (none in this test)
-					if (s === SELECTORS.quoteTweet) {
-						return [];
-					}
+					if (s === "p") return [textEl];
+					if (s === "img") return [tweetImage];
+					if (s === QUOTE_TWEET) return [];
 					return [];
 				},
 			});
@@ -301,7 +280,6 @@ describe("x parser", () => {
 			expect(result).not.toBeNull();
 			expect(result!.attachments).toHaveLength(1);
 			expect(result!.attachments[0]).toEqual({
-				node_id: "root",
 				kind: "image",
 				src: "https://pbs.twimg.com/media/ABC123.jpg",
 				alt: "Test image",
@@ -329,7 +307,7 @@ describe("x parser", () => {
 				matches: (s) => s === 'article[data-testid="tweet"]',
 				querySelector: (s) => {
 					// Quote tweet selector
-					if (s === SELECTORS.quoteTweet) {
+					if (s === QUOTE_TWEET) {
 						return quoteWrapper;
 					}
 					// First tweet text element (main tweet)
@@ -372,26 +350,18 @@ describe("x parser", () => {
 					return null;
 				},
 				querySelectorAll: (s) => {
-					// Both text elements
-					if (s === '[data-testid="tweetText"]') {
-						return [mainTextEl, quoteTextEl];
-					}
-					// No images in this test
-					if (s === '[data-testid="tweetPhoto"]') {
-						return [];
-					}
+					if (s === "p") return [mainTextEl, quoteTextEl];
+					if (s === "img") return [];
 					return [];
 				},
 				contains: (e: unknown) => e === quoteWrapper,
+				textContent: "Main tweet text Quoted tweet content",
 			});
 
 			const result = await extractPostData(el);
 			expect(result).not.toBeNull();
-			expect(result!.nodes).toHaveLength(2);
-			expect(result!.nodes[0].kind).toBe("root");
-			expect(result!.nodes[0].text).toBe("main tweet text");
-			expect(result!.nodes[1].kind).toBe("repost");
-			expect(result!.nodes[1].text).toBe("quoted tweet content");
+			expect(result!.text).toContain("main tweet text");
+			expect(result!.text).toContain("quoted tweet content");
 		});
 
 		// Quote tweet with image attachment
@@ -414,26 +384,10 @@ describe("x parser", () => {
 					return null;
 				},
 				querySelectorAll: (inner: string) => {
-					if (inner === '[data-testid="tweetPhoto"]') {
-						return [
-							{
-								querySelector: (sel: string) =>
-									sel === "img" ? quoteTweetImage : null,
-								closest: () => null, // Not inside another quote wrapper
-							},
-						];
-					}
+					if (inner === "img") return [quoteTweetImage];
 					return [];
 				},
-				contains: (e: unknown) => {
-					// The photo container from main element's querySelectorAll
-					// will be checked here - return true to simulate containment
-					// Also return true for quoteTextEl
-					return (
-						(e !== null && typeof e === "object" && "querySelector" in e) ||
-						e === quoteTextEl
-					);
-				},
+				contains: (e: unknown) => e === quoteTweetImage || e === quoteTextEl,
 			};
 
 			// Main tweet text element
@@ -448,7 +402,7 @@ describe("x parser", () => {
 				matches: (s) => s === 'article[data-testid="tweet"]',
 				querySelector: (s) => {
 					// Quote tweet selector
-					if (s === SELECTORS.quoteTweet) {
+					if (s === QUOTE_TWEET) {
 						return quoteWrapperEl;
 					}
 					// First tweet text element (main tweet)
@@ -491,39 +445,22 @@ describe("x parser", () => {
 					return null;
 				},
 				querySelectorAll: (s) => {
-					// Both tweet text elements
-					if (s === '[data-testid="tweetText"]') {
-						return [mainTextEl, quoteTextEl];
-					}
-					// Photo containers - only quote has one
-					if (s === '[data-testid="tweetPhoto"]') {
-						return [
-							{
-								querySelector: (sel: string) =>
-									sel === "img" ? quoteTweetImage : null,
-								closest: () => quoteWrapperEl, // This container IS inside the quote wrapper
-							},
-						];
-					}
+					if (s === "p") return [mainTextEl, quoteTextEl];
+					if (s === "img") return [quoteTweetImage];
 					return [];
 				},
 				contains: (e: unknown) => e === quoteWrapperEl,
+				textContent: "Check this out Amazing screenshot attached",
 			});
 
 			const result = await extractPostData(el);
 			expect(result).not.toBeNull();
-			// Should have root + repost node
-			expect(result!.nodes).toHaveLength(2);
-			expect(result!.nodes[1].kind).toBe("repost");
-			expect(result!.nodes[1].text).toBe("amazing screenshot attached");
-			// Should have image attachment from quote tweet
+			expect(result!.text).toContain("amazing screenshot attached");
 			expect(result!.attachments).toHaveLength(1);
 			expect(result!.attachments[0].kind).toBe("image");
 			expect(result!.attachments[0].src).toBe(
 				"https://pbs.twimg.com/media/IMG456.jpg",
 			);
-			// CRITICAL: Quote tweet image should have node_id='repost-0', not 'root'
-			expect(result!.attachments[0].node_id).toBe("repost-0");
 		});
 
 		it("waits for late media hydration before finalizing attachments", async () => {
@@ -547,7 +484,7 @@ describe("x parser", () => {
 			const el = makeElement({
 				matches: (s) => s === 'article[data-testid="tweet"]',
 				querySelector: (s) => {
-					if (s === '[data-testid="tweetText"]') return textEl;
+					if (s === "p") return textEl;
 					if (s === '[data-testid="User-Name"]') {
 						return {
 							querySelector: (inner: string) => {
@@ -584,15 +521,11 @@ describe("x parser", () => {
 					return null;
 				},
 				querySelectorAll: (s) => {
-					if (s === '[data-testid="tweetText"]') return [textEl];
-					if (s === '[data-testid="tweetPhoto"]') {
-						return photoReady ? [latePhotoContainer] : [];
-					}
-					if (s === '[data-testid="tweetPhoto"] img') {
-						return photoReady ? [lateImage] : [];
-					}
+					if (s === "p") return [textEl];
+					if (s === "img") return photoReady ? [lateImage] : [];
 					return [];
 				},
+				textContent: "tweet with late image",
 			});
 
 			setTimeout(() => {
@@ -603,7 +536,6 @@ describe("x parser", () => {
 			expect(result).not.toBeNull();
 			expect(result!.attachments).toHaveLength(1);
 			expect(result!.attachments[0]).toEqual({
-				node_id: "root",
 				kind: "image",
 				src: "https://pbs.twimg.com/media/LATE123.jpg",
 				alt: "Late image",
@@ -619,11 +551,12 @@ describe("x parser", () => {
 						: null,
 			};
 
-			const photoContainer = {
-				querySelector: (sel: string) => (sel === "img" ? null : null),
-				querySelectorAll: (sel: string) =>
-					sel === '[style*="background-image"]' ? [backgroundNode] : [],
-				getAttribute: (_name: string) => null,
+			const imgWithBackgroundParent = {
+				getAttribute: () => null,
+				parentElement: {
+					querySelectorAll: (sel: string) =>
+						sel === '[style*="background-image"]' ? [backgroundNode] : [],
+				},
 			};
 
 			const textEl = { textContent: "background image tweet" };
@@ -631,7 +564,7 @@ describe("x parser", () => {
 			const el = makeElement({
 				matches: (s) => s === 'article[data-testid="tweet"]',
 				querySelector: (s) => {
-					if (s === '[data-testid="tweetText"]') return textEl;
+					if (s === "p") return textEl;
 					if (s === '[data-testid="User-Name"]') {
 						return {
 							querySelector: (inner: string) => {
@@ -668,17 +601,17 @@ describe("x parser", () => {
 					return null;
 				},
 				querySelectorAll: (s) => {
-					if (s === '[data-testid="tweetText"]') return [textEl];
-					if (s === '[data-testid="tweetPhoto"]') return [photoContainer];
+					if (s === "p") return [textEl];
+					if (s === "img") return [imgWithBackgroundParent];
 					return [];
 				},
+				textContent: "background image tweet",
 			});
 
 			const result = await extractPostData(el);
 			expect(result).not.toBeNull();
 			expect(result!.attachments).toEqual([
 				{
-					node_id: "root",
 					kind: "image",
 					src: "https://pbs.twimg.com/media/BG789.jpg?format=jpg&name=small",
 					alt: "",

@@ -4,13 +4,13 @@ status: verified
 last_verified: 2026-02-16
 ---
 
-# API Spec (v0.1)
+# API Spec (v0.3)
 
 ## problem
 The extension and supporting flows need stable backend API contracts for authentication, classification, feedback, usage, and billing.
 
 ## non_goals
-- Introducing non-spec endpoints or expanding beyond v0.1 product scope.
+- Introducing non-spec endpoints or expanding beyond current product scope.
 - Breaking response contract changes without synchronized spec updates.
 
 ## acceptance_criteria
@@ -34,7 +34,7 @@ The extension and supporting flows need stable backend API contracts for authent
 - E2E: Extension-to-API auth/classification and checkout flow validation.
 
 ## rollout
-- Flags: No endpoint-level feature flags required in v0.1.
+- Flags: No endpoint-level feature flags required.
 - Migration: Contract-aligned schema changes handled via backend migrations.
 - Backout: Revert route changes while preserving backward-compatible responses.
 
@@ -110,23 +110,18 @@ Request:
 {
   "post": {
     "post_id": "linkedin-post-id-or-derived-hash",
-    "author_id": "author-id-or-url",
-    "author_name": "Some Person",
-    "nodes": [
-      { "id": "root", "parent_id": null, "kind": "root", "text": "root post text" },
-      { "id": "repost-0", "parent_id": "root", "kind": "repost", "text": "nested repost text" }
-    ],
+    "text": "whole post content including author, title, body, quoted content",
     "attachments": [
       {
-        "node_id": "root",
         "kind": "image",
+        "ordinal": 0,
         "sha256": "hex",
         "mime_type": "image/jpeg",
         "base64": "..."
       },
       {
-        "node_id": "root",
         "kind": "pdf",
+        "ordinal": 1,
         "source_url": "https://media.licdn.com/...",
         "excerpt_text": "optional extracted text"
       }
@@ -190,11 +185,7 @@ Request:
   "posts": [
     {
       "post_id": "linkedin-post-id-or-derived-hash",
-      "author_id": "author-id-or-url",
-      "author_name": "Some Person",
-      "nodes": [
-        { "id": "root", "parent_id": null, "kind": "root", "text": "root post text" }
-      ],
+      "text": "whole post content",
       "attachments": []
     }
   ]

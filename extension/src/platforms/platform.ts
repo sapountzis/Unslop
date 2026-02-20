@@ -3,27 +3,42 @@
 
 import { PostData } from "../types";
 
+export type PlatformId = "linkedin" | "x" | "reddit";
+
 /**
  * Post surface: the content root (for extraction), render root (for hide/collapse decisions),
  * label root (for pill placement in label mode), and a stable identity string for deduplication.
  */
-export type PostSurface = {
-	contentRoot: HTMLElement;
-	renderRoot: HTMLElement;
-	labelRoot: HTMLElement;
-	identity: string;
+export type DetectionSignal = {
+	id: string;
+	weight: number;
+	test: (element: HTMLElement) => boolean;
 };
 
-/**
- * Platform-specific DOM selectors.
- */
-export type PlatformSelectors = {
-	/** The feed container selector(s). */
-	feed: string;
-	/** Selector matching the semantic content card used for extraction/classification. */
-	candidatePostRoot: string;
-	/** Selector matching the outer layout node used for keep/hide rendering. */
-	renderPostRoot: string;
+export type DetectionProfile = {
+	/** Broad semantic hints observed from mutations and feed scans. */
+	hintSelectors: readonly string[];
+	/** Ancestor ascent depth for tree-context relocalization. */
+	maxAncestorDepth: number;
+	/** Minimum weighted score required to accept a candidate. */
+	minScore: number;
+	/** Rejection streak threshold that triggers a fallback full-feed scan. */
+	fallbackRejectStreak: number;
+	/** Weighted post-likeness signals. */
+	signals: readonly DetectionSignal[];
+	/** Resolve parser-compatible content root from the chosen candidate root. */
+	resolveContentRoot: (candidateRoot: HTMLElement) => HTMLElement | null;
+	/** Optional render root resolver. Defaults to candidate root. */
+	resolveRenderRoot?: (
+		candidateRoot: HTMLElement,
+		contentRoot: HTMLElement,
+	) => HTMLElement;
+	/** Optional label root resolver. Defaults to render root. */
+	resolveLabelRoot?: (
+		candidateRoot: HTMLElement,
+		contentRoot: HTMLElement,
+		renderRoot: HTMLElement,
+	) => HTMLElement;
 };
 
 /**
@@ -34,19 +49,10 @@ export type PlatformSelectors = {
  */
 export interface PlatformPlugin {
 	/** Unique platform identifier. */
-	readonly id: "linkedin" | "x" | "reddit";
+	readonly id: PlatformId;
 
-	/** Platform-specific DOM selectors. */
-	readonly selectors: PlatformSelectors;
-
-	/**
-	 * CSS selector fragment used by the pre-classify gate.
-	 * Applied to unprocessed post containers to hide them before classification finishes.
-	 */
-	readonly preclassifyCssSelector: string;
-
-	/** Check if a URL's route should have filtering enabled. */
-	shouldFilterRoute(url: string): boolean;
+	/** Platform-specific detection profile consumed by the shared detector engine. */
+	readonly detectionProfile: DetectionProfile;
 
 	/** Extract a route key from a URL (for route-change detection). */
 	routeKeyFromUrl(url: string): string;
@@ -56,9 +62,6 @@ export interface PlatformPlugin {
 
 	/** Find the feed container element in the current DOM. */
 	findFeedRoot(): Element | null;
-
-	/** Resolve a DOM node into a post surface, or null if not a valid post. */
-	resolvePostSurface(node: HTMLElement): PostSurface | null;
 
 	/** Extract structured post data from a content root element. */
 	extractPostData(element: HTMLElement): Promise<PostData | null>;

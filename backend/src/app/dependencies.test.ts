@@ -205,9 +205,7 @@ describe("app dependency wiring", () => {
 			body: JSON.stringify({
 				post: {
 					post_id: "svc-1",
-					author_id: "a-1",
-					author_name: "Author",
-					nodes: [{ id: "root", parent_id: null, kind: "root", text: "text" }],
+					text: "text",
 					attachments: [],
 				},
 			}),

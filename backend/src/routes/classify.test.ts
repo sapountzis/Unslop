@@ -9,8 +9,6 @@ import {
 	CLASSIFY_BATCH_MAX_SIZE,
 	MULTIMODAL_MAX_ATTACHMENTS,
 	MULTIMODAL_MAX_IMAGE_BYTES,
-	MULTIMODAL_MAX_NODE_COUNT,
-	MULTIMODAL_MAX_NODE_DEPTH,
 	MULTIMODAL_MAX_PDF_EXCERPT_CHARS,
 } from "../lib/policy-constants";
 import type { ClassificationService } from "../services/classification-service";
@@ -72,27 +70,16 @@ const app = createTestApp((testApp) => {
 function createMultimodalPost(overrides?: Partial<Record<string, unknown>>) {
 	return {
 		post_id: "post-1",
-		author_id: "author-1",
-		author_name: "Author 1",
-		nodes: [{ id: "root", parent_id: null, kind: "root", text: "Root text" }],
+		text: "Root text",
 		attachments: [],
 		...overrides,
 	};
 }
 
-function createNodeChain(depth: number) {
-	return Array.from({ length: depth + 1 }, (_, index) => ({
-		id: index === 0 ? "root" : `node-${index}`,
-		parent_id: index === 0 ? null : index === 1 ? "root" : `node-${index - 1}`,
-		kind: index === 0 ? "root" : "repost",
-		text: `Node ${index}`,
-	}));
-}
-
 function createAttachment(kind: "image" | "pdf", ordinal: number) {
 	if (kind === "image") {
 		return {
-			node_id: "root",
+			ordinal,
 			kind: "image",
 			sha256: "a".repeat(64),
 			mime_type: "image/jpeg",
@@ -101,7 +88,7 @@ function createAttachment(kind: "image" | "pdf", ordinal: number) {
 	}
 
 	return {
-		node_id: "root",
+		ordinal,
 		kind: "pdf",
 		source_url: `https://example.com/file-${ordinal}.pdf`,
 		excerpt_text: "Excerpt",
@@ -123,9 +110,7 @@ describe("Classify Routes (unit)", () => {
 			body: JSON.stringify({
 				post: {
 					post_id: "x",
-					author_id: "x",
-					author_name: "x",
-					nodes: [{ id: "root", parent_id: null, kind: "root", text: "x" }],
+					text: "x",
 					attachments: [],
 				},
 			}),
@@ -154,8 +139,7 @@ describe("Classify Routes (unit)", () => {
 		const payload = {
 			post: createMultimodalPost({
 				post_id: "svc-1",
-				author_id: "author-1",
-				author_name: "Test Author",
+				text: "Test Author content",
 			}),
 		};
 
@@ -186,8 +170,7 @@ describe("Classify Routes (unit)", () => {
 			body: JSON.stringify({
 				post: createMultimodalPost({
 					post_id: "quota-1",
-					author_id: "author-1",
-					author_name: "Test Author",
+					text: "Test Author content",
 				}),
 			}),
 		});
@@ -223,20 +206,12 @@ describe("Classify Routes (unit)", () => {
 
 	it("POST /v1/classify/batch enforces max batch size", async () => {
 		const token = await generateSessionToken(TEST_USER_ID, "test@example.com");
-		const posts = Array.from({ length: 21 }, (_, index) => ({
-			...createMultimodalPost(),
-			post_id: `batch-max-${index}`,
-			author_id: "author-123",
-			author_name: "Batch Test",
-			nodes: [
-				{
-					id: "root",
-					parent_id: null,
-					kind: "root",
-					text: "Short test content.",
-				},
-			],
-		}));
+		const posts = Array.from({ length: 21 }, (_, index) =>
+			createMultimodalPost({
+				post_id: `batch-max-${index}`,
+				text: "Short test content.",
+			}),
+		);
 
 		const res = await app.request("http://localhost/v1/classify/batch", {
 			method: "POST",
@@ -254,20 +229,8 @@ describe("Classify Routes (unit)", () => {
 		const token = await generateSessionToken(TEST_USER_ID, "test@example.com");
 		const payload = {
 			posts: [
-				{
-					...createMultimodalPost(),
-					post_id: "post-1",
-					author_id: "author-1",
-					author_name: "A",
-					nodes: [{ id: "root", parent_id: null, kind: "root", text: "one" }],
-				},
-				{
-					...createMultimodalPost(),
-					post_id: "post-2",
-					author_id: "author-2",
-					author_name: "B",
-					nodes: [{ id: "root", parent_id: null, kind: "root", text: "two" }],
-				},
+				createMultimodalPost({ post_id: "post-1", text: "one" }),
+				createMultimodalPost({ post_id: "post-2", text: "two" }),
 			],
 		};
 
@@ -315,20 +278,8 @@ describe("Classify Routes (unit)", () => {
 		const token = await generateSessionToken(TEST_USER_ID, "test@example.com");
 		const payload = {
 			posts: [
-				{
-					...createMultimodalPost(),
-					post_id: "post-1",
-					author_id: "author-1",
-					author_name: "A",
-					nodes: [{ id: "root", parent_id: null, kind: "root", text: "one" }],
-				},
-				{
-					...createMultimodalPost(),
-					post_id: "post-2",
-					author_id: "author-2",
-					author_name: "B",
-					nodes: [{ id: "root", parent_id: null, kind: "root", text: "two" }],
-				},
+				createMultimodalPost({ post_id: "post-1", text: "one" }),
+				createMultimodalPost({ post_id: "post-2", text: "two" }),
 			],
 		};
 
@@ -357,9 +308,7 @@ describe("Classify Routes (unit)", () => {
 		const legacyFieldName = `content${"_text"}`;
 		const multimodalPost = {
 			post_id: "p1",
-			author_id: "a1",
-			author_name: "n1",
-			nodes: [{ id: "root", parent_id: null, kind: "root", text: "x" }],
+			text: "x",
 			attachments: [],
 		};
 
@@ -373,8 +322,6 @@ describe("Classify Routes (unit)", () => {
 			classifySchema.safeParse({
 				post: {
 					post_id: "legacy-p1",
-					author_id: "a1",
-					author_name: "n1",
 					[legacyFieldName]: "legacy",
 				},
 			}).success,
@@ -382,27 +329,16 @@ describe("Classify Routes (unit)", () => {
 
 		expect(
 			batchClassifySchema.safeParse({
-				posts: Array.from({ length: CLASSIFY_BATCH_MAX_SIZE }, (_, index) => ({
-					post_id: `p-${index}`,
-					author_id: "a1",
-					author_name: "n1",
-					nodes: [{ id: "root", parent_id: null, kind: "root", text: "x" }],
-					attachments: [],
-				})),
+				posts: Array.from({ length: CLASSIFY_BATCH_MAX_SIZE }, (_, index) =>
+					createMultimodalPost({ post_id: `p-${index}` }),
+				),
 			}).success,
 		).toBe(true);
 
 		expect(
 			batchClassifySchema.safeParse({
-				posts: Array.from(
-					{ length: CLASSIFY_BATCH_MAX_SIZE + 1 },
-					(_, index) => ({
-						post_id: `p-${index}`,
-						author_id: "a1",
-						author_name: "n1",
-						nodes: [{ id: "root", parent_id: null, kind: "root", text: "x" }],
-						attachments: [],
-					}),
+				posts: Array.from({ length: CLASSIFY_BATCH_MAX_SIZE + 1 }, (_, index) =>
+					createMultimodalPost({ post_id: `p-${index}` }),
 				),
 			}).success,
 		).toBe(false);
@@ -411,20 +347,6 @@ describe("Classify Routes (unit)", () => {
 	it("rejects multimodal payloads that exceed policy limits and rejects legacy shape", () => {
 		const legacyFieldName = `content${"_text"}`;
 		const maxEncodedLength = Math.ceil(MULTIMODAL_MAX_IMAGE_BYTES / 3) * 4;
-		const tooManyNodes = createMultimodalPost({
-			nodes: Array.from(
-				{ length: MULTIMODAL_MAX_NODE_COUNT + 1 },
-				(_, index) => ({
-					id: index === 0 ? "root" : `node-${index}`,
-					parent_id: index === 0 ? null : "root",
-					kind: index === 0 ? "root" : "repost",
-					text: `Node ${index}`,
-				}),
-			),
-		});
-		const tooDeepNodes = createMultimodalPost({
-			nodes: createNodeChain(MULTIMODAL_MAX_NODE_DEPTH + 1),
-		});
 		const tooManyAttachments = createMultimodalPost({
 			attachments: Array.from(
 				{ length: MULTIMODAL_MAX_ATTACHMENTS + 1 },
@@ -434,7 +356,7 @@ describe("Classify Routes (unit)", () => {
 		const tooLargeImage = createMultimodalPost({
 			attachments: [
 				{
-					node_id: "root",
+					ordinal: 0,
 					kind: "image",
 					sha256: "b".repeat(64),
 					mime_type: "image/jpeg",
@@ -447,7 +369,7 @@ describe("Classify Routes (unit)", () => {
 		const tooLongEncodedImage = createMultimodalPost({
 			attachments: [
 				{
-					node_id: "root",
+					ordinal: 0,
 					kind: "image",
 					sha256: "c".repeat(64),
 					mime_type: "image/jpeg",
@@ -458,7 +380,7 @@ describe("Classify Routes (unit)", () => {
 		const tooLongPdfExcerpt = createMultimodalPost({
 			attachments: [
 				{
-					node_id: "root",
+					ordinal: 0,
 					kind: "pdf",
 					source_url: "https://example.com/file.pdf",
 					excerpt_text: "x".repeat(MULTIMODAL_MAX_PDF_EXCERPT_CHARS + 1),
@@ -474,8 +396,6 @@ describe("Classify Routes (unit)", () => {
 		const legacyShape = {
 			post: {
 				post_id: "legacy-1",
-				author_id: "author-1",
-				author_name: "Author 1",
 				[legacyFieldName]: "legacy",
 			},
 		};
@@ -483,12 +403,6 @@ describe("Classify Routes (unit)", () => {
 		expect(
 			classifySchema.safeParse({ post: createMultimodalPost() }).success,
 		).toBe(true);
-		expect(classifySchema.safeParse({ post: tooManyNodes }).success).toBe(
-			false,
-		);
-		expect(classifySchema.safeParse({ post: tooDeepNodes }).success).toBe(
-			false,
-		);
 		expect(classifySchema.safeParse({ post: tooManyAttachments }).success).toBe(
 			false,
 		);

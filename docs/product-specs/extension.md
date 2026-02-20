@@ -1,22 +1,22 @@
 ---
 owner: unslop
 status: verified
-last_verified: 2026-02-16
+last_verified: 2026-02-17
 ---
 
-# Chrome Extension Spec (v0.1)
+# Chrome Extension Spec (v0.3)
 
 ## problem
 Users need a minimal Chrome extension that can classify LinkedIn, X, and Reddit feed posts and apply decisions without breaking normal browsing.
 
 ## non_goals
-- UI complexity beyond toggle/sign-in/status/upgrade.
+- UI complexity beyond toggle/sign-in/status/upgrade/diagnostics.
 - Per-author heuristics, sliders, or non-spec runtime feature expansion.
 
 ## acceptance_criteria
 - AC1: Extension runtime extracts canonical post payloads and requests batch classification.
 - AC2: Decisions are applied as `keep|hide` with fail-open behavior.
-- AC3: Auth callback, storage, popup controls, and backend message contracts are defined.
+- AC3: Auth callback, storage, popup controls, diagnostics checks, and backend message contracts are defined.
 
 ## constraints
 - Performance: Mutation observation and classify batching must not degrade feed interaction.
@@ -29,12 +29,12 @@ Users need a minimal Chrome extension that can classify LinkedIn, X, and Reddit 
 - Traces: Optional message flow spans across content/background/api boundaries.
 
 ## test_plan
-- Unit: Parser, selector, surface, and decision rendering modules.
+- Unit: Parser, selector, detection-profile, and decision rendering modules.
 - Integration: Background/content message contracts and auth persistence behavior.
 - E2E: Popup auth + feed classification smoke across supported pages.
 
 ## rollout
-- Flags: No runtime feature flags required for v0.1 extension baseline.
+- Flags: No runtime feature flags required.
 - Migration: Manifest/build changes shipped with versioned extension bundles.
 - Backout: Roll back to last known-good extension package if regressions appear.
 
@@ -55,7 +55,7 @@ The extension must be minimal and must **fail open**.
    - Reddit plugin runs on `https://www.reddit.com/*` and `https://old.reddit.com/*`.
    - Starts at `document_start` to enable pre-classification hiding.
    - Detects posts using `MutationObserver`.
-   - Extracts `post_id`, `author_id`, `author_name`, `nodes`, and `attachments`.
+   - Extracts `post_id`, `text`, and `attachments`.
    - Sends posts to background for batch classification.
    - Applies the returned decision to the DOM.
 
@@ -79,15 +79,18 @@ The extension must be minimal and must **fail open**.
      - Sign in (email field + button)
      - Account status (email + plan)
      - Upgrade to Pro (opens checkout URL)
+     - Run Diagnostics (one-click runtime + selector + storage health checks)
 
-No options page is required in v0.1.
+No options page is required.
 
 ## Storage keys (sync)
 
 ```ts
 type Storage = {
-  jwt?: string;            // session token
-  enabled: boolean;        // default true
+  jwt?: string;                              // session token
+  enabled: boolean;                          // default true
+  hideRenderMode?: "collapse" | "label";     // default "collapse"
+  devMode?: boolean;                         // default false; gates diagnostics UI
 };
 ```
 
@@ -97,15 +100,10 @@ For each feed post element:
 
 - `post_id`:
   - Use platform-native stable ID if present, else derive (see below)
-- `author_id`:
-  - profile URL or stable author identifier if present
-- `author_name`:
-  - visible author name text (best-effort)
-- `nodes`:
-  - ordered text nodes (`root` first, then nested repost nodes in DOM order)
-  - each node includes: `id`, `parent_id`, `kind`, `text`
+- `text`:
+  - whole post content (author, title, body, quoted content, metadata) as a single normalized string
 - `attachments`:
-  - zero or more items tied to `node_id`
+  - zero or more items with optional `ordinal` for ordering
   - parser may emit attachment refs (image `src`; pdf `iframe_src` / `container_data_url` / `source_hint`)
   - background resolver converts refs into canonical payloads:
     - `image` attachments include `sha256`, `mime_type`, `base64`
@@ -115,18 +113,18 @@ For each feed post element:
 
 If no native post id exists:
 
-- `post_id = hex(SHA-256(author_id + "\n" + JSON.stringify(nodes)))`
+- `post_id = hex(SHA-256(normalizeContentText(text)))`
 
 ### Canonical payload requirements
 
-- preserve deterministic node and attachment ordering when building request payloads
+- preserve deterministic attachment ordering when building request payloads
 - the extension does not compute `content_fingerprint`
 - backend computes global `content_fingerprint` for cache lookups from canonical payload content
 
 ### Reddit capture requirements
 
 - Candidate post roots include both `shreddit-post` and `shreddit-ad-post`.
-- Parser includes title/body plus available subreddit and post metadata in normalized node text.
+- Parser includes title/body plus available subreddit and post metadata in normalized text.
 - Parser emits image attachment refs from Reddit media containers with deterministic ordinals and stable deduping by source URL.
 
 ## Classification flow (required)
@@ -136,7 +134,7 @@ Content script → background:
 ```ts
 chrome.runtime.sendMessage({
   type: "CLASSIFY_BATCH",
-  posts: [{ post_id, author_id, author_name, nodes, attachments }]
+  posts: [{ post_id, text, attachments }]
 });
 ```
 
@@ -170,10 +168,9 @@ The content script uses a fail-open timeout (`3000ms` baseline). If no decision 
 
 ## Pre-classification behavior
 
-- While filtering is enabled, unprocessed post nodes are hidden until a decision is applied.
-- The preclassify gate is enabled synchronously at content-script bootstrap on feed routes.
-- Processed `keep` posts become visible once marked processed.
-- This prevents "appear then disappear" flicker for posts that end up hidden.
+- While a post is being classified, its render root is marked with `data-unslop-checking`.
+- Once a decision is applied the marker is removed and `data-unslop-processed` is set.
+- Already-processed elements are skipped on subsequent mutation callbacks.
 
 ## Failure modes (required)
 

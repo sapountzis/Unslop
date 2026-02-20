@@ -17,6 +17,10 @@ This repository is agent-first. `AGENTS.md` is the map; `docs/` is the system of
    - `docs/exec-plans/README.md` for lifecycle/DoD/blocker rules.
    - `docs/product-specs/index.md` for governing-spec selection.
 
+## Domain-specific documentation
+- **Extension**: `extension/AGENTS.md` — architecture, flows, entry points, module roles, binding rules. No `extension/docs/`; all extension guidance lives in AGENTS.md.
+- **Backend**: `backend/AGENTS.md` — backend constitution and module boundaries.
+
 ## Documentation Areas
 - `docs/product-specs/index.md` and `docs/product-specs/README.md`: authoritative behavior and acceptance criteria.
 - `docs/exec-plans/README.md`: planning format and lifecycle rules.

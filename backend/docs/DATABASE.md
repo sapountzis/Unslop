@@ -74,8 +74,8 @@ Indexes:
 
 Purpose:
 
-- Append-only ledger for actual LLM attempts (cache misses only).
-- Includes both success and error attempts.
+- Append-only ledger for successful LLM attempts (cache misses only).
+- Success events only; errors are not persisted.
 
 Key columns:
 

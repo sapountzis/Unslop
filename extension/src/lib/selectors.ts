@@ -4,10 +4,10 @@
 
 // Data attributes used by the extension
 export const ATTRIBUTES = {
+	pending: "data-unslop-pending",
 	processed: "data-unslop-processed",
 	processing: "data-unslop-checking",
 	decision: "data-unslop-decision",
-	preclassify: "data-unslop-preclassify",
 	identity: "data-unslop-identity",
 } as const;
 

@@ -9,6 +9,7 @@ const PLAN_PATH_RE = /^docs\/exec-plans\/(active|completed)\/[^/]+\.md$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const PLACEHOLDER_RE = /<fill-[^>]+>/;
 const LOOP_EVIDENCE_RE = /^- Iteration \d+:\s*.*make check.*review.*$/im;
+const CHANGELOG_PATHS = new Set(["CHANGELOG.md"]);
 const REQUIRED_WORKFLOW_PATTERNS = [
 	{
 		label: "Init Command line",
@@ -252,10 +253,19 @@ if (changedFiles.length === 0) {
 
 const changedCodeFiles = changedFiles.filter((file) => !isDocPath(file));
 const touchedPlans = changedFiles.filter(isPlanPath);
+const touchedChangelog = changedFiles.some((file) => CHANGELOG_PATHS.has(file));
 
 if (changedCodeFiles.length === 0) {
 	console.log("[TASKFLOW] PASS: docs-only change set detected.");
 	process.exit(0);
+}
+
+if (!touchedChangelog) {
+	addViolation(
+		"non-doc changes must include a root changelog update",
+		`changed non-doc files (${changedCodeFiles.length}): ${formatFileList(changedCodeFiles)}; changelog touched: no`,
+		"update CHANGELOG.md (Keep a Changelog format) in the same change set",
+	);
 }
 
 if (touchedPlans.length !== 1) {

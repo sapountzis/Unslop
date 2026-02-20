@@ -12,6 +12,7 @@ function makeElement(
 		querySelectorAll: (s: string) => any[];
 		getAttribute: (s: string) => string | null;
 		classList: { contains: (s: string) => boolean };
+		textContent: string;
 	}> = {},
 ): HTMLElement {
 	return {
@@ -21,43 +22,42 @@ function makeElement(
 		getAttribute: overrides.getAttribute ?? (() => null),
 		classList: overrides.classList ?? { contains: () => false },
 		closest: () => null,
+		textContent: overrides.textContent ?? "",
 	} as unknown as HTMLElement;
 }
 
 describe("linkedin parser", () => {
 	describe("isLikelyFeedPostRoot", () => {
-		it("rejects elements without feed-shared-update-v2 class", () => {
+		it("rejects elements without article role or URN", () => {
 			const el = makeElement({
-				matches: () => false,
-				classList: { contains: () => false },
+				getAttribute: () => null,
+				querySelector: () => null,
 			});
 			expect(isLikelyFeedPostRoot(el)).toBe(false);
 		});
 
 		it("rejects aggregate URNs", () => {
 			const el = makeElement({
-				matches: (s) => s.includes("feed-shared-update-v2"),
-				classList: { contains: (c) => c === "feed-shared-update-v2" },
 				getAttribute: (name) =>
-					name === "data-urn" ? "urn:li:aggregate:123" : null,
+					name === "role"
+						? "article"
+						: name === "data-urn"
+							? "urn:li:aggregate:123"
+							: null,
 			});
 			expect(isLikelyFeedPostRoot(el)).toBe(false);
 		});
 
 		it("rejects elements with recommendation entities", () => {
 			const el = makeElement({
-				matches: (s) => s.includes("feed-shared-update-v2"),
-				classList: { contains: (c) => c === "feed-shared-update-v2" },
-				getAttribute: () => null,
-				querySelector: (s) => {
-					if (
-						s.includes("feed-discovery-entity") ||
-						s.includes("aggregated-content")
-					) {
-						return {};
-					}
-					return null;
-				},
+				getAttribute: (name) =>
+					name === "role"
+						? "article"
+						: name === "data-urn"
+							? "urn:li:activity:123"
+							: null,
+				querySelector: (s) =>
+					s === '[data-urn^="urn:li:aggregate:"]' ? {} : null,
 			});
 			expect(isLikelyFeedPostRoot(el)).toBe(false);
 		});
@@ -65,8 +65,7 @@ describe("linkedin parser", () => {
 		it("accepts valid feed post with URN", () => {
 			const el = makeElement({
 				matches: (s) =>
-					s.includes("feed-shared-update-v2") || s.includes("data-urn"),
-				classList: { contains: (c) => c === "feed-shared-update-v2" },
+					s.includes("urn:li:activity:") || s.includes("urn:li:share:"),
 				getAttribute: (name) =>
 					name === "data-urn" ? "urn:li:activity:123" : null,
 				querySelector: () => null,
@@ -117,10 +116,10 @@ describe("linkedin parser", () => {
 		it("extracts basic post with text content", async () => {
 			const el = makeElement({
 				matches: (s) =>
-					s.includes("feed-shared-update-v2") || s.includes("data-urn"),
-				classList: { contains: (c) => c === "feed-shared-update-v2" },
+					s.includes("urn:li:activity:") || s.includes("urn:li:share:"),
 				getAttribute: (name) =>
 					name === "data-urn" ? "urn:li:activity:test123" : null,
+				textContent: "  My LinkedIn post content.  ",
 				querySelector: (s) => {
 					if (
 						s.includes("feed-shared-text") ||
@@ -161,18 +160,17 @@ describe("linkedin parser", () => {
 
 			const result = await extractPostData(el);
 			expect(result).not.toBeNull();
-			expect(result!.author_id).toBe("johndoe");
-			expect(result!.nodes[0].kind).toBe("root");
-			expect(result!.nodes[0].text).toBe("my linkedin post content.");
+			expect(result!.post_id).toBe("urn:li:activity:test123");
+			expect(result!.text).toBe("my linkedin post content.");
 		});
 
 		it("handles company author URLs", async () => {
 			const el = makeElement({
 				matches: (s) =>
-					s.includes("feed-shared-update-v2") || s.includes("data-urn"),
-				classList: { contains: (c) => c === "feed-shared-update-v2" },
+					s.includes("urn:li:activity:") || s.includes("urn:li:share:"),
 				getAttribute: (name) =>
 					name === "data-urn" ? "urn:li:activity:comp1" : null,
+				textContent: "Company post",
 				querySelector: (s) => {
 					if (
 						s.includes("feed-shared-text") ||
@@ -203,7 +201,8 @@ describe("linkedin parser", () => {
 
 			const result = await extractPostData(el);
 			expect(result).not.toBeNull();
-			expect(result!.author_id).toBe("company-acme-corp");
+			expect(result!.post_id).toBe("urn:li:activity:comp1");
+			expect(result!.text).toBe("company post");
 		});
 	});
 });
