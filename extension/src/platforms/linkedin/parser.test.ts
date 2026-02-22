@@ -113,6 +113,41 @@ describe("linkedin parser", () => {
 			expect(await extractPostData(el)).toBeNull();
 		});
 
+		it("removes known linkedin feed chrome from extracted text", async () => {
+			const el = makeElement({
+				matches: (s) =>
+					s.includes("urn:li:activity:") || s.includes("urn:li:share:"),
+				getAttribute: (name) =>
+					name === "data-urn" ? "urn:li:activity:noise1" : null,
+				textContent:
+					"Feed post number 28 Serg Masis loves this Real post body here. 33 reactions 13 comments Like Comment Repost Send",
+				querySelector: () => null,
+				querySelectorAll: () => [],
+			});
+
+			const result = await extractPostData(el);
+			expect(result).not.toBeNull();
+			expect(result!.text).toBe("real post body here.");
+		});
+
+		it("falls back to raw normalized text if cleanup strips everything", async () => {
+			const el = makeElement({
+				matches: (s) =>
+					s.includes("urn:li:activity:") || s.includes("urn:li:share:"),
+				getAttribute: (name) =>
+					name === "data-urn" ? "urn:li:activity:fallback1" : null,
+				textContent: "Feed post number 15 Coursera commented on this",
+				querySelector: () => null,
+				querySelectorAll: () => [],
+			});
+
+			const result = await extractPostData(el);
+			expect(result).not.toBeNull();
+			expect(result!.text).toBe(
+				"feed post number 15 coursera commented on this",
+			);
+		});
+
 		it("extracts basic post with text content", async () => {
 			const el = makeElement({
 				matches: (s) =>
