@@ -1,6 +1,7 @@
 // LinkedIn DOM parser — semantic/attribute selectors only (no classes)
 import { normalizeContentText, derivePostId } from "../../lib/hash";
 import { PostAttachment, PostData } from "../../types";
+import { cleanupLinkedInText } from "./textCleanup";
 
 const URN_SELECTOR =
 	'[data-urn^="urn:li:activity:"], [data-urn^="urn:li:share:"]';
@@ -109,7 +110,14 @@ function readAttribute(
 }
 
 function extractText(element: HTMLElement): string {
-	return normalizeContentText(element.textContent ?? "");
+	const rawText = element.textContent ?? "";
+	const normalized = normalizeContentText(rawText);
+	if (!normalized) {
+		return "";
+	}
+
+	const cleaned = cleanupLinkedInText(rawText);
+	return cleaned.length > 0 ? cleaned : normalized;
 }
 
 function extractAttachmentRefs(element: HTMLElement): PostAttachment[] {
