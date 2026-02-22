@@ -143,7 +143,9 @@ describe("linkedin parser", () => {
 
 			const result = await extractPostData(el);
 			expect(result).not.toBeNull();
-			expect(result!.text).toBe("feed post number 15 coursera commented on this");
+			expect(result!.text).toBe(
+				"feed post number 15 coursera commented on this",
+			);
 		});
 
 		it("extracts basic post with text content", async () => {

@@ -39,6 +39,9 @@ export function cleanupLinkedInText(rawText: string): string {
 		return "";
 	}
 
-	const withoutLeadingNoise = stripByPatterns(normalized, LEADING_NOISE_PATTERNS);
+	const withoutLeadingNoise = stripByPatterns(
+		normalized,
+		LEADING_NOISE_PATTERNS,
+	);
 	return stripByPatterns(withoutLeadingNoise, TRAILING_NOISE_PATTERNS);
 }

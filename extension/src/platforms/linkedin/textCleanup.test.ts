@@ -20,6 +20,8 @@ describe("linkedin text cleanup", () => {
 		const cleaned = cleanupLinkedInText(
 			"I like this approach and you can comment if you disagree.",
 		);
-		expect(cleaned).toBe("i like this approach and you can comment if you disagree.");
+		expect(cleaned).toBe(
+			"i like this approach and you can comment if you disagree.",
+		);
 	});
 });
