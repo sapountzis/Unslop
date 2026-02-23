@@ -14,13 +14,9 @@ export const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 export const CACHE_MAX_ITEMS = 10_000;
 
 // Batch classify settings
-// Keep a small window so multiple nearby posts still batch, while reducing
-// visible "new post -> request sent" delay.
 export const BATCH_WINDOW_MS = 20;
 // Keep in sync with backend/src/lib/policy-constants.ts: CLASSIFY_BATCH_MAX_SIZE
 export const BATCH_MAX_ITEMS = 20;
-// Slightly higher concurrency reduces backlog under feed bursts without
-// aggressively increasing request pressure.
 export const BATCH_MAX_INFLIGHT_REQUESTS = 3;
 export const BATCH_RESULT_TIMEOUT_MS = 3000; // Viewport-aware fail-open timeout in pending-decision coordinator
 
@@ -37,7 +33,7 @@ export type HideRenderMode = "collapse" | "label";
 export const HIDE_RENDER_MODE: HideRenderMode = "collapse";
 
 // Runtime orchestration timings
-export const WATCHDOG_POLL_MS = 1000;
+export const ROUTE_HEARTBEAT_MS = 300;
 export const PERSIST_INTERVAL_MS = 30_000;
 export const SYNC_STORAGE_AREA = "sync";
 

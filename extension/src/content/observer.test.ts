@@ -124,6 +124,32 @@ describe("FeedObserver", () => {
 		expect(() => obs.detach()).not.toThrow();
 	});
 
+	it("detached observer does not reattach when new feed root appears", async () => {
+		let feedRoot: HTMLElement | null = document.createElement("div");
+		container.appendChild(feedRoot);
+
+		let attachCount = 0;
+		const obs = new FeedObserver(
+			() => feedRoot,
+			() => {},
+			() => {
+				attachCount += 1;
+			},
+		);
+		obs.attach();
+		expect(obs.isLive).toBe(true);
+		obs.detach();
+
+		const replacement = document.createElement("section");
+		const initial = feedRoot;
+		feedRoot = replacement;
+		container.replaceChild(replacement, initial);
+		await tick();
+
+		expect(attachCount).toBe(1);
+		expect(obs.isLive).toBe(false);
+	});
+
 	// ── re-attach ─────────────────────────────────────────────────────────
 
 	it("re-attaching on a live observer detaches first then re-attaches cleanly", async () => {

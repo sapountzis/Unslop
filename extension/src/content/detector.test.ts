@@ -66,6 +66,16 @@ describe("collectHints", () => {
 		const node = el("div", { "data-other": "true" });
 		expect(collectHints(node, ["[data-hint]"])).toHaveLength(0);
 	});
+
+	it("deduplicates hints when selectors overlap", () => {
+		const node = el("div", { "data-hint": "true", "data-post": "true" });
+		const child = el("span", { "data-hint": "true", "data-post": "true" });
+		node.appendChild(child);
+		const hints = collectHints(node, ["[data-hint]", "[data-post]"]);
+		expect(hints).toHaveLength(2);
+		expect(hints[0]).toBe(node);
+		expect(hints[1]).toBe(child);
+	});
 });
 
 // ── detectPost ─────────────────────────────────────────────────────────────

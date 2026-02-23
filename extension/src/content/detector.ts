@@ -12,12 +12,20 @@ export function collectHints(
 	selectors: readonly string[],
 ): HTMLElement[] {
 	if (!(node instanceof HTMLElement)) return [];
+	if (selectors.length === 0) return [];
+	const selector = selectors.join(", ");
 	const hints: HTMLElement[] = [];
-	for (const sel of selectors) {
-		if (node.matches(sel)) hints.push(node);
-		for (const el of node.querySelectorAll<HTMLElement>(sel)) {
-			hints.push(el);
-		}
+	const seen = new Set<HTMLElement>();
+	const add = (element: HTMLElement): void => {
+		if (seen.has(element)) return;
+		seen.add(element);
+		hints.push(element);
+	};
+	if (node.matches(selector)) {
+		add(node);
+	}
+	for (const el of node.querySelectorAll<HTMLElement>(selector)) {
+		add(el);
 	}
 	return hints;
 }

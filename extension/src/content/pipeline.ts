@@ -1,11 +1,15 @@
 // Pipeline — the core orchestrator.
 //
 // Lifecycle: start() → [observe mutations] → processNode() → detect → parse → classify → render
-// Route changes re-attach the observer. Toggle/storage changes update enabled/hideMode.
+// Route eligibility is evaluated on a heartbeat; processing is gated by route+enabled state.
 import type { PlatformPlugin } from "../platforms/platform";
 import type { BatchClassifyResult } from "../types";
 import { MESSAGE_TYPES } from "../lib/messages";
-import { PERSIST_INTERVAL_MS, SYNC_STORAGE_AREA } from "../lib/config";
+import {
+	PERSIST_INTERVAL_MS,
+	ROUTE_HEARTBEAT_MS,
+	SYNC_STORAGE_AREA,
+} from "../lib/config";
 import {
 	HIDE_RENDER_MODE_STORAGE_KEY,
 	resolveHideRenderMode,
@@ -19,14 +23,12 @@ import { FeedObserver } from "./observer";
 import { collectHints, detectPost, scanFeed } from "./detector";
 import { Classifier } from "./classifier";
 import { renderDecision, clearAllDecisions } from "./renderer";
-import { NavigationHandler } from "./navigation";
 import { createState } from "./state";
 
 export class Pipeline {
 	private readonly state = createState();
 	private readonly observer: FeedObserver;
 	private readonly classifier: Classifier;
-	private readonly nav: NavigationHandler;
 	private messageListener:
 		| ((
 				msg: unknown,
@@ -38,6 +40,8 @@ export class Pipeline {
 		| ((changes: Record<string, { newValue?: unknown }>, area: string) => void)
 		| null = null;
 	private persistIntervalId: ReturnType<typeof setInterval> | null = null;
+	private routeHeartbeatId: ReturnType<typeof setInterval> | null = null;
+	private visibilityHandler: (() => void) | null = null;
 	constructor(private readonly platform: PlatformPlugin) {
 		this.classifier = new Classifier(
 			(msg) =>
@@ -48,28 +52,37 @@ export class Pipeline {
 		this.observer = new FeedObserver(
 			() => platform.findFeedRoot(),
 			(nodes) => this.onNodes(nodes),
-			() => this.onFeedAttached(),
 		);
-		this.nav = new NavigationHandler(() => this.onRouteChange());
 	}
 	async start(): Promise<void> {
 		decisionCache.cleanupExpired().catch(console.error);
 		await this.hydrateSettings();
 		this.setupMessageListener();
 		this.setupStorageListener();
-		this.nav.setup();
+		this.setupRouteMonitoring();
 		this.persistIntervalId = setInterval(
 			() => decisionCache.cleanupExpired().catch(console.error),
 			PERSIST_INTERVAL_MS,
 		);
 		if (document.readyState === "loading") {
-			document.addEventListener("DOMContentLoaded", () => this.reconcile());
+			document.addEventListener("DOMContentLoaded", () => {
+				this.observer.attach();
+				this.evaluateRoute(true);
+			});
 		} else {
-			this.reconcile();
+			this.observer.attach();
+			this.evaluateRoute(true);
 		}
 	}
 	stop(): void {
-		this.nav.dispose();
+		if (this.routeHeartbeatId !== null) {
+			clearInterval(this.routeHeartbeatId);
+			this.routeHeartbeatId = null;
+		}
+		if (this.visibilityHandler) {
+			document.removeEventListener("visibilitychange", this.visibilityHandler);
+			this.visibilityHandler = null;
+		}
 		this.observer.detach();
 		this.classifier.reset();
 		clearAllDecisions();
@@ -87,32 +100,51 @@ export class Pipeline {
 		}
 	}
 	// ── Private ────────────────────────────────────────────────────────────────
-	private reconcile(): void {
+	private setupRouteMonitoring(): void {
+		this.visibilityHandler = () => {
+			if (document.visibilityState !== "visible") return;
+			this.evaluateRoute();
+		};
+		document.addEventListener("visibilitychange", this.visibilityHandler);
+		this.routeHeartbeatId = setInterval(
+			() => this.evaluateRoute(),
+			ROUTE_HEARTBEAT_MS,
+		);
+	}
+	private evaluateRoute(forceRescanOnEligible = false): void {
 		const routeKey = this.platform.routeKeyFromUrl(window.location.href);
 		const eligible = this.platform.shouldFilterRouteKey(routeKey);
-		if (!this.state.enabled || !eligible) {
-			if (this.observer.isLive) {
-				this.observer.detach();
-				this.classifier.reset();
-				clearAllDecisions();
-			}
-			this.state.routeKey = routeKey;
+
+		const routeChanged = routeKey !== this.state.routeKey;
+		const eligibilityChanged = eligible !== this.state.routeEligible;
+		const becameEligible = !this.state.routeEligible && eligible;
+		const becameIneligible = this.state.routeEligible && !eligible;
+
+		if (!routeChanged && !eligibilityChanged && !forceRescanOnEligible) {
 			return;
 		}
-		const routeChanged = routeKey !== this.state.routeKey;
+
 		this.state.routeKey = routeKey;
+		this.state.routeEligible = eligible;
+
 		if (routeChanged) {
-			this.observer.detach();
 			this.classifier.reset();
 			this.state.processed = new WeakSet();
 		}
-		this.observer.attach();
+
+		if (!this.state.enabled || !eligible) {
+			if (becameIneligible || routeChanged || forceRescanOnEligible) {
+				clearAllDecisions();
+			}
+			this.classifier.reset();
+			return;
+		}
+
+		if (forceRescanOnEligible || routeChanged || becameEligible) {
+			this.rescanFeed();
+		}
 	}
-	private onRouteChange(): void {
-		this.reconcile();
-	}
-	private onFeedAttached(): void {
-		// Scan the full feed on initial attach to catch posts already in the DOM.
+	private rescanFeed(): void {
 		const feedRoot = this.platform.findFeedRoot();
 		if (!feedRoot) return;
 		const surfaces = scanFeed(feedRoot, this.platform.detectionProfile, (el) =>
@@ -123,7 +155,7 @@ export class Pipeline {
 		}
 	}
 	private onNodes(nodes: Node[]): void {
-		if (!this.state.enabled) return;
+		if (!this.state.enabled || !this.state.routeEligible) return;
 		const seen = new WeakSet<HTMLElement>();
 		for (const node of nodes) {
 			const hints = collectHints(
@@ -147,7 +179,7 @@ export class Pipeline {
 		labelRoot: HTMLElement;
 		identity: string;
 	}): Promise<void> {
-		if (!this.state.enabled) return;
+		if (!this.state.enabled || !this.state.routeEligible) return;
 		// Skip already-processed or currently-processing elements.
 		if (
 			surface.renderRoot.hasAttribute(ATTRIBUTES.processed) ||
@@ -252,7 +284,14 @@ export class Pipeline {
 				this.state.enabled = resolveEnabled(
 					changes.enabled.newValue as boolean | undefined,
 				);
-				this.reconcile();
+				if (!this.state.enabled) {
+					this.classifier.reset();
+					clearAllDecisions();
+					return;
+				}
+				this.classifier.reset();
+				this.state.processed = new WeakSet();
+				this.evaluateRoute(true);
 			}
 			if (HIDE_RENDER_MODE_STORAGE_KEY in changes) {
 				this.state.hideMode = resolveHideRenderMode(
