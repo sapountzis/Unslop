@@ -1,7 +1,8 @@
 ---
 owner: agent
-status: active
+status: completed
 created: 2026-02-23
+completed: 2026-02-23
 ---
 
 # Plan: linkedin_cleanup_edge_peeler
@@ -18,7 +19,7 @@ Links:
 - Worktree: `/tmp/unslop-worktrees/linkedin-cleanup-edge-peeler`
 - Branch: `feat/linkedin-cleanup-edge-peeler`
 - Active Plan: `docs/exec-plans/active/2026-02-23-linkedin-cleanup-edge-peeler.md`
-- Status: active (test-first cleanup refactor in progress)
+- Status: completed; pending PR metadata update after submission
 - Autonomy: Continue through `make pr-ready` then `make pr-submit` unless blocked or human input is required.
 
 ## Steps
