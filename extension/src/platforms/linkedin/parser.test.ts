@@ -130,6 +130,25 @@ describe("linkedin parser", () => {
 			expect(result!.text).toBe("real post body here.");
 		});
 
+		it("applies metadata-heavy linkedin cleanup before returning text", async () => {
+			const el = makeElement({
+				matches: (s) =>
+					s.includes("urn:li:activity:") || s.includes("urn:li:share:"),
+				getAttribute: (name) =>
+					name === "data-urn" ? "urn:li:activity:noise-v2" : null,
+				textContent:
+					"simon heatonsimon heaton • followingverified • following director of growth marketing @ buffer director of growth marketing @ buffer 1w • 1 week ago • visible to anyone on or off linkedin we're hiring a senior data scientist at buffer! ...more 144 19 comments 11 reposts",
+				querySelector: () => null,
+				querySelectorAll: () => [],
+			});
+
+			const result = await extractPostData(el);
+			expect(result).not.toBeNull();
+			expect(result!.text).toBe(
+				"we're hiring a senior data scientist at buffer!",
+			);
+		});
+
 		it("falls back to raw normalized text if cleanup strips everything", async () => {
 			const el = makeElement({
 				matches: (s) =>
