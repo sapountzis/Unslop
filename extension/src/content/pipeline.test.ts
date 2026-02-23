@@ -36,6 +36,8 @@ type ChromeMock = {
 	};
 };
 
+const activePipelines = new Set<Pipeline>();
+
 function installChromeMock(): void {
 	const chromeMock: ChromeMock = {
 		runtime: {
@@ -64,7 +66,7 @@ function installChromeMock(): void {
 }
 
 function setPath(path: string): void {
-	window.location.hash = `#${path}`;
+	history.replaceState({}, "", `#${path}`);
 }
 
 function routeKeyFromUrl(url: string): string {
@@ -128,6 +130,12 @@ function createPlugin(extractCounter: { value: number }): PlatformPlugin {
 	};
 }
 
+function createPipeline(extractCounter: { value: number }): Pipeline {
+	const pipeline = new Pipeline(createPlugin(extractCounter));
+	activePipelines.add(pipeline);
+	return pipeline;
+}
+
 async function drain(): Promise<void> {
 	await Promise.resolve();
 	await Promise.resolve();
@@ -141,6 +149,11 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+	for (const pipeline of activePipelines) {
+		pipeline.stop();
+	}
+	activePipelines.clear();
+	jest.clearAllTimers();
 	jest.useRealTimers();
 	delete (globalThis as unknown as { chrome?: ChromeMock }).chrome;
 	document.body.innerHTML = "";
@@ -150,7 +163,7 @@ describe("Pipeline route heartbeat", () => {
 	it("recovers when moving from notifications to feed", async () => {
 		setPath("/notifications/");
 		const extractCounter = { value: 0 };
-		const pipeline = new Pipeline(createPlugin(extractCounter));
+		const pipeline = createPipeline(extractCounter);
 
 		document.body.appendChild(makePost("1"));
 		await pipeline.start();
@@ -168,7 +181,7 @@ describe("Pipeline route heartbeat", () => {
 	it("does not rescan repeatedly when route stays stable", async () => {
 		setPath("/feed/");
 		const extractCounter = { value: 0 };
-		const pipeline = new Pipeline(createPlugin(extractCounter));
+		const pipeline = createPipeline(extractCounter);
 
 		document.body.appendChild(makePost("1"));
 		await pipeline.start();
@@ -186,7 +199,7 @@ describe("Pipeline route heartbeat", () => {
 	it("suppresses processing on ineligible routes and resumes on eligible routes", async () => {
 		setPath("/notifications/");
 		const extractCounter = { value: 0 };
-		const pipeline = new Pipeline(createPlugin(extractCounter));
+		const pipeline = createPipeline(extractCounter);
 
 		await pipeline.start();
 		document.body.appendChild(makePost("2"));
@@ -205,7 +218,7 @@ describe("Pipeline route heartbeat", () => {
 	it("stops route heartbeat after stop()", async () => {
 		setPath("/notifications/");
 		const extractCounter = { value: 0 };
-		const pipeline = new Pipeline(createPlugin(extractCounter));
+		const pipeline = createPipeline(extractCounter);
 
 		document.body.appendChild(makePost("3"));
 		await pipeline.start();
