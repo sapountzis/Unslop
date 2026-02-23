@@ -27,14 +27,9 @@ process.env.MAGIC_LINK_BASE_URL =
 process.env.VLM_MODEL = process.env.VLM_MODEL || "test-vlm";
 
 const fullScores: ScoreResult = {
-	u: 0.1,
-	d: 0.1,
-	c: 0.1,
-	rb: 0.1,
-	eb: 0.1,
-	sp: 0.1,
-	p: 0.1,
-	x: 0.1,
+	signal: 0.1,
+	manipulation: 0.1,
+	template: 0.1,
 };
 
 const post: MultimodalClassifyPost = {

@@ -1,5 +1,6 @@
 // extension/src/lib/media-hydration.ts
 // Generic wait for img src/srcset hydration. Used by parsers to avoid extracting before lazy-loaded images appear.
+import { readBestImageSourceWithAncestors } from "./imageSource";
 
 const DEFAULT_MEDIA_WAIT_TIMEOUT_MS = 1500;
 const MEDIA_WAIT_MIN_GRACE_MS = 120;
@@ -30,44 +31,10 @@ function queryOne(root: HTMLElement, selector: string): HTMLElement | null {
 	return q.call(root, selector);
 }
 
-function readImgSrc(img: HTMLElement): string | null {
-	const getAttr = img.getAttribute?.bind(img);
-	if (!getAttr) return null;
-	const src = getAttr("src");
-	if (src?.trim()) return src.trim();
-	const currentSrc = (img as unknown as { currentSrc?: string }).currentSrc;
-	if (typeof currentSrc === "string" && currentSrc.trim())
-		return currentSrc.trim();
-	const srcset = getAttr("srcset");
-	if (srcset) {
-		const first = srcset.split(",", 1)[0]?.trim().split(/\s+/, 1)[0];
-		if (first) return first;
-	}
-	const style = getAttr("style");
-	if (style?.includes("background-image")) {
-		const m = style.match(/url\((['"]?)(.*?)\1\)/i);
-		if (m?.[2]?.trim()) return m[2].trim();
-	}
-	const parent = img.parentElement;
-	if (parent) {
-		const styled = queryAll(parent, '[style*="background-image"]');
-		for (const s of styled) {
-			const u = readImgSrc(s as HTMLElement);
-			if (u) return u;
-		}
-		const parentStyle = parent.getAttribute?.("style");
-		if (parentStyle?.includes("background-image")) {
-			const m = parentStyle.match(/url\((['"]?)(.*?)\1\)/i);
-			if (m?.[2]?.trim()) return m[2].trim();
-		}
-	}
-	return null;
-}
-
 function hasHydratedPhoto(scopes: WaitScope[], imgSelector: string): boolean {
 	for (const { root } of scopes) {
 		for (const img of queryAll(root, imgSelector)) {
-			if (readImgSrc(img)) return true;
+			if (readBestImageSourceWithAncestors(img)) return true;
 		}
 	}
 	return false;
@@ -88,6 +55,8 @@ export type WaitForMediaHydrationOptions = {
 	hintSelector?: string;
 	/** When set, only consider imgs matching this as "hydrated" (e.g. a[href*="/photo/"] img to exclude avatars). */
 	hydratedPhotoSelector?: string;
+	/** Optional readiness override used by callers with platform-specific criteria. */
+	readyWhen?: (scopes: WaitScope[]) => boolean;
 };
 
 /**
@@ -100,12 +69,17 @@ export async function waitForMediaHydration(
 ): Promise<void> {
 	if (scopes.length === 0) return;
 
-	const imgSelector = options.imgSelector ?? "img";
 	const hintSelector = options.hintSelector ?? "img";
 	const hydratedSelector =
 		options.hydratedPhotoSelector ?? options.imgSelector ?? "img";
+	const isReady = (): boolean => {
+		if (typeof options.readyWhen === "function") {
+			return options.readyWhen(scopes);
+		}
+		return hasHydratedPhoto(scopes, hydratedSelector);
+	};
 
-	if (hasHydratedPhoto(scopes, hydratedSelector)) return;
+	if (isReady()) return;
 
 	const timeoutMs = options.timeoutMs ?? DEFAULT_MEDIA_WAIT_TIMEOUT_MS;
 	const hintedAtStart = hasMediaHint(scopes, hintSelector);
@@ -154,7 +128,7 @@ export async function waitForMediaHydration(
 		};
 
 		const check = (): void => {
-			if (hasHydratedPhoto(scopes, hydratedSelector)) {
+			if (isReady()) {
 				finish();
 				return;
 			}

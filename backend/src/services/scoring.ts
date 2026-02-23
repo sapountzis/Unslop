@@ -2,60 +2,69 @@ import { ScoreResult, Decision } from "../types/classification";
 import { logger } from "../lib/logger";
 
 // =========================================================
-// THRESHOLDS — each independently tunable
+// 3-DIMENSION SCORING ENGINE
+// =========================================================
+//
+// Decision logic is a cascading rule tree, NOT linear.
+// This captures non-linear interactions like:
+// "high manipulation is OK if signal is also high"
+//
+// The cascade order matters:
+//   1. Hard vetoes   — extreme manipulation/template, always hide
+//   2. Signal rescue  — strong value overrides moderate negatives
+//   3. Authenticity   — genuine human content with low manipulation passes
+//   4. Soft vetoes    — moderate negatives with no redeeming signal
+//   5. Default        — show (don't over-filter)
 // =========================================================
 
-// Step 1: Hard Vetoes (extreme values, always hide)
-const HARD_VETO_RB = 0.7; // Rage bait
-const HARD_VETO_X = 0.7; // Deception
-const HARD_VETO_SP = 0.8; // Pure sales funnel
+// ─── THRESHOLDS (tune these on your labeled data) ───
 
-// Step 2: Signal Rescue — safety gate
-const RESCUE_GATE_RB = 0.5; // Max rb allowed for rescue
-const RESCUE_GATE_X = 0.5; // Max x allowed for rescue
-const RESCUE_U = 0.6; // Usefulness rescue threshold
-const RESCUE_D = 0.6; // Depth rescue threshold
-const RESCUE_C = 0.6; // Connection rescue threshold
+// Step 1: Hard vetoes
+const HARD_VETO_M = 0.7; // Manipulation this high = always hide
+const HARD_VETO_T = 0.8; // Template this high = always hide
+const HARD_VETO_COMBO_M = 0.6; // Manipulation + template combined veto
+const HARD_VETO_COMBO_T = 0.6; // (both moderately high = hide)
 
-// Step 3: Soft Vetoes (moderate negatives, no redeeming signal)
-const SOFT_VETO_RB = 0.5; // Moderate rage bait
-const SOFT_VETO_X = 0.5; // Moderate deception
-const SOFT_VETO_SP = 0.5; // Moderate sales pitch
-const SOFT_VETO_P = 0.7; // Packaging slop
-const SOFT_VETO_EB = 0.6; // Ego noise
+// Step 2: Signal rescue
+const RESCUE_S = 0.5; // Signal needed to rescue
+const RESCUE_MAX_M = 0.5; // Max manipulation allowed for rescue
+const RESCUE_STRONG_S = 0.7; // Strong signal rescues even with moderate manipulation
+const RESCUE_STRONG_MAX_M = 0.6; // Max manipulation allowed for strong rescue
 
-// =========================================================
-// TYPE DEFINITIONS
-// =========================================================
+// Step 3: Authenticity pass
+const AUTH_S_LOW = 0.3; // Minimum signal for authenticity pass (just not zero)
+const AUTH_MAX_M = 0.3; // Max manipulation for authenticity pass
+const AUTH_MAX_T = 0.4; // Max template for authenticity pass
 
-type ScoreMap = Record<string, number>;
+// Step 4: Soft vetoes
+const SOFT_VETO_M = 0.5; // Moderate manipulation + weak signal = hide
+const SOFT_VETO_T = 0.6; // Moderate template + weak signal = hide
+const SOFT_VETO_MAX_S = 0.3; // Signal must be below this for soft vetoes to fire
+
+// ─── TYPES ───
 
 export type DecisionReason =
-	| "toxic_content"
-	| "deception"
-	| "aggressive_sales"
-	| "high_signal"
-	| "genuine_human"
-	| "rage_bait"
-	| "misleading"
-	| "sales_pitch"
-	| "packaging_slop"
-	| "ego_noise"
-	| "neutral_safe"
+	| "extreme_manipulation"
+	| "extreme_template"
+	| "combined_manipulation_template"
+	| "high_signal_rescue"
+	| "strong_signal_rescue"
+	| "authentic_content"
+	| "moderate_manipulation"
+	| "moderate_template"
+	| "default_show"
 	| "error";
 
 export type RuleId =
-	| "H1_RAGE"
-	| "H1_DECEPTION"
-	| "H1_SALES"
+	| "H1_MANIP"
+	| "H1_TEMPLATE"
+	| "H1_COMBO"
 	| "K1_SIGNAL"
-	| "K1_HUMAN"
-	| "S1_RAGE"
-	| "S1_DECEPTION"
-	| "S1_SALES"
-	| "S1_PACKAGING"
-	| "S1_EGO"
-	| "K2_NEUTRAL"
+	| "K1_STRONG_SIGNAL"
+	| "K1_AUTHENTIC"
+	| "S1_MANIP"
+	| "S1_TEMPLATE"
+	| "K2_DEFAULT"
 	| "E0_ERROR";
 
 export type ScoringOutput = {
@@ -63,196 +72,123 @@ export type ScoringOutput = {
 	reason: DecisionReason;
 	ruleId: RuleId;
 	audit: {
-		valueScore: number;
-		slopScore: number;
-		clampedScores: ScoreMap;
+		signal: number;
+		manipulation: number;
+		template: number;
 	};
 };
 
-const DIMENSION_KEYS = ["u", "d", "c", "rb", "eb", "sp", "p", "x"] as const;
+type Scores = { signal: number; manipulation: number; template: number };
 
 export class ScoringEngine {
 	public score(result: ScoreResult | null): ScoringOutput {
-		// 0. Handle Null
+		// 0. Handle null/error
 		if (!result) {
-			return this.buildOutput("keep", "error", "E0_ERROR", {}, 0, 0);
+			return this.out("keep", "error", "E0_ERROR", {
+				signal: 0,
+				manipulation: 0,
+				template: 0,
+			});
 		}
 
-		// 1. Sanitize Inputs (Clamp 0..1)
-		const s = this.sanitize(result);
+		// 1. Sanitize (clamp 0..1)
+		const sc: Scores = {
+			signal: this.clamp(result.signal ?? 0),
+			manipulation: this.clamp(result.manipulation ?? 0),
+			template: this.clamp(result.template ?? 0),
+		};
 
-		// 2. Calculate Aggregates for Audit
-		const maxSignal = Math.max(s.u, s.d, s.c);
-		const maxNoise = Math.max(s.rb, s.sp, s.p, s.eb, s.x);
-
-		// ─── STEP 1: HARD VETOES (extreme values, always hide) ───
-
-		if (s.rb >= HARD_VETO_RB) {
-			return this.buildOutput(
-				"hide",
-				"toxic_content",
-				"H1_RAGE",
-				s,
-				maxNoise,
-				maxSignal,
-			);
-		}
-		if (s.x >= HARD_VETO_X) {
-			return this.buildOutput(
-				"hide",
-				"deception",
-				"H1_DECEPTION",
-				s,
-				maxNoise,
-				maxSignal,
-			);
-		}
-		if (s.sp >= HARD_VETO_SP) {
-			return this.buildOutput(
-				"hide",
-				"aggressive_sales",
-				"H1_SALES",
-				s,
-				maxNoise,
-				maxSignal,
-			);
+		// ─── STEP 1: HARD VETOES ───
+		// Extreme manipulation = always slop, regardless of signal
+		if (sc.manipulation >= HARD_VETO_M) {
+			return this.out("hide", "extreme_manipulation", "H1_MANIP", sc);
 		}
 
-		// ─── STEP 2: SIGNAL RESCUE (with safety gate) ───
-		// Only rescue if rage and deception are below the safety gate.
-		// This prevents "useful but ragey/deceptive" content from passing.
-
-		const safetyGatePasses = s.rb < RESCUE_GATE_RB && s.x < RESCUE_GATE_X;
-
-		if (safetyGatePasses) {
-			if (s.u >= RESCUE_U || s.d >= RESCUE_D) {
-				return this.buildOutput(
-					"keep",
-					"high_signal",
-					"K1_SIGNAL",
-					s,
-					maxNoise,
-					maxSignal,
-				);
-			}
-			if (s.c >= RESCUE_C) {
-				return this.buildOutput(
-					"keep",
-					"genuine_human",
-					"K1_HUMAN",
-					s,
-					maxNoise,
-					maxSignal,
-				);
-			}
+		// Extreme template = always slop
+		if (sc.template >= HARD_VETO_T) {
+			return this.out("hide", "extreme_template", "H1_TEMPLATE", sc);
 		}
 
-		// ─── STEP 3: SOFT VETOES (moderate negatives, no redeeming signal) ───
-
-		if (s.rb >= SOFT_VETO_RB) {
-			return this.buildOutput(
-				"hide",
-				"rage_bait",
-				"S1_RAGE",
-				s,
-				maxNoise,
-				maxSignal,
-			);
-		}
-		if (s.x >= SOFT_VETO_X) {
-			return this.buildOutput(
-				"hide",
-				"misleading",
-				"S1_DECEPTION",
-				s,
-				maxNoise,
-				maxSignal,
-			);
-		}
-		if (s.sp >= SOFT_VETO_SP) {
-			return this.buildOutput(
-				"hide",
-				"sales_pitch",
-				"S1_SALES",
-				s,
-				maxNoise,
-				maxSignal,
-			);
-		}
-		if (s.p >= SOFT_VETO_P) {
-			return this.buildOutput(
-				"hide",
-				"packaging_slop",
-				"S1_PACKAGING",
-				s,
-				maxNoise,
-				maxSignal,
-			);
-		}
-		if (s.eb >= SOFT_VETO_EB) {
-			return this.buildOutput(
-				"hide",
-				"ego_noise",
-				"S1_EGO",
-				s,
-				maxNoise,
-				maxSignal,
-			);
+		// Both moderately high = slop (catches posts that dodge individual thresholds)
+		if (
+			sc.manipulation >= HARD_VETO_COMBO_M &&
+			sc.template >= HARD_VETO_COMBO_T
+		) {
+			return this.out("hide", "combined_manipulation_template", "H1_COMBO", sc);
 		}
 
-		// ─── STEP 4: DEFAULT ───
+		// ─── STEP 2: SIGNAL RESCUE ───
+		// Strong signal rescues even with moderate manipulation
+		if (
+			sc.signal >= RESCUE_STRONG_S &&
+			sc.manipulation <= RESCUE_STRONG_MAX_M
+		) {
+			return this.out("keep", "strong_signal_rescue", "K1_STRONG_SIGNAL", sc);
+		}
 
-		return this.buildOutput(
-			"keep",
-			"neutral_safe",
-			"K2_NEUTRAL",
-			s,
-			maxNoise,
-			maxSignal,
-		);
+		// Good signal with low manipulation = keep
+		if (sc.signal >= RESCUE_S && sc.manipulation <= RESCUE_MAX_M) {
+			return this.out("keep", "high_signal_rescue", "K1_SIGNAL", sc);
+		}
+
+		// ─── STEP 3: AUTHENTICITY PASS ───
+		// Low-signal but genuine human content (personal stories, humor, questions)
+		// Only passes if manipulation AND template are both low
+		if (
+			sc.signal >= AUTH_S_LOW &&
+			sc.manipulation <= AUTH_MAX_M &&
+			sc.template <= AUTH_MAX_T
+		) {
+			return this.out("keep", "authentic_content", "K1_AUTHENTIC", sc);
+		}
+
+		// ─── STEP 4: SOFT VETOES ───
+		// Moderate manipulation + weak signal = not worth showing
+		if (sc.manipulation >= SOFT_VETO_M && sc.signal < SOFT_VETO_MAX_S) {
+			return this.out("hide", "moderate_manipulation", "S1_MANIP", sc);
+		}
+
+		// Moderate template + weak signal = formulaic noise
+		if (sc.template >= SOFT_VETO_T && sc.signal < SOFT_VETO_MAX_S) {
+			return this.out("hide", "moderate_template", "S1_TEMPLATE", sc);
+		}
+
+		// ─── STEP 5: DEFAULT ───
+		// When in doubt, show. Don't over-filter.
+		return this.out("keep", "default_show", "K2_DEFAULT", sc);
 	}
 
-	/**
-	 * Helper to construct the output object and log the decision.
-	 */
-	private buildOutput(
+	private out(
 		decision: Decision,
 		reason: DecisionReason,
 		ruleId: RuleId,
-		clampedScores: ScoreMap,
-		slopScore: number,
-		valueScore: number,
+		sc: Scores,
 	): ScoringOutput {
-		const out: ScoringOutput = {
+		const output: ScoringOutput = {
 			decision,
 			reason,
 			ruleId,
 			audit: {
-				valueScore,
-				slopScore,
-				clampedScores,
+				signal: sc.signal,
+				manipulation: sc.manipulation,
+				template: sc.template,
 			},
 		};
 
 		logger.info("slop_audit", {
 			event: "audit_decision",
-			decision: out.decision,
-			rule: out.ruleId,
-			reason: out.reason,
-			maxSignal: valueScore.toFixed(2),
-			maxNoise: slopScore.toFixed(2),
+			decision: output.decision,
+			rule: output.ruleId,
+			reason: output.reason,
+			signal: sc.signal.toFixed(2),
+			manipulation: sc.manipulation.toFixed(2),
+			template: sc.template.toFixed(2),
 		});
 
-		return out;
+		return output;
 	}
 
-	private sanitize(result: ScoreResult): ScoreMap {
-		const clamped: ScoreMap = {};
-
-		for (const k of DIMENSION_KEYS) {
-			const val = result[k as keyof ScoreResult] ?? 0;
-			clamped[k] = Math.max(0, Math.min(1, val));
-		}
-		return clamped;
+	private clamp(v: number): number {
+		return Math.max(0, Math.min(1, v));
 	}
 }

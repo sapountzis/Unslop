@@ -247,7 +247,6 @@ describe("resolvePostAttachmentPayload", () => {
 					status: 200,
 					headers: { "content-type": "image/png" },
 				}),
-			maxImageDimension: 512,
 			resizeImage: async (bytes, maxDimension, mimeType) => {
 				resizeCalledWith = { bytes, maxDim: maxDimension, mime: mimeType };
 				return {
@@ -276,7 +275,7 @@ describe("resizeImageIfNeeded", () => {
 	it("throws for invalid image data so caller skips attachment", async () => {
 		const invalidBytes = new TextEncoder().encode("not an image");
 		await expect(
-			resizeImageIfNeeded(invalidBytes, 1024, "image/png"),
+			resizeImageIfNeeded(invalidBytes, 512, "image/png"),
 		).rejects.toThrow("image_decode_failed");
 	});
 });

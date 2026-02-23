@@ -6,7 +6,7 @@
 // For local development, use: http://localhost:3000
 // For production, use: https://api.getunslop.com
 
-// export const API_BASE_URL = "http://localhost:3000";
+// export const API_BASE_URL = "http://localhost:30 00";
 export const API_BASE_URL = "https://api.getunslop.com";
 
 // Cache settings
@@ -14,10 +14,10 @@ export const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 export const CACHE_MAX_ITEMS = 10_000;
 
 // Batch classify settings
-export const BATCH_WINDOW_MS = 75;
+export const BATCH_WINDOW_MS = 150;
 // Keep in sync with backend/src/lib/policy-constants.ts: CLASSIFY_BATCH_MAX_SIZE
 export const BATCH_MAX_ITEMS = 20;
-export const BATCH_MAX_INFLIGHT_REQUESTS = 2;
+export const BATCH_MAX_INFLIGHT_REQUESTS = 3;
 export const BATCH_RESULT_TIMEOUT_MS = 3000; // Viewport-aware fail-open timeout in pending-decision coordinator
 
 // API fetch timeout
@@ -33,7 +33,7 @@ export type HideRenderMode = "collapse" | "label";
 export const HIDE_RENDER_MODE: HideRenderMode = "collapse";
 
 // Runtime orchestration timings
-export const WATCHDOG_POLL_MS = 1000;
+export const ROUTE_HEARTBEAT_MS = 300;
 export const PERSIST_INTERVAL_MS = 30_000;
 export const SYNC_STORAGE_AREA = "sync";
 
@@ -44,7 +44,8 @@ export const PROCESS_PER_FRAME = 20;
 export const FALLBACK_RAF_INTERVAL_MS = 16;
 
 // Background attachment resolver
-export const ATTACHMENT_BUDGET_RATIO = 0.3;
+// Cap attachment pre-resolution wait so text-first classification starts sooner.
+export const ATTACHMENT_BUDGET_RATIO = 0.1;
 export const ATTACHMENT_RESOLVE_CONCURRENCY = 8;
 
 // Backend reachability probe timeout

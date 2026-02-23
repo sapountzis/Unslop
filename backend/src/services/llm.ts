@@ -56,14 +56,9 @@ export interface LlmServiceDeps {
 }
 
 const DecisionSchema = z.object({
-	u: z.number(),
-	d: z.number(),
-	c: z.number(),
-	rb: z.number(),
-	eb: z.number(),
-	sp: z.number(),
-	p: z.number(),
-	x: z.number(),
+	signal: z.number(),
+	manipulation: z.number(),
+	template: z.number(),
 });
 
 const PROMPT_MAX_ROOT_CHARS = 2400;
@@ -194,7 +189,11 @@ export function buildMessages(post: PostInput): ChatCompletionMessageParam[] {
 	];
 
 	return [
-		{ role: "system", content: SYSTEM_PROMPT },
+		{
+			role: "system",
+			content: SYSTEM_PROMPT,
+			cache_control: { type: "ephemeral" },
+		} as ChatCompletionMessageParam,
 		{ role: "user", content: userContent },
 	];
 }

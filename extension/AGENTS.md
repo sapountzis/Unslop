@@ -10,7 +10,7 @@ You are working in the **Chrome extension** that filters social media feeds (Lin
 │  src/platforms/{linkedin,x,reddit}/index.ts → createPlatformRuntime(plugin) │
 │  src/content/pipeline.ts  (class Pipeline)                                  │
 │  src/content/observer.ts  classifier.ts  detector.ts  renderer.ts           │
-│  src/content/navigation.ts  state.ts  types.ts  auth/                       │
+│  src/content/state.ts  types.ts  auth/                                       │
 └─────────────────────────────────────────────────────────────────────────────┘
                                     │
                     chrome.runtime.sendMessage / onMessage
@@ -87,8 +87,8 @@ sequenceDiagram
 | **Detection** | `detector.ts` | `collectHints()`, `detectPost()`, `scanFeed()` — scoring-based ancestor walk; resolves content/render/label roots + identity |
 | **Classification** | `classifier.ts` | class Classifier: decision cache, batch queue, flush on window/threshold, fail-open timeout |
 | **Rendering** | `renderer.ts` | `renderDecision()`, `clearAllDecisions()` — applies keep/hide; modes: collapse, label |
-| **Navigation** | `navigation.ts` | class NavigationHandler: monkey-patches history.pushState/replaceState, listens popstate |
-| **State** | `state.ts` | `PipelineState`: enabled, hideMode, routeKey, processed WeakSet |
+| **Route Lifecycle** | `pipeline.ts` | Heartbeat + visibility route evaluation, eligibility gating, and feed rescan on ineligible→eligible transitions |
+| **State** | `state.ts` | `PipelineState`: enabled, hideMode, routeKey, routeEligible, processed WeakSet |
 | **Types** | `types.ts` | `DetectedSurface`: contentRoot, renderRoot, labelRoot, identity |
 | **Auth** | `auth/auth.ts` | JWT extraction from auth callback page |
 

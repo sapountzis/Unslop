@@ -7,7 +7,9 @@ import {
 	afterEach,
 	jest,
 } from "bun:test";
+import { decisionCache } from "../lib/storage";
 import type { PostData } from "../types";
+import { Classifier } from "./classifier";
 
 // Yield to microtasks — works while fake timers are active.
 async function drain(): Promise<void> {
@@ -15,10 +17,6 @@ async function drain(): Promise<void> {
 	await Promise.resolve();
 	await Promise.resolve();
 }
-
-// ── Mock storage ───────────────────────────────────────────────────────────
-// Must be set up before Classifier is imported so the module-level singleton
-// picks up the mock.
 
 const cacheGetMock = mock(
 	async (_id: string) =>
@@ -29,18 +27,24 @@ const cacheGetMock = mock(
 		},
 );
 const cacheSetMock = mock(async (..._args: unknown[]) => {});
-
-mock.module("../lib/storage", () => ({
-	decisionCache: { get: cacheGetMock, set: cacheSetMock },
-}));
-
-const { Classifier } = await import("./classifier");
+const cacheCleanupExpiredMock = mock(async () => {});
 import {
 	BATCH_MAX_ITEMS,
 	BATCH_WINDOW_MS,
 	FETCH_TIMEOUT_MS,
 	BATCH_RESULT_TIMEOUT_MS,
 } from "../lib/config";
+
+const originalDecisionCacheMethods = {
+	get: decisionCache.get,
+	set: decisionCache.set,
+	cleanupExpired: decisionCache.cleanupExpired,
+};
+const mutableDecisionCache = decisionCache as {
+	get: typeof decisionCache.get;
+	set: typeof decisionCache.set;
+	cleanupExpired: typeof decisionCache.cleanupExpired;
+};
 
 function makePost(id: string): PostData {
 	return { post_id: id, text: `text for ${id}`, attachments: [] };
@@ -57,9 +61,18 @@ beforeEach(() => {
 	cacheGetMock.mockReset();
 	cacheGetMock.mockResolvedValue(null);
 	cacheSetMock.mockReset();
+	cacheCleanupExpiredMock.mockReset();
+	mutableDecisionCache.get = cacheGetMock as typeof decisionCache.get;
+	mutableDecisionCache.set = cacheSetMock as typeof decisionCache.set;
+	mutableDecisionCache.cleanupExpired =
+		cacheCleanupExpiredMock as typeof decisionCache.cleanupExpired;
 });
 
 afterEach(() => {
+	mutableDecisionCache.get = originalDecisionCacheMethods.get;
+	mutableDecisionCache.set = originalDecisionCacheMethods.set;
+	mutableDecisionCache.cleanupExpired =
+		originalDecisionCacheMethods.cleanupExpired;
 	jest.useRealTimers();
 });
 

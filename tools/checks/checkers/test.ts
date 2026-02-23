@@ -1,5 +1,5 @@
 import { defineChecker } from "../core/define-checker";
-import { outputFor } from "./shared";
+import { extractFailureHighlights, outputFor } from "./shared";
 
 const SUITES = [
 	{
@@ -33,10 +33,17 @@ export const testChecker = defineChecker({
 			if (result.exitCode === 0) {
 				continue;
 			}
+			const output = outputFor(result);
 			failed.push(suite.id);
 			console.error(`[TEST] FAIL: ${suite.label}.`);
+			const highlights = extractFailureHighlights(output);
+			if (highlights) {
+				console.error(`[TEST] --- ${suite.id} extracted failures ---`);
+				console.error(highlights);
+				console.error(`[TEST] --- end extracted failures ---`);
+			}
 			console.error(`[TEST] --- ${suite.id} test log tail ---`);
-			console.error(ctx.tail(outputFor(result), 120));
+			console.error(ctx.tail(output, 400));
 			console.error(`[TEST] --- end ${suite.id} test log ---`);
 			console.error(suite.remediation);
 		}

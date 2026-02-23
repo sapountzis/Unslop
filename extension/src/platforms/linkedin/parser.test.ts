@@ -1,8 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import {
 	extractPostData,
-	readPostIdentity,
 	isLikelyFeedPostRoot,
+	readPostIdentity,
 } from "./parser";
 
 function makeElement(
@@ -182,7 +182,23 @@ describe("linkedin parser", () => {
 			expect(result!.text).toBe("this is the real post body");
 		});
 
-		it("falls back to raw normalized text if cleanup strips everything", async () => {
+		it("drops metadata-only follows activity text", async () => {
+			const el = makeElement({
+				matches: (s) =>
+					s.includes("urn:li:activity:") || s.includes("urn:li:share:"),
+				getAttribute: (name) =>
+					name === "data-urn" ? "urn:li:activity:metadata-only-follows" : null,
+				textContent:
+					"Anna Christina Kyratzoglou follows FranklinCovey Greece and Cyprus",
+				querySelector: () => null,
+				querySelectorAll: () => [],
+			});
+
+			const result = await extractPostData(el);
+			expect(result).toBeNull();
+		});
+
+		it("drops metadata-only engagement headers", async () => {
 			const el = makeElement({
 				matches: (s) =>
 					s.includes("urn:li:activity:") || s.includes("urn:li:share:"),
@@ -194,10 +210,25 @@ describe("linkedin parser", () => {
 			});
 
 			const result = await extractPostData(el);
+			expect(result).toBeNull();
+		});
+
+		it("falls back to normalized text for uncertain cleanup results", async () => {
+			const rawText =
+				"status ok like comment congratulations! excited for you well deserved wishing you the best";
+			const el = makeElement({
+				matches: (s) =>
+					s.includes("urn:li:activity:") || s.includes("urn:li:share:"),
+				getAttribute: (name) =>
+					name === "data-urn" ? "urn:li:activity:uncertain-fallback1" : null,
+				textContent: rawText,
+				querySelector: () => null,
+				querySelectorAll: () => [],
+			});
+
+			const result = await extractPostData(el);
 			expect(result).not.toBeNull();
-			expect(result!.text).toBe(
-				"feed post number 15 coursera commented on this",
-			);
+			expect(result!.text).toBe(rawText);
 		});
 
 		it("extracts basic post with text content", async () => {
@@ -290,6 +321,140 @@ describe("linkedin parser", () => {
 			expect(result).not.toBeNull();
 			expect(result!.post_id).toBe("urn:li:activity:comp1");
 			expect(result!.text).toBe("company post");
+		});
+
+		it("extracts main feed image and ignores small avatar images", async () => {
+			const post = document.createElement("div");
+			post.setAttribute("role", "article");
+			post.setAttribute("data-urn", "urn:li:activity:images1");
+
+			const text = document.createElement("p");
+			text.textContent = "Main media test post";
+			post.appendChild(text);
+
+			const avatar = document.createElement("img");
+			avatar.setAttribute(
+				"src",
+				"https://media.licdn.com/dms/image/v2/D4D03AQ/profile-displayphoto-scale_100_100/B4DZabc",
+			);
+			avatar.setAttribute("width", "48");
+			avatar.setAttribute("height", "48");
+			post.appendChild(avatar);
+
+			const contentImage = document.createElement("img");
+			contentImage.setAttribute(
+				"src",
+				"https://media.licdn.com/dms/image/v2/D4D22AQFARKzcgiC7Cg/feedshare-shrink_800/B56Zx7OytOGoAg-/0/1771594001502",
+			);
+			contentImage.setAttribute("width", "600");
+			contentImage.setAttribute("height", "600");
+			contentImage.setAttribute("alt", "diagram");
+			post.appendChild(contentImage);
+
+			const result = await extractPostData(post);
+			expect(result).not.toBeNull();
+			expect(result!.attachments).toEqual([
+				{
+					kind: "image",
+					src: "https://media.licdn.com/dms/image/v2/D4D22AQFARKzcgiC7Cg/feedshare-shrink_800/B56Zx7OytOGoAg-/0/1771594001502",
+					alt: "diagram",
+					ordinal: 0,
+				},
+			]);
+		});
+
+		it("waits for main image src hydration before finalizing attachments", async () => {
+			const post = document.createElement("div");
+			post.setAttribute("role", "article");
+			post.setAttribute("data-urn", "urn:li:activity:images2");
+
+			const text = document.createElement("p");
+			text.textContent = "Hydration test post";
+			post.appendChild(text);
+
+			const delayedImage = document.createElement("img");
+			delayedImage.setAttribute("width", "600");
+			delayedImage.setAttribute("height", "600");
+			post.appendChild(delayedImage);
+
+			const hydratedSrc =
+				"https://media.licdn.com/dms/image/v2/D5622AQFARKzcgiC7Cg/feedshare-shrink_800/B56Zx7OytOGoAg-/0/1771594001502";
+			setTimeout(() => {
+				delayedImage.setAttribute("src", hydratedSrc);
+			}, 25);
+
+			const result = await extractPostData(post);
+			expect(result).not.toBeNull();
+			expect(result!.attachments).toEqual([
+				{
+					kind: "image",
+					src: hydratedSrc,
+					alt: "",
+					ordinal: 0,
+				},
+			]);
+		});
+
+		it("uses srcset when src is empty", async () => {
+			const post = document.createElement("div");
+			post.setAttribute("role", "article");
+			post.setAttribute("data-urn", "urn:li:activity:images3");
+
+			const text = document.createElement("p");
+			text.textContent = "Srcset test post";
+			post.appendChild(text);
+
+			const contentImage = document.createElement("img");
+			contentImage.setAttribute("width", "600");
+			contentImage.setAttribute("height", "600");
+			contentImage.setAttribute(
+				"srcset",
+				"https://media.licdn.com/dms/image/v2/D4D22AQ/feedshare-shrink_800/A 800w, https://media.licdn.com/dms/image/v2/D4D22AQ/feedshare-shrink_200/B 200w",
+			);
+			post.appendChild(contentImage);
+
+			const result = await extractPostData(post);
+			expect(result).not.toBeNull();
+			expect(result!.attachments).toEqual([
+				{
+					kind: "image",
+					src: "https://media.licdn.com/dms/image/v2/D4D22AQ/feedshare-shrink_800/A",
+					alt: "",
+					ordinal: 0,
+				},
+			]);
+		});
+
+		it("does not include tiny ui images as attachments", async () => {
+			const post = document.createElement("div");
+			post.setAttribute("role", "article");
+			post.setAttribute("data-urn", "urn:li:activity:images4");
+
+			const text = document.createElement("p");
+			text.textContent = "Tiny-only post";
+			post.appendChild(text);
+
+			const icon = document.createElement("img");
+			icon.setAttribute(
+				"src",
+				"https://static.licdn.com/aero-v1/sc/h/8ekq8gho1ruaf8i7f86vd1ftt",
+			);
+			icon.setAttribute("width", "16");
+			icon.setAttribute("height", "16");
+			post.appendChild(icon);
+
+			const avatar = document.createElement("img");
+			avatar.setAttribute(
+				"src",
+				"https://media.licdn.com/dms/image/v2/D4D03AQ/profile-displayphoto-scale_100_100/B4DZabc",
+			);
+			avatar.setAttribute("width", "48");
+			avatar.setAttribute("height", "48");
+			post.appendChild(avatar);
+
+			const result = await extractPostData(post);
+			expect(result).not.toBeNull();
+			expect(result!.attachments).toEqual([]);
 		});
 	});
 });

@@ -7,6 +7,7 @@ export type PipelineState = {
 	enabled: boolean;
 	hideMode: HideRenderMode;
 	routeKey: string;
+	routeEligible: boolean;
 	/** Render roots that have already been processed (terminal). */
 	processed: WeakSet<HTMLElement>;
 };
@@ -16,6 +17,7 @@ export function createState(): PipelineState {
 		enabled: true,
 		hideMode: HIDE_RENDER_MODE,
 		routeKey: "",
+		routeEligible: false,
 		processed: new WeakSet(),
 	};
 }
