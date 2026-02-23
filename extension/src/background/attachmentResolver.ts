@@ -7,7 +7,8 @@ import {
 } from "../types";
 
 export const MAX_IMAGE_BYTES = 2_000_000;
-export const MAX_IMAGE_DIMENSION = 1024;
+/** Maximum image edge (width or height) after normalization. */
+export const MAX_IMAGE_DIMENSION = 512;
 /** Minimum dimension (width and height) to accept; rejects profile/avatar images. */
 export const MIN_IMAGE_DIMENSION = 128;
 export const MAX_PDF_FETCH_BYTES = 150_000;
