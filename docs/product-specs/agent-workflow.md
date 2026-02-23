@@ -1,7 +1,7 @@
 ---
 owner: unslop
 status: verified
-last_verified: 2026-02-19
+last_verified: 2026-02-23
 ---
 
 # Agent Workflow Enforcement
@@ -23,6 +23,7 @@ Agent-driven delivery must follow a deterministic path from feature request to P
 - AC7: Default agent behavior continues autonomously through `make pr-ready` and `make pr-submit`; agents pause only for explicit blockers or required human input.
 - AC8: Top-level agent-facing docs stay abstract and pointer-first; detailed implementation specifics live in canonical runbooks/spec docs.
 - AC9: Harness check failures expose gate-specific diagnostics with concrete remediation/retry steps, while happy-path output remains minimal.
+- AC10: Before running `make pr-ready`, agents bump versions for both backend and extension in `backend/package.json`, `extension/package.json`, and `extension/manifest.json`.
 
 ## constraints
 - Local workflows must remain deterministic and produce actionable failure diagnostics.
