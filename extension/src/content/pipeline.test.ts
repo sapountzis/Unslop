@@ -65,20 +65,26 @@ function installChromeMock(): void {
 	(globalThis as unknown as { chrome: ChromeMock }).chrome = chromeMock;
 }
 
-function setPath(path: string): void {
-	history.replaceState({}, "", `#${path}`);
+type RouteState = {
+	get: () => string;
+	set: (path: string) => void;
+};
+
+function normalizeRouteKey(path: string): string {
+	const withLeadingSlash = path.startsWith("/") ? path : `/${path}`;
+	return withLeadingSlash.endsWith("/")
+		? withLeadingSlash
+		: `${withLeadingSlash}/`;
 }
 
-function routeKeyFromUrl(url: string): string {
-	try {
-		const parsed = new URL(url);
-		const path = parsed.hash.startsWith("#/")
-			? parsed.hash.slice(1)
-			: parsed.pathname;
-		return path.endsWith("/") ? path : `${path}/`;
-	} catch {
-		return "/";
-	}
+function createRouteState(initialPath: string): RouteState {
+	let routeKey = normalizeRouteKey(initialPath);
+	return {
+		get: () => routeKey,
+		set: (path: string) => {
+			routeKey = normalizeRouteKey(path);
+		},
+	};
 }
 
 function makePost(id: string): HTMLElement {
@@ -89,7 +95,10 @@ function makePost(id: string): HTMLElement {
 	return post;
 }
 
-function createPlugin(extractCounter: { value: number }): PlatformPlugin {
+function createPlugin(
+	extractCounter: { value: number },
+	routeState: RouteState,
+): PlatformPlugin {
 	return {
 		id: "linkedin",
 		detectionProfile: {
@@ -107,12 +116,12 @@ function createPlugin(extractCounter: { value: number }): PlatformPlugin {
 			resolveContentRoot: (candidateRoot) =>
 				candidateRoot.hasAttribute("data-test-post") ? candidateRoot : null,
 		},
-		routeKeyFromUrl,
+		routeKeyFromUrl: () => routeState.get(),
 		shouldFilterRouteKey(routeKey) {
 			return routeKey === "/feed/" || routeKey.startsWith("/feed/");
 		},
 		findFeedRoot() {
-			const routeKey = routeKeyFromUrl(window.location.href);
+			const routeKey = routeState.get();
 			return this.shouldFilterRouteKey(routeKey) ? document.body : null;
 		},
 		async extractPostData(element): Promise<PostData | null> {
@@ -130,8 +139,11 @@ function createPlugin(extractCounter: { value: number }): PlatformPlugin {
 	};
 }
 
-function createPipeline(extractCounter: { value: number }): Pipeline {
-	const pipeline = new Pipeline(createPlugin(extractCounter));
+function createPipeline(
+	extractCounter: { value: number },
+	routeState: RouteState,
+): Pipeline {
+	const pipeline = new Pipeline(createPlugin(extractCounter, routeState));
 	activePipelines.add(pipeline);
 	return pipeline;
 }
@@ -145,7 +157,6 @@ beforeEach(() => {
 	jest.useFakeTimers();
 	installChromeMock();
 	document.body.innerHTML = "";
-	setPath("/feed/");
 });
 
 afterEach(() => {
@@ -161,16 +172,16 @@ afterEach(() => {
 
 describe("Pipeline route heartbeat", () => {
 	it("recovers when moving from notifications to feed", async () => {
-		setPath("/notifications/");
+		const routeState = createRouteState("/notifications/");
 		const extractCounter = { value: 0 };
-		const pipeline = createPipeline(extractCounter);
+		const pipeline = createPipeline(extractCounter, routeState);
 
 		document.body.appendChild(makePost("1"));
 		await pipeline.start();
 
 		expect(extractCounter.value).toBe(0);
 
-		setPath("/feed/");
+		routeState.set("/feed/");
 		jest.advanceTimersByTime(ROUTE_HEARTBEAT_MS);
 		await drain();
 
@@ -179,9 +190,9 @@ describe("Pipeline route heartbeat", () => {
 	});
 
 	it("does not rescan repeatedly when route stays stable", async () => {
-		setPath("/feed/");
+		const routeState = createRouteState("/feed/");
 		const extractCounter = { value: 0 };
-		const pipeline = createPipeline(extractCounter);
+		const pipeline = createPipeline(extractCounter, routeState);
 
 		document.body.appendChild(makePost("1"));
 		await pipeline.start();
@@ -197,9 +208,9 @@ describe("Pipeline route heartbeat", () => {
 	});
 
 	it("suppresses processing on ineligible routes and resumes on eligible routes", async () => {
-		setPath("/notifications/");
+		const routeState = createRouteState("/notifications/");
 		const extractCounter = { value: 0 };
-		const pipeline = createPipeline(extractCounter);
+		const pipeline = createPipeline(extractCounter, routeState);
 
 		await pipeline.start();
 		document.body.appendChild(makePost("2"));
@@ -207,7 +218,7 @@ describe("Pipeline route heartbeat", () => {
 
 		expect(extractCounter.value).toBe(0);
 
-		setPath("/feed/");
+		routeState.set("/feed/");
 		jest.advanceTimersByTime(ROUTE_HEARTBEAT_MS);
 		await drain();
 
@@ -216,15 +227,15 @@ describe("Pipeline route heartbeat", () => {
 	});
 
 	it("stops route heartbeat after stop()", async () => {
-		setPath("/notifications/");
+		const routeState = createRouteState("/notifications/");
 		const extractCounter = { value: 0 };
-		const pipeline = createPipeline(extractCounter);
+		const pipeline = createPipeline(extractCounter, routeState);
 
 		document.body.appendChild(makePost("3"));
 		await pipeline.start();
 		pipeline.stop();
 
-		setPath("/feed/");
+		routeState.set("/feed/");
 		jest.advanceTimersByTime(ROUTE_HEARTBEAT_MS * 5);
 		await drain();
 
