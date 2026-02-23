@@ -113,7 +113,7 @@ describe("linkedin parser", () => {
 			expect(await extractPostData(el)).toBeNull();
 		});
 
-		it("removes known linkedin feed chrome from extracted text", async () => {
+		it("removes known linkedin feed UI noise from extracted text", async () => {
 			const el = makeElement({
 				matches: (s) =>
 					s.includes("urn:li:activity:") || s.includes("urn:li:share:"),
@@ -147,6 +147,23 @@ describe("linkedin parser", () => {
 			expect(result!.text).toBe(
 				"we're hiring a senior data scientist at buffer!",
 			);
+		});
+
+		it("strips connection-follow metadata prefixes in extracted text", async () => {
+			const el = makeElement({
+				matches: (s) =>
+					s.includes("urn:li:activity:") || s.includes("urn:li:share:"),
+				getAttribute: (name) =>
+					name === "data-urn" ? "urn:li:activity:connectionsfollow1" : null,
+				textContent:
+					"George Spanidis, Nektaria Toto and 51 other connections follow LinkedIn for Marketing this is the real post body",
+				querySelector: () => null,
+				querySelectorAll: () => [],
+			});
+
+			const result = await extractPostData(el);
+			expect(result).not.toBeNull();
+			expect(result!.text).toBe("this is the real post body");
 		});
 
 		it("falls back to raw normalized text if cleanup strips everything", async () => {

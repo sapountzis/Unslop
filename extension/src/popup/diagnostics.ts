@@ -99,7 +99,7 @@ export function buildDiagnosticsReport(
 				status: "fail",
 				evidence: input.runtimeError,
 				nextAction:
-					"Reload extension from chrome://extensions and reopen the popup.",
+					"Reload extension from the browser extensions page and reopen the popup.",
 			}),
 		);
 		return withReport(checks);
@@ -135,7 +135,7 @@ export function buildDiagnosticsReport(
 				status: "fail",
 				evidence: "No diagnostics response received.",
 				nextAction:
-					"Reload extension from chrome://extensions and reopen the popup.",
+					"Reload extension from the browser extensions page and reopen the popup.",
 			}),
 		);
 		return withReport(checks);

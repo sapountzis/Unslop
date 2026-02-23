@@ -10,9 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Set Cloudflare Worker `keep_vars = true` to preserve dashboard text env vars during deploy.
 - Corrected backend Worker `MAGIC_LINK_BASE_URL` to `https://api.getunslop.com/v1/auth/callback`.
-- Bumped backend and extension versions to `0.4.3`.
+- Bumped backend and extension versions to `0.4.4`.
 - Added best-effort LinkedIn parser cleanup for feed chrome text (for example feed numbering, engagement preface, and action-bar tokens) while preserving fallback to raw normalized text.
 - Expanded LinkedIn text cleanup with unified staged filtering that preserves prior feed-chrome stripping and adds handling for duplicated names, follower/time metadata, job update labels, following/verified tokens, comment/repost count rails, automated reaction suggestion tails, and promoted/download UI chrome.
+- Hardened LinkedIn text cleanup against leaked social-graph follow prefixes (for example `...and N other connections follow LinkedIn for ...`) using deterministic token-based prefix stripping while preserving normal prose that includes "follow".
 
 ## [0.3.0] - 2026-02-17
 
