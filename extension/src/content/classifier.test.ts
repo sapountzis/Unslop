@@ -29,9 +29,14 @@ const cacheGetMock = mock(
 		},
 );
 const cacheSetMock = mock(async (..._args: unknown[]) => {});
+const cacheCleanupExpiredMock = mock(async () => {});
 
 mock.module("../lib/storage", () => ({
-	decisionCache: { get: cacheGetMock, set: cacheSetMock },
+	decisionCache: {
+		get: cacheGetMock,
+		set: cacheSetMock,
+		cleanupExpired: cacheCleanupExpiredMock,
+	},
 }));
 
 const { Classifier } = await import("./classifier");
@@ -57,6 +62,7 @@ beforeEach(() => {
 	cacheGetMock.mockReset();
 	cacheGetMock.mockResolvedValue(null);
 	cacheSetMock.mockReset();
+	cacheCleanupExpiredMock.mockReset();
 });
 
 afterEach(() => {

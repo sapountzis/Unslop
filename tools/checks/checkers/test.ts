@@ -43,7 +43,7 @@ export const testChecker = defineChecker({
 				console.error(`[TEST] --- end extracted failures ---`);
 			}
 			console.error(`[TEST] --- ${suite.id} test log tail ---`);
-			console.error(ctx.tail(output, 220));
+			console.error(ctx.tail(output, 400));
 			console.error(`[TEST] --- end ${suite.id} test log ---`);
 			console.error(suite.remediation);
 		}

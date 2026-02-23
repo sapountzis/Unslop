@@ -52,7 +52,7 @@ export function extractFailureHighlights(output: string): string {
 		last.end = Math.max(last.end, range.end);
 	}
 	return merged
-		.slice(0, 12)
+		.slice(0, 20)
 		.map((range) => lines.slice(range.start, range.end + 1).join("\n"))
 		.join("\n...\n");
 }
