@@ -1,7 +1,8 @@
 ---
 owner: agent
-status: active
+status: completed
 created: 2026-02-23
+completed: 2026-02-23
 ---
 
 # Plan: linkedin_cleanup_anchor_classifier
@@ -41,7 +42,8 @@ Links:
 - `cd extension && bun test src/platforms/linkedin` -> pass (55 tests).
 - `make check` -> initial fail (`[FORMAT]`), fixed via `make fmt`.
 - `make check` -> second fail (`[TASKFLOW]` missing `CHANGELOG.md` update), fixed by changelog + required version bumps.
-- `make check` -> pending rerun after latest fixes.
+- `make check` -> pass after formatting/changelog fixes.
+- `make pr-ready` -> initial fail due active plan lifecycle not finalized; resolved by marking this plan completed and moving it to `docs/exec-plans/completed/`.
 
 ## PR
 - PR: pending (replace with PR URL after `make pr-submit`, or record blocker context)
