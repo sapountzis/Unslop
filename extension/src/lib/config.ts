@@ -14,7 +14,7 @@ export const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 export const CACHE_MAX_ITEMS = 10_000;
 
 // Batch classify settings
-export const BATCH_WINDOW_MS = 20;
+export const BATCH_WINDOW_MS = 150;
 // Keep in sync with backend/src/lib/policy-constants.ts: CLASSIFY_BATCH_MAX_SIZE
 export const BATCH_MAX_ITEMS = 20;
 export const BATCH_MAX_INFLIGHT_REQUESTS = 3;
