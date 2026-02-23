@@ -117,7 +117,11 @@ function extractText(element: HTMLElement): string {
 	}
 
 	const cleaned = cleanupLinkedInText(rawText);
-	return cleaned.length > 0 ? cleaned : normalized;
+	if (cleaned.classification === "metadata_only") {
+		return "";
+	}
+
+	return cleaned.text.length > 0 ? cleaned.text : normalized;
 }
 
 function extractAttachmentRefs(element: HTMLElement): PostAttachment[] {
