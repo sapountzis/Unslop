@@ -20,26 +20,26 @@ import { logger } from "../lib/logger";
 // ─── THRESHOLDS (tune these on your labeled data) ───
 
 // Step 1: Hard vetoes
-const HARD_VETO_M = 0.7;           // Manipulation this high = always hide
-const HARD_VETO_T = 0.8;           // Template this high = always hide
-const HARD_VETO_COMBO_M = 0.6;     // Manipulation + template combined veto
-const HARD_VETO_COMBO_T = 0.6;     // (both moderately high = hide)
+const HARD_VETO_M = 0.7; // Manipulation this high = always hide
+const HARD_VETO_T = 0.8; // Template this high = always hide
+const HARD_VETO_COMBO_M = 0.6; // Manipulation + template combined veto
+const HARD_VETO_COMBO_T = 0.6; // (both moderately high = hide)
 
 // Step 2: Signal rescue
-const RESCUE_S = 0.5;              // Signal needed to rescue
-const RESCUE_MAX_M = 0.5;          // Max manipulation allowed for rescue
-const RESCUE_STRONG_S = 0.7;       // Strong signal rescues even with moderate manipulation
-const RESCUE_STRONG_MAX_M = 0.6;   // Max manipulation allowed for strong rescue
+const RESCUE_S = 0.5; // Signal needed to rescue
+const RESCUE_MAX_M = 0.5; // Max manipulation allowed for rescue
+const RESCUE_STRONG_S = 0.7; // Strong signal rescues even with moderate manipulation
+const RESCUE_STRONG_MAX_M = 0.6; // Max manipulation allowed for strong rescue
 
 // Step 3: Authenticity pass
-const AUTH_S_LOW = 0.3;            // Minimum signal for authenticity pass (just not zero)
-const AUTH_MAX_M = 0.3;            // Max manipulation for authenticity pass
-const AUTH_MAX_T = 0.4;            // Max template for authenticity pass
+const AUTH_S_LOW = 0.3; // Minimum signal for authenticity pass (just not zero)
+const AUTH_MAX_M = 0.3; // Max manipulation for authenticity pass
+const AUTH_MAX_T = 0.4; // Max template for authenticity pass
 
 // Step 4: Soft vetoes
-const SOFT_VETO_M = 0.5;           // Moderate manipulation + weak signal = hide
-const SOFT_VETO_T = 0.6;           // Moderate template + weak signal = hide
-const SOFT_VETO_MAX_S = 0.3;       // Signal must be below this for soft vetoes to fire
+const SOFT_VETO_M = 0.5; // Moderate manipulation + weak signal = hide
+const SOFT_VETO_T = 0.6; // Moderate template + weak signal = hide
+const SOFT_VETO_MAX_S = 0.3; // Signal must be below this for soft vetoes to fire
 
 // ─── TYPES ───
 
@@ -84,7 +84,11 @@ export class ScoringEngine {
 	public score(result: ScoreResult | null): ScoringOutput {
 		// 0. Handle null/error
 		if (!result) {
-			return this.out("keep", "error", "E0_ERROR", { signal: 0, manipulation: 0, template: 0 });
+			return this.out("keep", "error", "E0_ERROR", {
+				signal: 0,
+				manipulation: 0,
+				template: 0,
+			});
 		}
 
 		// 1. Sanitize (clamp 0..1)
@@ -106,13 +110,19 @@ export class ScoringEngine {
 		}
 
 		// Both moderately high = slop (catches posts that dodge individual thresholds)
-		if (sc.manipulation >= HARD_VETO_COMBO_M && sc.template >= HARD_VETO_COMBO_T) {
+		if (
+			sc.manipulation >= HARD_VETO_COMBO_M &&
+			sc.template >= HARD_VETO_COMBO_T
+		) {
 			return this.out("hide", "combined_manipulation_template", "H1_COMBO", sc);
 		}
 
 		// ─── STEP 2: SIGNAL RESCUE ───
 		// Strong signal rescues even with moderate manipulation
-		if (sc.signal >= RESCUE_STRONG_S && sc.manipulation <= RESCUE_STRONG_MAX_M) {
+		if (
+			sc.signal >= RESCUE_STRONG_S &&
+			sc.manipulation <= RESCUE_STRONG_MAX_M
+		) {
 			return this.out("keep", "strong_signal_rescue", "K1_STRONG_SIGNAL", sc);
 		}
 
@@ -124,7 +134,11 @@ export class ScoringEngine {
 		// ─── STEP 3: AUTHENTICITY PASS ───
 		// Low-signal but genuine human content (personal stories, humor, questions)
 		// Only passes if manipulation AND template are both low
-		if (sc.signal >= AUTH_S_LOW && sc.manipulation <= AUTH_MAX_M && sc.template <= AUTH_MAX_T) {
+		if (
+			sc.signal >= AUTH_S_LOW &&
+			sc.manipulation <= AUTH_MAX_M &&
+			sc.template <= AUTH_MAX_T
+		) {
 			return this.out("keep", "authentic_content", "K1_AUTHENTIC", sc);
 		}
 

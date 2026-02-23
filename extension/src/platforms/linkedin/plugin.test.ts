@@ -14,9 +14,9 @@ describe("linkedin plugin feed root resolution", () => {
 	});
 
 	it("returns null when route is not feed-eligible", () => {
-		expect(findLinkedInFeedRoot("https://www.linkedin.com/notifications/")).toBe(
-			null,
-		);
+		expect(
+			findLinkedInFeedRoot("https://www.linkedin.com/notifications/"),
+		).toBe(null);
 	});
 
 	it("returns document body on feed route", () => {
@@ -27,9 +27,7 @@ describe("linkedin plugin feed root resolution", () => {
 
 	it("returns document body on feed route with query params", () => {
 		expect(
-			findLinkedInFeedRoot(
-				"https://www.linkedin.com/feed/?filter=following",
-			),
+			findLinkedInFeedRoot("https://www.linkedin.com/feed/?filter=following"),
 		).toBe(document.body);
 	});
 });

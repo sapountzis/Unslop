@@ -12,8 +12,8 @@ import {
 import type { AppLogger } from "../lib/logger-types";
 
 const testLogger: Pick<AppLogger, "warn" | "error"> = {
-	warn: () => { },
-	error: () => { },
+	warn: () => {},
+	error: () => {},
 };
 
 const testConfig = {

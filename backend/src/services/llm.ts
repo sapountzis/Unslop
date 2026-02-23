@@ -189,7 +189,11 @@ export function buildMessages(post: PostInput): ChatCompletionMessageParam[] {
 	];
 
 	return [
-		{ role: "system", content: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } } as ChatCompletionMessageParam,
+		{
+			role: "system",
+			content: SYSTEM_PROMPT,
+			cache_control: { type: "ephemeral" },
+		} as ChatCompletionMessageParam,
 		{ role: "user", content: userContent },
 	];
 }

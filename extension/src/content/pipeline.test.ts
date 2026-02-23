@@ -1,4 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it, jest, mock } from "bun:test";
+import {
+	afterEach,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	jest,
+	mock,
+} from "bun:test";
 import type { PlatformPlugin } from "../platforms/platform";
 import type { PostData } from "../types";
 import { Pipeline } from "./pipeline";
