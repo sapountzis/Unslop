@@ -16,6 +16,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Hardened LinkedIn text cleanup against leaked social-graph follow prefixes (for example `...and N other connections follow LinkedIn for ...`) using deterministic token-based prefix stripping while preserving normal prose that includes "follow".
 - Refactored LinkedIn cleanup to bounded edge-peeling normalization/stripping and added follow-action prefix removal (`follow ...`) with guardrails for natural prose (for example `follow up ...`).
 - Bumped backend and extension versions to `0.4.5`.
+- Reworked LinkedIn cleanup into a deterministic metadata-classified pipeline (normalize -> tail truncate -> anchored edge peeling -> outcome classification), adding coverage for `2nd/verified` header variants and `X follows Y` activity prefixes while dropping metadata-only captures and preserving uncertain fail-open fallback.
+- Bumped backend and extension versions to `0.4.6`.
 
 ## [0.3.0] - 2026-02-17
 

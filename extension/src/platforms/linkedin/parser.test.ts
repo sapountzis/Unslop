@@ -182,7 +182,23 @@ describe("linkedin parser", () => {
 			expect(result!.text).toBe("this is the real post body");
 		});
 
-		it("falls back to raw normalized text if cleanup strips everything", async () => {
+		it("drops metadata-only follows activity text", async () => {
+			const el = makeElement({
+				matches: (s) =>
+					s.includes("urn:li:activity:") || s.includes("urn:li:share:"),
+				getAttribute: (name) =>
+					name === "data-urn" ? "urn:li:activity:metadata-only-follows" : null,
+				textContent:
+					"Anna Christina Kyratzoglou follows FranklinCovey Greece and Cyprus",
+				querySelector: () => null,
+				querySelectorAll: () => [],
+			});
+
+			const result = await extractPostData(el);
+			expect(result).toBeNull();
+		});
+
+		it("drops metadata-only engagement headers", async () => {
 			const el = makeElement({
 				matches: (s) =>
 					s.includes("urn:li:activity:") || s.includes("urn:li:share:"),
@@ -194,10 +210,25 @@ describe("linkedin parser", () => {
 			});
 
 			const result = await extractPostData(el);
+			expect(result).toBeNull();
+		});
+
+		it("falls back to normalized text for uncertain cleanup results", async () => {
+			const rawText =
+				"status ok like comment congratulations! excited for you well deserved wishing you the best";
+			const el = makeElement({
+				matches: (s) =>
+					s.includes("urn:li:activity:") || s.includes("urn:li:share:"),
+				getAttribute: (name) =>
+					name === "data-urn" ? "urn:li:activity:uncertain-fallback1" : null,
+				textContent: rawText,
+				querySelector: () => null,
+				querySelectorAll: () => [],
+			});
+
+			const result = await extractPostData(el);
 			expect(result).not.toBeNull();
-			expect(result!.text).toBe(
-				"feed post number 15 coursera commented on this",
-			);
+			expect(result!.text).toBe(rawText);
 		});
 
 		it("extracts basic post with text content", async () => {
