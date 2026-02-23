@@ -1,7 +1,8 @@
 // X (Twitter) DOM parser — semantic/attribute selectors only (no data-testid)
-import { normalizeContentText, derivePostId } from "../../lib/hash";
+import { derivePostId, normalizeContentText } from "../../lib/hash";
+import { readBestImageSourceWithAncestors } from "../../lib/imageSource";
 import { waitForMediaHydration } from "../../lib/mediaHydration";
-import { PostData, PostAttachment } from "../../types";
+import type { PostAttachment, PostData } from "../../types";
 
 const TWEET_LINK = 'a[href*="/status/"]';
 const QUOTE_TWEET = '[role="link"][tabindex="0"]';
@@ -125,75 +126,6 @@ function findImagesInElement(element: HTMLElement): HTMLElement[] {
 	return queryAllElements(element, "img");
 }
 
-function parseSrcset(srcset: string | null): string | null {
-	if (!srcset) return null;
-	const firstCandidate = srcset.split(",", 1)[0]?.trim().split(/\s+/, 1)[0];
-	return firstCandidate || null;
-}
-
-function parseBackgroundImageUrl(value: string | null): string | null {
-	if (!value) return null;
-	const match = value.match(/url\((['"]?)(.*?)\1\)/i);
-	if (!match) return null;
-	const extracted = match[2]?.trim();
-	return extracted || null;
-}
-
-function readImageSourceFromElement(
-	element: HTMLElement | null,
-): string | null {
-	if (!element) return null;
-
-	const attrSrc = readAttribute(element, "src");
-	if (attrSrc) return attrSrc;
-
-	const currentSrc = (
-		element as unknown as {
-			currentSrc?: string;
-		}
-	).currentSrc;
-	if (typeof currentSrc === "string" && currentSrc.trim().length > 0) {
-		return currentSrc.trim();
-	}
-
-	const srcset = parseSrcset(readAttribute(element, "srcset"));
-	if (srcset) return srcset;
-
-	const styleAttr = readAttribute(element, "style");
-	const backgroundUrl = parseBackgroundImageUrl(styleAttr);
-	if (backgroundUrl) return backgroundUrl;
-
-	return null;
-}
-
-function readImageSourceFromElementOrParent(img: HTMLElement): string | null {
-	const imgSrc = readImageSourceFromElement(img);
-	if (imgSrc) return imgSrc;
-
-	// Check parent and ancestors for background-image
-	let current: HTMLElement | null = img.parentElement;
-	let depth = 0;
-	const maxDepth = 3; // Limit traversal to avoid going too far up
-
-	while (current && depth < maxDepth) {
-		// Check if current element has background-image
-		const currentSrc = readImageSourceFromElement(current);
-		if (currentSrc) return currentSrc;
-
-		// Check children of current for background-image
-		const styled = queryAllElements(current, '[style*="background-image"]');
-		for (const s of styled) {
-			const src = readImageSourceFromElement(s);
-			if (src) return src;
-		}
-
-		current = current.parentElement;
-		depth += 1;
-	}
-
-	return null;
-}
-
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -286,7 +218,7 @@ export async function extractPostData(
 		for (const link of photoLinks) {
 			const imgs = findImagesInElement(link);
 			for (const img of imgs) {
-				if (readImageSourceFromElementOrParent(img)) {
+				if (readBestImageSourceWithAncestors(img)) {
 					hasHydratedPhotoImg = true;
 					break;
 				}
@@ -300,7 +232,7 @@ export async function extractPostData(
 			for (const link of photoLinks) {
 				const imgs = findImagesInElement(link);
 				for (const img of imgs) {
-					if (readImageSourceFromElementOrParent(img)) {
+					if (readBestImageSourceWithAncestors(img)) {
 						hasHydratedPhotoImg = true;
 						break;
 					}
@@ -323,7 +255,7 @@ export async function extractPostData(
 				continue;
 			}
 
-			const src = readImageSourceFromElementOrParent(img);
+			const src = readBestImageSourceWithAncestors(img);
 			if (!src) continue;
 
 			attachments.push({

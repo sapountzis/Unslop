@@ -13,7 +13,7 @@ export const LLM_RETRY_ATTEMPTS = 3;
 export const LLM_RETRY_MIN_TIMEOUT_MS = 2000;
 export const LLM_RETRY_MAX_TIMEOUT_MS = 20000;
 export const LLM_TEMPERATURE = 0.1;
-export const LLM_MAX_TOKENS = 1000;
+export const LLM_MAX_TOKENS = 100;
 
 export const DEFAULT_BATCH_LLM_CONCURRENCY = 4;
 export const POLAR_PRICE_CACHE_TTL_MS = 60 * 60 * 1000;
