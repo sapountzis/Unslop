@@ -71,7 +71,8 @@ beforeEach(() => {
 afterEach(() => {
 	mutableDecisionCache.get = originalDecisionCacheMethods.get;
 	mutableDecisionCache.set = originalDecisionCacheMethods.set;
-	mutableDecisionCache.cleanupExpired = originalDecisionCacheMethods.cleanupExpired;
+	mutableDecisionCache.cleanupExpired =
+		originalDecisionCacheMethods.cleanupExpired;
 	jest.useRealTimers();
 });
 
