@@ -39,11 +39,11 @@ export const testChecker = defineChecker({
 			const highlights = extractFailureHighlights(output);
 			if (highlights) {
 				console.error(`[TEST] --- ${suite.id} extracted failures ---`);
-				console.error(ctx.tail(highlights, 200));
+				console.error(highlights);
 				console.error(`[TEST] --- end extracted failures ---`);
 			}
 			console.error(`[TEST] --- ${suite.id} test log tail ---`);
-			console.error(ctx.tail(output, 120));
+			console.error(ctx.tail(output, 220));
 			console.error(`[TEST] --- end ${suite.id} test log ---`);
 			console.error(suite.remediation);
 		}

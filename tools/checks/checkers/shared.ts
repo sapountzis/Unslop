@@ -27,13 +27,34 @@ export function extractFailureHighlights(output: string): string {
 		/^expect\(/,
 		/^\s+at /,
 	] as const;
-	return output
-		.split(/\r?\n/)
-		.filter((line) =>
-			patterns.some((pattern) => pattern.test(line.trimStart())),
-		)
-		.slice(-120)
-		.join("\n");
+	const lines = output.split(/\r?\n/);
+	const ranges: Array<{ start: number; end: number }> = [];
+	for (let index = 0; index < lines.length; index += 1) {
+		const normalized = lines[index]?.trimStart() ?? "";
+		if (!patterns.some((pattern) => pattern.test(normalized))) {
+			continue;
+		}
+		ranges.push({
+			start: Math.max(0, index - 3),
+			end: Math.min(lines.length - 1, index + 8),
+		});
+	}
+	if (ranges.length === 0) {
+		return "";
+	}
+	const merged: Array<{ start: number; end: number }> = [];
+	for (const range of ranges) {
+		const last = merged[merged.length - 1];
+		if (!last || range.start > last.end + 1) {
+			merged.push(range);
+			continue;
+		}
+		last.end = Math.max(last.end, range.end);
+	}
+	return merged
+		.slice(0, 12)
+		.map((range) => lines.slice(range.start, range.end + 1).join("\n"))
+		.join("\n...\n");
 }
 
 export async function runAndEmit(
