@@ -428,19 +428,13 @@ describe("Classify Routes (unit)", () => {
 
 describe("Scoring Engine", () => {
 	const uniform = (value: number, slop: number) => ({
-		u: value,
-		d: value,
-		c: value,
-		rb: slop,
-		eb: slop,
-		sp: slop,
-		p: slop,
-		x: slop,
+		signal: value,
+		manipulation: slop,
+		template: slop,
 	});
 
 	it("scores keep for strong value and weak slop", () => {
 		const engine = new ScoringEngine();
-		// rb=0.3 is below safety gate (0.5), so rescue can fire; u=0.7 >= RESCUE_U (0.6)
 		const result = engine.score(uniform(0.7, 0.3));
 
 		expect(result.decision).toBe("keep");
@@ -448,21 +442,21 @@ describe("Scoring Engine", () => {
 
 	it("applies toxic veto before hide rules", () => {
 		const engine = new ScoringEngine();
-		// rb=0.7 hard veto → hide
+		// m=0.7 hard veto → hide
 		const atLowerBound = engine.score(uniform(0.5, 0.7));
-		// rb=0.4 below all thresholds, no rescue → keep neutral
-		const middle = engine.score(uniform(0.4, 0.4));
-		// rb=0.45 below safety gate (0.5), u=0.69 >= RESCUE_U (0.6) → keep rescued
-		const nearUpperBound = engine.score(uniform(0.69, 0.45));
+		// moderate m, very low s → hide
+		const middle = engine.score(uniform(0.2, 0.5));
+		// m=0.4 below safety gate, s=0.4 → keep rescued
+		const nearUpperBound = engine.score(uniform(0.4, 0.4));
 
 		expect(atLowerBound.decision).toBe("hide");
-		expect(middle.decision).toBe("keep");
+		expect(middle.decision).toBe("hide");
 		expect(nearUpperBound.decision).toBe("keep");
 	});
 
 	it("scores hide for weak value and strong slop", () => {
 		const engine = new ScoringEngine();
-		const result = engine.score(uniform(0.49, 0.71));
+		const result = engine.score(uniform(0.2, 0.8));
 
 		expect(result.decision).toBe("hide");
 	});
