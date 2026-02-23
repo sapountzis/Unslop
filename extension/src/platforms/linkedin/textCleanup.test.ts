@@ -39,7 +39,7 @@ describe("linkedin text cleanup", () => {
 		expect(cleaned).toBe("we're hiring a senior data scientist at buffer!");
 	});
 
-	it("strips duplicated follower/time metadata and loading chrome", () => {
+	it("strips duplicated follower/time metadata and loading UI noise", () => {
 		const cleaned = cleanupLinkedInText(
 			"softetasofteta 9,425 followers9,425 followers 7m • 7 minutes ago • visible to anyone on or off linkedin we stand out because we put you first. ...more your document is loading",
 		);
@@ -67,6 +67,20 @@ describe("linkedin text cleanup", () => {
 		expect(cleaned).toBe("real post body");
 	});
 
+	it("strips connection-follow prefix metadata before post body", () => {
+		const cleaned = cleanupLinkedInText(
+			"George Spanidis, Nektaria Toto and 51 other connections follow LinkedIn for Marketing this is the real post body",
+		);
+		expect(cleaned).toBe("this is the real post body");
+	});
+
+	it("strips single-actor follows prefix metadata before post body", () => {
+		const cleaned = cleanupLinkedInText(
+			"Nektaria Toto follows LinkedIn for Marketing this is the real post body",
+		);
+		expect(cleaned).toBe("this is the real post body");
+	});
+
 	it("preserves normal prose with congratulations language", () => {
 		const cleaned = cleanupLinkedInText(
 			"We said congratulations to the team and wishing you the best in public.",
@@ -81,5 +95,14 @@ describe("linkedin text cleanup", () => {
 			"status ok like comment congratulations! excited for you well deserved wishing you the best";
 		const cleaned = cleanupLinkedInText(rawText);
 		expect(cleaned).toBe(rawText);
+	});
+
+	it("preserves follow wording inside normal prose", () => {
+		const cleaned = cleanupLinkedInText(
+			"We follow market updates and follow up with customers every week.",
+		);
+		expect(cleaned).toBe(
+			"we follow market updates and follow up with customers every week.",
+		);
 	});
 });

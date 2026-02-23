@@ -19,7 +19,8 @@ Update trigger: changes to default delivery workflow, planning workflow, or qual
 5. Implement minimal scoped changes.
 6. Repeat `(edit -> make check -> review update in plan)` until all required gates pass.
 7. Update specs/runbooks/quality docs touched by the change, including root `CHANGELOG.md` for non-doc changes (Keep a Changelog format).
-8. Capture verification in the plan, finalize plan status/move per `docs/exec-plans/README.md`, then run `make pr-ready` and immediately run `make pr-submit`.
+8. Before PR gates, bump versions in both backend and extension (`backend/package.json`, `extension/package.json`, and `extension/manifest.json`).
+9. Capture verification in the plan, finalize plan status/move per `docs/exec-plans/README.md`, then run `make pr-ready` and immediately run `make pr-submit`.
 
 ### Golden Path: Bug Fix
 1. Reproduce the issue and record minimal repro steps in the active plan.
@@ -27,6 +28,7 @@ Update trigger: changes to default delivery workflow, planning workflow, or qual
 3. Add/fix tests that lock expected behavior.
 4. Implement smallest safe fix.
 5. Re-run relevant checks and update docs if behavior/ops changed.
+6. Before PR gates, bump versions in both backend and extension (`backend/package.json`, `extension/package.json`, and `extension/manifest.json`).
 
 ### Golden Path: Docs-Only Change
 1. Identify source-of-truth file(s) in `docs/`.
@@ -51,6 +53,7 @@ Update trigger: changes to default delivery workflow, planning workflow, or qual
 2. If no blockers remain:
    - set plan frontmatter to `status: completed` and add `completed: <YYYY-MM-DD>`;
    - move plan from `docs/exec-plans/active/` to `docs/exec-plans/completed/`;
+   - confirm backend + extension versions are bumped in `backend/package.json`, `extension/package.json`, and `extension/manifest.json`;
    - run `make pr-ready` and then `make pr-submit`.
 3. If environment blockers or required human decisions remain, keep plan in `active/` and record the standard blocker exception note with owner action.
 

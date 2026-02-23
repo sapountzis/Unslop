@@ -1,7 +1,7 @@
 {
 	"manifest_version": 3,
 	"name": "Unslop",
-	"version": "0.4.3",
+	"version": "0.4.4",
 	"description": "Filter your social media feeds",
 	"permissions": ["storage", "activeTab"],
 	"host_permissions": [
