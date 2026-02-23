@@ -149,6 +149,22 @@ describe("linkedin parser", () => {
 			);
 		});
 
+		it("strips leaked follow action prefix from extracted text", async () => {
+			const el = makeElement({
+				matches: (s) =>
+					s.includes("urn:li:activity:") || s.includes("urn:li:share:"),
+				getAttribute: (name) =>
+					name === "data-urn" ? "urn:li:activity:follow-prefix-1" : null,
+				textContent: "follow lazy engineers are good engineers",
+				querySelector: () => null,
+				querySelectorAll: () => [],
+			});
+
+			const result = await extractPostData(el);
+			expect(result).not.toBeNull();
+			expect(result!.text).toBe("lazy engineers are good engineers");
+		});
+
 		it("strips connection-follow metadata prefixes in extracted text", async () => {
 			const el = makeElement({
 				matches: (s) =>

@@ -1,16 +1,16 @@
 import { normalizeContentText } from "../../lib/hash";
 
 /**
- * LinkedIn text cleanup is intentionally staged:
- * 1) normalize known token-glue artifacts from DOM extraction,
- * 2) strip leading metadata/header UI noise,
- * 3) strip trailing action/count UI noise,
- * 4) preserve fail-open behavior when aggressive stripping would leave almost no text.
+ * LinkedIn cleanup uses deterministic edge peeling:
+ * 1) normalize separator/token artifacts (for example "|" and glued metadata),
+ * 2) peel leading metadata/prefix noise,
+ * 3) peel trailing action/count noise,
+ * 4) repeat bounded passes until stable.
  *
- * The follow-prefix cleaner is token-based (instead of one broad regex) because
- * follow metadata can be glued into prefix text and naive regex tends to either
- * miss variants or over-strip body content. The token strategy keeps filtering
- * deterministic and scoped to known LinkedIn follow-topic shapes.
+ * Design decisions:
+ * - Edge-only mutation: remove noise only from start/end, never from the middle.
+ * - Bounded convergence: run a small number of passes, stop early when unchanged.
+ * - Fail-open safety: if cleanup would over-strip, return normalized original text.
  */
 type CleanupRule = readonly [pattern: RegExp, replacement: string];
 
@@ -42,6 +42,22 @@ const TOPIC_BODY_START_GUARD = new Set([
 	"here",
 ]);
 
+const FOLLOW_IMPERATIVE_GUARD = new Set([
+	"me",
+	"us",
+	"you",
+	"this",
+	"that",
+	"these",
+	"those",
+	"my",
+	"our",
+	"your",
+	"up",
+	"along",
+]);
+
+const MAX_EDGE_PASSES = 6;
 const MAX_PREFIX_SCAN_TOKENS = 20;
 const MAX_ACTOR_TOKENS = 12;
 const MIN_ACTOR_TOKENS = 2;
@@ -49,6 +65,7 @@ const MIN_BODY_TOKENS_AFTER_PREFIX = 4;
 
 const NORMALIZE_RULES: CleanupRule[] = [
 	[/\u2026more/gi, "...more"],
+	[/\s*\|\s*/g, " "],
 	[/\bfollowingverified\b/gi, "following verified"],
 	[/\bfollowers(?=\d)/gi, "followers "],
 	[/\bfollowersfollowers\b/gi, "followers"],
@@ -84,8 +101,8 @@ const LEADING_RULES: CleanupRule[] = [
 ];
 
 const TRAILING_RULES: CleanupRule[] = [
-	[/\blike\s+comment\s+congratulations!?[\s\S]*$/i, ""],
 	[/(?:\.\.\.more|\u2026more)\b[\s\S]*$/i, ""],
+	[/\blike\s+comment\s+congratulations!?[\s\S]*$/i, ""],
 	[/\byour document is loading\b[\s\S]*$/i, ""],
 	[/\bdownload free whitepaper\b[\s\S]*$/i, ""],
 	[/\bview form\b[\s\S]*$/i, ""],
@@ -102,22 +119,17 @@ const TRAILING_RULES: CleanupRule[] = [
 	[/(?:\s*[•|]\s*)+$/i, ""],
 ];
 
-function applyRules(value: string, rules: CleanupRule[]): string {
+function applyRulePass(value: string, rules: CleanupRule[]): string {
 	let current = value.trim();
-	let mutated = true;
-
-	while (mutated && current.length > 0) {
-		mutated = false;
-		for (const [pattern, replacement] of rules) {
-			const next = current.replace(pattern, replacement).trim();
-			if (next !== current) {
-				current = next;
-				mutated = true;
-			}
-		}
+	for (const [pattern, replacement] of rules) {
+		current = current.replace(pattern, replacement).trim();
 	}
 
 	return current;
+}
+
+function splitTokens(value: string): string[] {
+	return value.trim().split(/\s+/).filter(Boolean);
 }
 
 function canonicalToken(token: string): string {
@@ -126,6 +138,30 @@ function canonicalToken(token: string): string {
 
 function isCountToken(token: string): boolean {
 	return /^(?:\d{1,3}(?:,\d{3})+|\d+)$/.test(token);
+}
+
+function stripLeadingFollowActionPrefix(value: string): string {
+	const tokens = splitTokens(value);
+	if (tokens.length < MIN_BODY_TOKENS_AFTER_PREFIX + 1) {
+		return value;
+	}
+
+	const first = canonicalToken(tokens[0] ?? "");
+	if (first !== "follow") {
+		return value;
+	}
+
+	const second = canonicalToken(tokens[1] ?? "");
+	if (FOLLOW_IMPERATIVE_GUARD.has(second)) {
+		return value;
+	}
+
+	const remainingTokenCount = tokens.length - 1;
+	if (remainingTokenCount < MIN_BODY_TOKENS_AFTER_PREFIX) {
+		return value;
+	}
+
+	return tokens.slice(1).join(" ");
 }
 
 function consumeLinkedInTopicTokens(
@@ -170,8 +206,8 @@ function hasValidActorPrefix(
 	return first.length > 0 && !PROSE_PREFIX_DISALLOWED.has(first);
 }
 
-function stripLeadingFollowPrefix(value: string): string {
-	const tokens = value.trim().split(/\s+/).filter(Boolean);
+function stripLeadingFollowMetadataPrefix(value: string): string {
+	const tokens = splitTokens(value);
 	if (tokens.length < 8) {
 		return value;
 	}
@@ -221,6 +257,30 @@ function stripLeadingFollowPrefix(value: string): string {
 	return value;
 }
 
+function stripLeadingEdgeNoise(value: string): string {
+	const withoutFollowAction = stripLeadingFollowActionPrefix(value);
+	const withoutFollowMetadata =
+		stripLeadingFollowMetadataPrefix(withoutFollowAction);
+	return applyRulePass(withoutFollowMetadata, LEADING_RULES);
+}
+
+function stripTrailingEdgeNoise(value: string): string {
+	return applyRulePass(value, TRAILING_RULES);
+}
+
+function peelEdges(value: string): string {
+	let current = value.trim();
+	for (let pass = 0; pass < MAX_EDGE_PASSES && current.length > 0; pass += 1) {
+		const previous = current;
+		current = stripLeadingEdgeNoise(current);
+		current = stripTrailingEdgeNoise(current);
+		if (current === previous) {
+			break;
+		}
+	}
+	return current;
+}
+
 function tokenCount(value: string): number {
 	const matches = value.match(/[a-z0-9]+/g);
 	return matches ? matches.length : 0;
@@ -249,16 +309,12 @@ export function cleanupLinkedInText(rawText: string): string {
 		return "";
 	}
 
-	const harmonized = applyRules(normalized, NORMALIZE_RULES);
-	const withoutFollowPrefix = stripLeadingFollowPrefix(harmonized);
-	const withoutLeadingNoise = applyRules(withoutFollowPrefix, LEADING_RULES);
-	const withoutTrailingNoise = applyRules(withoutLeadingNoise, TRAILING_RULES);
+	const harmonized = applyRulePass(normalized, NORMALIZE_RULES);
+	const peeled = peelEdges(harmonized);
 
-	if (!withoutTrailingNoise) {
+	if (!peeled) {
 		return "";
 	}
 
-	return shouldFallbackToNormalized(withoutTrailingNoise, harmonized)
-		? harmonized
-		: withoutTrailingNoise;
+	return shouldFallbackToNormalized(peeled, harmonized) ? harmonized : peeled;
 }
