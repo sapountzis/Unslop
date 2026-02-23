@@ -81,6 +81,38 @@ describe("linkedin text cleanup", () => {
 		expect(cleaned).toBe("this is the real post body");
 	});
 
+	it("strips leaked follow action prefix before post body", () => {
+		const cleaned = cleanupLinkedInText(
+			"follow lazy engineers are good engineers",
+		);
+		expect(cleaned).toBe("lazy engineers are good engineers");
+	});
+
+	it("strips leaked follow action prefix in long-form content", () => {
+		const cleaned = cleanupLinkedInText(
+			"follow coding isn't dying. bad developers are.the head of claude",
+		);
+		expect(cleaned).toBe(
+			"coding isn't dying. bad developers are.the head of claude",
+		);
+	});
+
+	it("preserves natural follow-up prose at sentence start", () => {
+		const cleaned = cleanupLinkedInText(
+			"follow up with the release team tomorrow morning please",
+		);
+		expect(cleaned).toBe(
+			"follow up with the release team tomorrow morning please",
+		);
+	});
+
+	it("normalizes pipe separators used in metadata prefixes", () => {
+		const cleaned = cleanupLinkedInText(
+			"followingverified | following | real post body",
+		);
+		expect(cleaned).toBe("real post body");
+	});
+
 	it("preserves normal prose with congratulations language", () => {
 		const cleaned = cleanupLinkedInText(
 			"We said congratulations to the team and wishing you the best in public.",
