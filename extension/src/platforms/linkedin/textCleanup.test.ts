@@ -24,4 +24,62 @@ describe("linkedin text cleanup", () => {
 			"i like this approach and you can comment if you disagree.",
 		);
 	});
+
+	it("strips job-update labels and automated reaction suggestion tails", () => {
+		const cleaned = cleanupLinkedInText(
+			"eleni pappa\u2019s job update eleni completed 4 years at noris mike 7 3 comments like comment congratulations! excited for you well deserved, eleni wishing you the best",
+		);
+		expect(cleaned).toBe("eleni completed 4 years at noris mike");
+	});
+
+	it("strips duplicated actor header, following/verified tags, and visibility metadata", () => {
+		const cleaned = cleanupLinkedInText(
+			"simon heatonsimon heaton • followingverified • following director of growth marketing @ buffer director of growth marketing @ buffer 1w • 1 week ago • visible to anyone on or off linkedin we're hiring a senior data scientist at buffer! ...more 144 19 comments 11 reposts",
+		);
+		expect(cleaned).toBe("we're hiring a senior data scientist at buffer!");
+	});
+
+	it("strips duplicated follower/time metadata and loading chrome", () => {
+		const cleaned = cleanupLinkedInText(
+			"softetasofteta 9,425 followers9,425 followers 7m • 7 minutes ago • visible to anyone on or off linkedin we stand out because we put you first. ...more your document is loading",
+		);
+		expect(cleaned).toBe("we stand out because we put you first.");
+	});
+
+	it("strips promoted headers and download/view-form control tails", () => {
+		const cleaned = cleanupLinkedInText(
+			"kalimera.aikalimera.ai 497 followers497 followers promotedpromoted reduce your airline operating costs by up to 60%! ...more download free whitepaper kalimera.ai download. view form download 6 1",
+		);
+		expect(cleaned).toBe("reduce your airline operating costs by up to 60%!");
+	});
+
+	it("strips load-more-comments action rows", () => {
+		const cleaned = cleanupLinkedInText(
+			"my post body like reply load more comments",
+		);
+		expect(cleaned).toBe("my post body");
+	});
+
+	it("strips following/verified metadata that precedes content", () => {
+		const cleaned = cleanupLinkedInText(
+			"followingverified • following real post body",
+		);
+		expect(cleaned).toBe("real post body");
+	});
+
+	it("preserves normal prose with congratulations language", () => {
+		const cleaned = cleanupLinkedInText(
+			"We said congratulations to the team and wishing you the best in public.",
+		);
+		expect(cleaned).toBe(
+			"we said congratulations to the team and wishing you the best in public.",
+		);
+	});
+
+	it("falls back to normalized text when stripping would leave only a tiny fragment", () => {
+		const rawText =
+			"status ok like comment congratulations! excited for you well deserved wishing you the best";
+		const cleaned = cleanupLinkedInText(rawText);
+		expect(cleaned).toBe(rawText);
+	});
 });
