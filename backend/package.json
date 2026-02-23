@@ -1,6 +1,6 @@
 {
 	"name": "unslop-backend",
-	"version": "0.4.6",
+	"version": "0.5.0",
 	"scripts": {
 		"dev": "bun run --env-file .env src/index.ts",
 		"dev:workers": "wrangler dev",
