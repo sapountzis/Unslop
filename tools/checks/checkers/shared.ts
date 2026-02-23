@@ -16,6 +16,26 @@ export function outputFor(result: CommandResult): string {
 	return commandOutput(result);
 }
 
+export function extractFailureHighlights(output: string): string {
+	const patterns = [
+		/^\(fail\)/,
+		/^FAIL\b/,
+		/ tests failed/,
+		/ test failed/,
+		/^error: script/,
+		/^Error:/,
+		/^expect\(/,
+		/^\s+at /,
+	] as const;
+	return output
+		.split(/\r?\n/)
+		.filter((line) =>
+			patterns.some((pattern) => pattern.test(line.trimStart())),
+		)
+		.slice(-120)
+		.join("\n");
+}
+
 export async function runAndEmit(
 	ctx: CheckContext,
 	spec: CommandSpec,
