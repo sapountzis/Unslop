@@ -1,19 +1,75 @@
+// extension/src/background/storageFacade.test.ts
 import { describe, expect, it } from "bun:test";
 import { createStorageFacade } from "./storageFacade";
 
-describe("background storage facade", () => {
-	it("normalizes jwt and enabled state in auth snapshot", async () => {
+describe("StorageFacade (BYOK)", () => {
+	it("returns provider settings with defaults when nothing is stored", async () => {
+		const storage = createStorageFacade({
+			getSync: async () => ({}),
+		});
+
+		const settings = await storage.getProviderSettings();
+		expect(settings.apiKey).toBe("");
+		expect(settings.baseUrl).toBe("https://openrouter.ai/api/v1");
+		expect(settings.model).toBe("gpt-4.1-mini");
+	});
+
+	it("returns stored provider settings", async () => {
 		const storage = createStorageFacade({
 			getSync: async () => ({
-				jwt: "",
-				enabled: undefined,
+				apiKey: "sk-abc",
+				baseUrl: "https://openrouter.ai/api",
+				model: "gpt-4o",
 			}),
 		});
 
-		const snapshot = await storage.getAuthState();
-		expect(snapshot).toEqual({
-			jwt: null,
-			enabled: true,
+		const settings = await storage.getProviderSettings();
+		expect(settings.apiKey).toBe("sk-abc");
+		expect(settings.baseUrl).toBe("https://openrouter.ai/api");
+		expect(settings.model).toBe("gpt-4o");
+	});
+
+	it("hasApiKey returns true when apiKey is stored", async () => {
+		const storage = createStorageFacade({
+			getSync: async () => ({ apiKey: "sk-abc" }),
+		});
+		expect(await storage.hasApiKey()).toBe(true);
+	});
+
+	it("hasApiKey returns false when apiKey is empty string", async () => {
+		const storage = createStorageFacade({
+			getSync: async () => ({ apiKey: "" }),
+		});
+		expect(await storage.hasApiKey()).toBe(false);
+	});
+
+	it("hasApiKey returns false when apiKey is missing", async () => {
+		const storage = createStorageFacade({
+			getSync: async () => ({}),
+		});
+		expect(await storage.hasApiKey()).toBe(false);
+	});
+
+	it("setProviderSettings persists all fields", async () => {
+		const writes: Record<string, unknown>[] = [];
+		const storage = createStorageFacade({
+			getSync: async () => ({}),
+			setSync: async (items) => {
+				writes.push(items);
+			},
+		});
+
+		await storage.setProviderSettings({
+			apiKey: "sk-xyz",
+			baseUrl: "https://api.openai.com",
+			model: "gpt-4.1-mini",
+		});
+
+		expect(writes).toHaveLength(1);
+		expect(writes[0]).toMatchObject({
+			apiKey: "sk-xyz",
+			baseUrl: "https://api.openai.com",
+			model: "gpt-4.1-mini",
 		});
 	});
 
@@ -34,11 +90,8 @@ describe("background storage facade", () => {
 
 	it("treats missing developer mode as disabled", async () => {
 		const storage = createStorageFacade({
-			getSync: async () => ({
-				devMode: undefined,
-			}),
+			getSync: async () => ({ devMode: undefined }),
 		});
-
 		expect(await storage.getDevMode()).toBe(false);
 	});
 

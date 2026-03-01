@@ -148,3 +148,4 @@ extension/src/**/*.js
 
 .claude/
 .vscode/
+backend/

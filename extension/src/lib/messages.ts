@@ -1,8 +1,9 @@
+// extension/src/lib/messages.ts
 import {
 	BatchClassifyResult,
+	LocalStatsSnapshot,
 	PostData,
-	StatsInfo,
-	UserInfoWithUsage,
+	ProviderSettings,
 } from "../types";
 import type {
 	ContentDiagnosticsResponse,
@@ -12,15 +13,12 @@ import type {
 export const MESSAGE_TYPES = {
 	CLASSIFY_BATCH: "CLASSIFY_BATCH",
 	CLASSIFY_BATCH_RESULT: "CLASSIFY_BATCH_RESULT",
-	GET_USER_INFO: "GET_USER_INFO",
-	CREATE_CHECKOUT: "CREATE_CHECKOUT",
-	START_AUTH: "START_AUTH",
-	SET_JWT: "SET_JWT",
-	CLEAR_JWT: "CLEAR_JWT",
 	TOGGLE_ENABLED: "TOGGLE_ENABLED",
-	GET_STATS: "GET_STATS",
 	GET_RUNTIME_DIAGNOSTICS: "GET_RUNTIME_DIAGNOSTICS",
 	GET_CONTENT_DIAGNOSTICS: "GET_CONTENT_DIAGNOSTICS",
+	GET_PROVIDER_SETTINGS: "GET_PROVIDER_SETTINGS",
+	SET_PROVIDER_SETTINGS: "SET_PROVIDER_SETTINGS",
+	GET_LOCAL_STATS: "GET_LOCAL_STATS",
 } as const;
 
 export type MessageType = (typeof MESSAGE_TYPES)[keyof typeof MESSAGE_TYPES];
@@ -35,34 +33,8 @@ export type ClassifyBatchResultMessage = {
 	item: BatchClassifyResult;
 };
 
-export type GetUserInfoMessage = {
-	type: typeof MESSAGE_TYPES.GET_USER_INFO;
-};
-
-export type CreateCheckoutMessage = {
-	type: typeof MESSAGE_TYPES.CREATE_CHECKOUT;
-};
-
-export type StartAuthMessage = {
-	type: typeof MESSAGE_TYPES.START_AUTH;
-	email: string;
-};
-
-export type SetJwtMessage = {
-	type: typeof MESSAGE_TYPES.SET_JWT;
-	jwt: string;
-};
-
-export type ClearJwtMessage = {
-	type: typeof MESSAGE_TYPES.CLEAR_JWT;
-};
-
 export type ToggleEnabledMessage = {
 	type: typeof MESSAGE_TYPES.TOGGLE_ENABLED;
-};
-
-export type GetStatsMessage = {
-	type: typeof MESSAGE_TYPES.GET_STATS;
 };
 
 export type GetRuntimeDiagnosticsMessage = {
@@ -73,30 +45,43 @@ export type GetContentDiagnosticsMessage = {
 	type: typeof MESSAGE_TYPES.GET_CONTENT_DIAGNOSTICS;
 };
 
+export type GetProviderSettingsMessage = {
+	type: typeof MESSAGE_TYPES.GET_PROVIDER_SETTINGS;
+};
+
+export type SetProviderSettingsMessage = {
+	type: typeof MESSAGE_TYPES.SET_PROVIDER_SETTINGS;
+	settings: ProviderSettings;
+};
+
+export type GetLocalStatsMessage = {
+	type: typeof MESSAGE_TYPES.GET_LOCAL_STATS;
+};
+
 export type RuntimeRequest =
 	| ClassifyBatchMessage
-	| GetUserInfoMessage
-	| CreateCheckoutMessage
-	| StartAuthMessage
-	| SetJwtMessage
-	| ClearJwtMessage
+	| ClassifyBatchResultMessage
 	| ToggleEnabledMessage
-	| GetStatsMessage
 	| GetRuntimeDiagnosticsMessage
-	| GetContentDiagnosticsMessage;
+	| GetContentDiagnosticsMessage
+	| GetProviderSettingsMessage
+	| SetProviderSettingsMessage
+	| GetLocalStatsMessage;
+
+export type SetProviderSettingsResponse =
+	| { status: "ok" }
+	| { status: "invalid_base_url"; reason: string }
+	| { status: "permission_denied"; origin: string };
 
 export type RuntimeResponseByType = {
 	[MESSAGE_TYPES.CLASSIFY_BATCH]: { status: "ok" | "disabled" | "error" };
 	[MESSAGE_TYPES.CLASSIFY_BATCH_RESULT]: undefined;
-	[MESSAGE_TYPES.GET_USER_INFO]: UserInfoWithUsage | null; // Now includes usage data (UserInfoWithUsage)
-	[MESSAGE_TYPES.CREATE_CHECKOUT]: { checkout_url: string | null };
-	[MESSAGE_TYPES.START_AUTH]: { status: "ok" };
-	[MESSAGE_TYPES.SET_JWT]: { status: "ok" };
-	[MESSAGE_TYPES.CLEAR_JWT]: { status: "ok" };
 	[MESSAGE_TYPES.TOGGLE_ENABLED]: { enabled: boolean };
-	[MESSAGE_TYPES.GET_STATS]: StatsInfo | null;
 	[MESSAGE_TYPES.GET_RUNTIME_DIAGNOSTICS]: RuntimeDiagnosticsResponse;
 	[MESSAGE_TYPES.GET_CONTENT_DIAGNOSTICS]: ContentDiagnosticsResponse;
+	[MESSAGE_TYPES.GET_PROVIDER_SETTINGS]: ProviderSettings | null;
+	[MESSAGE_TYPES.SET_PROVIDER_SETTINGS]: SetProviderSettingsResponse;
+	[MESSAGE_TYPES.GET_LOCAL_STATS]: LocalStatsSnapshot;
 };
 
 export type RuntimeResponse<T extends MessageType> = RuntimeResponseByType[T];

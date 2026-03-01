@@ -5,7 +5,6 @@ import type {
 	DiagnosticsReport,
 	RuntimeDiagnosticsSnapshot,
 } from "../lib/diagnostics";
-import { API_BASE_URL } from "../lib/config";
 
 type BuildDiagnosticsInput = {
 	runtimeSnapshot: RuntimeDiagnosticsSnapshot | null;
@@ -178,13 +177,13 @@ export function buildDiagnosticsReport(
 
 	checks.push(
 		createCoreCheck({
-			id: "storage_jwt_present",
-			label: "JWT present",
-			status: runtime.hasJwt ? "pass" : "fail",
-			evidence: `jwt_present=${String(runtime.hasJwt)}`,
-			nextAction: runtime.hasJwt
+			id: "api_key_configured",
+			label: "API key configured",
+			status: runtime.hasApiKey ? "pass" : "fail",
+			evidence: `api_key_present=${String(runtime.hasApiKey)}`,
+			nextAction: runtime.hasApiKey
 				? "None."
-				: "Sign in and complete the auth callback flow.",
+				: "Add your API key in the extension popup settings.",
 		}),
 	);
 
@@ -214,15 +213,15 @@ export function buildDiagnosticsReport(
 
 	checks.push(
 		createCoreCheck({
-			id: "backend_reachable",
-			label: "Backend endpoint reachable",
-			status: runtime.backendReachable ? "pass" : "fail",
-			evidence: runtime.backendReachable
-				? `base=${API_BASE_URL}, status=${runtime.backendHttpStatus ?? "none"}, latency_ms=${runtime.backendLatencyMs ?? "unknown"}`
-				: `base=${API_BASE_URL}, error=${runtime.backendError ?? "Network probe failed."}`,
-			nextAction: runtime.backendReachable
+			id: "llm_endpoint_reachable",
+			label: "LLM endpoint reachable",
+			status: runtime.llmEndpointReachable ? "pass" : "fail",
+			evidence: runtime.llmEndpointReachable
+				? `status=${runtime.llmEndpointHttpStatus ?? "none"}, latency_ms=${runtime.llmEndpointLatencyMs ?? "unknown"}`
+				: `error=${runtime.llmEndpointError ?? "Network probe failed."}`,
+			nextAction: runtime.llmEndpointReachable
 				? "None."
-				: "Check internet access and API base URL settings.",
+				: "Check your API key, base URL, and internet access.",
 		}),
 	);
 

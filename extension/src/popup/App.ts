@@ -1,7 +1,10 @@
 // extension/src/popup/App.ts
-import { UserInfoWithUsage } from "../types";
-import { MESSAGE_TYPES } from "../lib/messages";
+import {
+	MESSAGE_TYPES,
+	type SetProviderSettingsResponse,
+} from "../lib/messages";
 import { resolveEnabled } from "../lib/enabledState";
+import { DEFAULT_BASE_URL, DEFAULT_MODEL } from "../lib/config";
 import type { DiagnosticsReport } from "../lib/diagnostics";
 import type { HideRenderMode } from "../lib/config";
 import { DEV_MODE_STORAGE_KEY, resolveDevMode } from "../lib/devMode";
@@ -10,6 +13,17 @@ import {
 	resolveHideRenderMode,
 } from "../lib/hideRenderMode";
 import { DiagnosticsClient } from "./diagnosticsClient";
+import type { LocalStatsSnapshot, ProviderSettings } from "../types";
+
+const ZERO_LOCAL_STATS: LocalStatsSnapshot = {
+	today: { keep: 0, hide: 0, total: 0 },
+	last30Days: { keep: 0, hide: 0, total: 0 },
+	allTime: { keep: 0, hide: 0, total: 0 },
+	dailyBreakdown: [],
+};
+
+const PROVIDER_DRAFT_STORAGE_KEY = "providerSettingsDraft";
+const BASE_URL_PLACEHOLDER = "openai compatible endpoint";
 
 export class App {
 	private container: HTMLElement;
@@ -34,7 +48,7 @@ export class App {
 
 	async render(): Promise<void> {
 		const storage = await chrome.storage.sync.get([
-			"jwt",
+			"apiKey",
 			"enabled",
 			HIDE_RENDER_MODE_STORAGE_KEY,
 			DEV_MODE_STORAGE_KEY,
@@ -46,129 +60,119 @@ export class App {
 			storage[DEV_MODE_STORAGE_KEY] as boolean | null | undefined,
 		);
 
-		if (!storage.jwt) {
-			this.renderSignIn(this.devModeEnabled);
+		if (!storage.apiKey) {
+			await this.renderSettings(this.devModeEnabled);
 			return;
 		}
 
-		const userInfo = await this.getUserInfo();
-		if (userInfo) {
-			this.renderDashboard(
-				userInfo,
-				resolveEnabled(storage.enabled),
-				hideRenderMode,
-				this.devModeEnabled,
-			);
-		} else {
-			this.renderSignIn(this.devModeEnabled);
-		}
+		const localStats = await this.loadLocalStats();
+		this.renderDashboard(
+			resolveEnabled(storage.enabled),
+			hideRenderMode,
+			this.devModeEnabled,
+			localStats,
+		);
 	}
 
-	private async getUserInfo(): Promise<UserInfoWithUsage | null> {
-		try {
-			const response = await chrome.runtime.sendMessage({
-				type: MESSAGE_TYPES.GET_USER_INFO,
-			});
-			if (!response || !response.email) {
-				return null;
-			}
-			return response;
-		} catch (err) {
-			console.error("GetUserInfo error:", err);
-			return null;
-		}
-	}
+	// ── Settings form (shown when no API key is set) ──────
 
-	private renderSignIn(devModeEnabled: boolean): void {
+	private async renderSettings(devModeEnabled: boolean): Promise<void> {
+		const draft = await this.loadProviderSettingsDraft();
+		const apiKey = draft?.apiKey ?? "";
+		const baseUrl = draft?.baseUrl ?? DEFAULT_BASE_URL;
+		const model = draft?.model ?? DEFAULT_MODEL;
+
 		this.container.innerHTML = `
-		      <div>
-		        <div class="text-center">
-		          ${this.renderBrand()}
-		          <p>Sign in to filter your social feeds</p>
-	          <form id="signin-form">
-	            <input
-	              type="email"
-	              id="email-input"
-	              placeholder="your@email.com"
-	              required
-	            />
-	            <button type="submit" class="primary">Send Sign In Link</button>
-		          </form>
-		          <p id="status" class="status"></p>
-		        </div>
-		        ${this.renderDevModeCard(devModeEnabled)}
-		        ${devModeEnabled ? this.renderDiagnosticsCard() : ""}
-		      </div>
-		    `;
+      <div>
+        ${this.renderBrand()}
+        <p class="status">Enter your OpenAI-compatible API key to get started.</p>
+        <form id="settings-form">
+          <div class="card mb-8">
+            <label for="api-key-input" class="setting-label">API Key</label>
+            <input
+              type="password"
+              id="api-key-input"
+              placeholder="sk-..."
+              autocomplete="off"
+              value="${this.escapeHtml(apiKey)}"
+              required
+            />
+            <label for="base-url-input" class="setting-label" style="margin-top:8px;">Base URL</label>
+            <input
+              type="text"
+              id="base-url-input"
+              placeholder="${BASE_URL_PLACEHOLDER}"
+              value="${this.escapeHtml(baseUrl)}"
+            />
+            <label for="model-input" class="setting-label" style="margin-top:8px;">Model</label>
+            <input
+              type="text"
+              id="model-input"
+              placeholder="${DEFAULT_MODEL}"
+              value="${this.escapeHtml(model)}"
+            />
+          </div>
+          <button type="submit" class="primary mb-8">Save & Enable</button>
+          <p id="settings-status" class="status"></p>
+        </form>
+        ${this.renderDevModeCard(devModeEnabled)}
+        ${devModeEnabled ? this.renderDiagnosticsCard() : ""}
+      </div>
+    `;
 
-		const form = this.container.querySelector("#signin-form");
-		const emailInput = this.container.querySelector(
-			"#email-input",
+		const form = this.container.querySelector("#settings-form");
+		const statusEl = this.container.querySelector(
+			"#settings-status",
+		) as HTMLElement;
+		const apiKeyInput = this.container.querySelector(
+			"#api-key-input",
 		) as HTMLInputElement;
-		const status = this.container.querySelector("#status")!;
+		const baseUrlInput = this.container.querySelector(
+			"#base-url-input",
+		) as HTMLInputElement;
+		const modelInput = this.container.querySelector(
+			"#model-input",
+		) as HTMLInputElement;
+
+		this.bindProviderDraftPersistence(apiKeyInput, baseUrlInput, modelInput);
 
 		form?.addEventListener("submit", async (e) => {
 			e.preventDefault();
-			const email = emailInput.value;
+			const apiKey = apiKeyInput.value.trim();
+			const baseUrl = baseUrlInput.value.trim() || DEFAULT_BASE_URL;
+			const model = modelInput.value.trim() || DEFAULT_MODEL;
 
-			status.textContent = "Sending...";
-
-			try {
-				await chrome.runtime.sendMessage({
-					type: MESSAGE_TYPES.START_AUTH,
-					email,
-				});
-
-				status.textContent = "Check your email for a sign-in link.";
-				emailInput.value = "";
-			} catch (err) {
-				status.textContent = "Failed to send email. Please try again.";
+			if (!apiKey) {
+				statusEl.textContent = "API key is required.";
+				return;
 			}
+
+			statusEl.textContent = "Saving...";
+			const saveResult = (await chrome.runtime.sendMessage({
+				type: MESSAGE_TYPES.SET_PROVIDER_SETTINGS,
+				settings: { apiKey, baseUrl, model } satisfies ProviderSettings,
+			})) as SetProviderSettingsResponse | null;
+			if (saveResult?.status === "ok") {
+				await this.clearProviderSettingsDraft();
+				await this.render();
+				return;
+			}
+
+			statusEl.textContent = this.describeProviderSettingsError(saveResult);
 		});
 
 		this.bindDevModeControl();
 		this.bindDiagnosticsControls();
 	}
 
+	// ── Dashboard (shown when API key is configured) ──────
+
 	private renderDashboard(
-		userInfo: UserInfoWithUsage,
 		enabled: boolean,
 		hideRenderMode: HideRenderMode,
 		devModeEnabled: boolean,
+		localStats: LocalStatsSnapshot,
 	): void {
-		const isPro = userInfo.plan === "pro" && userInfo.plan_status === "active";
-
-		// Usage display - data now embedded in userInfo
-		let usageHtml = "";
-		if (userInfo.current_usage !== undefined) {
-			const usagePercent = Math.round(
-				(userInfo.current_usage / userInfo.limit!) * 100,
-			);
-			const isLow = userInfo.remaining! < userInfo.limit! * 0.1;
-			const barColor = isLow ? "var(--warning)" : "var(--good)";
-			const resetDate = new Date(userInfo.reset_date!);
-			const resetStr = resetDate.toLocaleDateString("en-US", {
-				month: "short",
-				day: "numeric",
-			});
-
-			usageHtml = `
-        <div class="card usage-card mb-8">
-          <div class="usage-header">
-            <span class="usage-label">Monthly Usage</span>
-            <span class="usage-count ${isLow ? "low" : ""}">${userInfo.remaining} remaining</span>
-          </div>
-          <div class="usage-bar-bg">
-            <div class="usage-bar" style="width: ${Math.min(usagePercent, 100)}%; background: ${barColor};"></div>
-          </div>
-          <div class="usage-footer">
-            <span>${userInfo.current_usage} / ${userInfo.limit} calls</span>
-            <span>Resets ${resetStr}</span>
-          </div>
-        </div>
-      `;
-		}
-
 		this.container.innerHTML = `
       <div>
         ${this.renderBrand()}
@@ -189,30 +193,18 @@ export class App {
           </select>
         </div>
 
-        ${usageHtml}
+        ${this.renderLocalStatsCard(localStats)}
 
         <div class="card mb-8">
-          <div><strong>Email:</strong> ${userInfo.email || "Loading..."}</div>
-          <div><strong>Plan:</strong> ${isPro ? "Pro" : "Free"}</div>
+          <strong>API settings</strong>
+          <button id="edit-settings-btn" class="ghost" style="margin-top:4px;">Edit API key &amp; model</button>
         </div>
 
-	        ${
-						!isPro
-							? `
-	          <button id="upgrade-btn" class="primary mb-8">Upgrade to Pro ($5/mo)</button>
-	        `
-							: ""
-					}
+        ${this.renderDevModeCard(devModeEnabled)}
+        ${devModeEnabled ? this.renderDiagnosticsCard() : ""}
+      </div>
+    `;
 
-		        <button id="stats-btn" class="secondary mb-8">View Statistics</button>
-		        ${this.renderDevModeCard(devModeEnabled)}
-		        ${devModeEnabled ? this.renderDiagnosticsCard() : ""}
-
-		        <button id="signout-btn" class="ghost">Sign Out</button>
-		      </div>
-		    `;
-
-		// Event listeners
 		const enabledToggle = this.container.querySelector(
 			"#enabled-toggle",
 		) as HTMLInputElement;
@@ -234,30 +226,185 @@ export class App {
 			hideRenderModeSelect.value = nextMode;
 		});
 
-		const upgradeBtn = this.container.querySelector("#upgrade-btn");
-		upgradeBtn?.addEventListener("click", async () => {
-			const response = await chrome.runtime.sendMessage({
-				type: MESSAGE_TYPES.CREATE_CHECKOUT,
-			});
-			if (response.checkout_url) {
-				chrome.tabs.create({ url: response.checkout_url });
-			}
-		});
-
-		const statsBtn = this.container.querySelector("#stats-btn");
-		statsBtn?.addEventListener("click", () => {
-			chrome.tabs.create({ url: chrome.runtime.getURL("stats.html") });
-		});
-
-		const signoutBtn = this.container.querySelector("#signout-btn");
-		signoutBtn?.addEventListener("click", async () => {
-			await chrome.runtime.sendMessage({ type: MESSAGE_TYPES.CLEAR_JWT });
-			this.render();
+		const editBtn = this.container.querySelector("#edit-settings-btn");
+		editBtn?.addEventListener("click", () => {
+			void this.renderSettingsEdit();
 		});
 
 		this.bindDevModeControl();
 		this.bindDiagnosticsControls();
 	}
+
+	// ── Settings edit view (from dashboard) ──────────────
+
+	private async renderSettingsEdit(): Promise<void> {
+		const settings = (await chrome.runtime.sendMessage({
+			type: MESSAGE_TYPES.GET_PROVIDER_SETTINGS,
+		})) as ProviderSettings | null;
+		const draft = await this.loadProviderSettingsDraft();
+		const apiKey = draft?.apiKey ?? settings?.apiKey ?? "";
+		const baseUrl = draft?.baseUrl ?? settings?.baseUrl ?? DEFAULT_BASE_URL;
+		const model = draft?.model ?? settings?.model ?? DEFAULT_MODEL;
+
+		this.container.innerHTML = `
+          <div>
+            ${this.renderBrand()}
+            <form id="edit-settings-form">
+              <div class="card mb-8">
+                <label for="api-key-edit" class="setting-label">API Key</label>
+                <input type="password" id="api-key-edit" placeholder="sk-..." autocomplete="off" value="${this.escapeHtml(apiKey)}" />
+                <label for="base-url-edit" class="setting-label" style="margin-top:8px;">Base URL</label>
+                <input type="text" id="base-url-edit" placeholder="${BASE_URL_PLACEHOLDER}" value="${this.escapeHtml(baseUrl)}" />
+                <label for="model-edit" class="setting-label" style="margin-top:8px;">Model</label>
+                <input type="text" id="model-edit" value="${this.escapeHtml(model)}" />
+              </div>
+              <button type="submit" class="primary mb-8">Save</button>
+              <button type="button" id="cancel-edit-btn" class="ghost mb-8">Cancel</button>
+              <button type="button" id="clear-key-btn" class="ghost" style="color:var(--warning)">Remove API key</button>
+              <p id="edit-status" class="status"></p>
+            </form>
+          </div>
+        `;
+
+		const form = this.container.querySelector("#edit-settings-form");
+		const statusEl = this.container.querySelector("#edit-status") as HTMLElement;
+		const apiKeyInput = this.container.querySelector(
+			"#api-key-edit",
+		) as HTMLInputElement;
+		const baseUrlInput = this.container.querySelector(
+			"#base-url-edit",
+		) as HTMLInputElement;
+		const modelInput = this.container.querySelector(
+			"#model-edit",
+		) as HTMLInputElement;
+
+		this.bindProviderDraftPersistence(apiKeyInput, baseUrlInput, modelInput);
+
+		form?.addEventListener("submit", async (e) => {
+			e.preventDefault();
+			const newKey = apiKeyInput.value.trim();
+			const newUrl = baseUrlInput.value.trim() || DEFAULT_BASE_URL;
+			const newModel = modelInput.value.trim() || DEFAULT_MODEL;
+			statusEl.textContent = "Saving...";
+			const saveResult = (await chrome.runtime.sendMessage({
+				type: MESSAGE_TYPES.SET_PROVIDER_SETTINGS,
+				settings: { apiKey: newKey, baseUrl: newUrl, model: newModel },
+			})) as SetProviderSettingsResponse | null;
+			if (saveResult?.status === "ok") {
+				await this.clearProviderSettingsDraft();
+				await this.render();
+				return;
+			}
+			statusEl.textContent = this.describeProviderSettingsError(saveResult);
+		});
+
+		this.container
+			.querySelector("#cancel-edit-btn")
+			?.addEventListener("click", async () => {
+				await this.clearProviderSettingsDraft();
+				await this.render();
+			});
+
+		this.container
+			.querySelector("#clear-key-btn")
+			?.addEventListener("click", async () => {
+				await chrome.storage.sync.remove(["apiKey", "baseUrl", "model"]);
+				await this.clearProviderSettingsDraft();
+				await this.render();
+			});
+	}
+
+	private bindProviderDraftPersistence(
+		apiKeyInput: HTMLInputElement,
+		baseUrlInput: HTMLInputElement,
+		modelInput: HTMLInputElement,
+	): void {
+		const persistDraft = () => {
+			void this.saveProviderSettingsDraft({
+				apiKey: apiKeyInput.value,
+				baseUrl: baseUrlInput.value,
+				model: modelInput.value,
+			});
+		};
+
+		apiKeyInput.addEventListener("input", persistDraft);
+		baseUrlInput.addEventListener("input", persistDraft);
+		modelInput.addEventListener("input", persistDraft);
+	}
+
+	private async loadProviderSettingsDraft(): Promise<ProviderSettings | null> {
+		const storage = await chrome.storage.local.get(PROVIDER_DRAFT_STORAGE_KEY);
+		const raw = storage[PROVIDER_DRAFT_STORAGE_KEY];
+		if (!raw || typeof raw !== "object") {
+			return null;
+		}
+
+		const draft = raw as Partial<ProviderSettings>;
+		return {
+			apiKey: typeof draft.apiKey === "string" ? draft.apiKey : "",
+			baseUrl: typeof draft.baseUrl === "string" ? draft.baseUrl : "",
+			model: typeof draft.model === "string" ? draft.model : "",
+		};
+	}
+
+	private async saveProviderSettingsDraft(
+		settings: ProviderSettings,
+	): Promise<void> {
+		await chrome.storage.local.set({
+			[PROVIDER_DRAFT_STORAGE_KEY]: settings,
+		});
+	}
+
+	private async clearProviderSettingsDraft(): Promise<void> {
+		await chrome.storage.local.remove(PROVIDER_DRAFT_STORAGE_KEY);
+	}
+
+	private describeProviderSettingsError(
+		result: SetProviderSettingsResponse | null,
+	): string {
+		if (!result) return "Unable to save settings. Try again.";
+		if (result.status === "invalid_base_url") {
+			return result.reason;
+		}
+		if (result.status === "permission_denied") {
+			return `Permission denied for ${result.origin}`;
+		}
+		return "Unable to save settings. Try again.";
+	}
+
+	private async loadLocalStats(): Promise<LocalStatsSnapshot> {
+		try {
+			const response = (await chrome.runtime.sendMessage({
+				type: MESSAGE_TYPES.GET_LOCAL_STATS,
+			})) as LocalStatsSnapshot | null;
+			if (!response || typeof response !== "object") {
+				return ZERO_LOCAL_STATS;
+			}
+			return {
+				today: response.today ?? ZERO_LOCAL_STATS.today,
+				last30Days: response.last30Days ?? ZERO_LOCAL_STATS.last30Days,
+				allTime: response.allTime ?? ZERO_LOCAL_STATS.allTime,
+				dailyBreakdown: Array.isArray(response.dailyBreakdown)
+					? response.dailyBreakdown
+					: ZERO_LOCAL_STATS.dailyBreakdown,
+			};
+		} catch {
+			return ZERO_LOCAL_STATS;
+		}
+	}
+
+	private renderLocalStatsCard(localStats: LocalStatsSnapshot): string {
+		return `
+      <div class="card mb-8">
+        <strong>Local stats</strong>
+        <div class="local-stats-row"><span>Today</span><span>${localStats.today.hide} hidden / ${localStats.today.total} total</span></div>
+        <div class="local-stats-row"><span>Last 30 days</span><span>${localStats.last30Days.hide} hidden / ${localStats.last30Days.total} total</span></div>
+        <div class="local-stats-row"><span>All time</span><span>${localStats.allTime.hide} hidden / ${localStats.allTime.total} total</span></div>
+      </div>
+    `;
+	}
+
+	// ── Diagnostics ───────────────────────────────────────
 
 	private escapeHtml(value: string): string {
 		return value
@@ -284,16 +431,16 @@ export class App {
 
 	private renderDiagnosticsCard(): string {
 		return `
-	      <div class="card mb-8 diagnostics-card">
-	        <div class="diagnostics-head">
-	          <strong>Run Diagnostics</strong>
-	          <span class="diagnostics-subtitle">Checks content runtime, selectors, storage, and messaging.</span>
-	        </div>
-	        <button id="run-diagnostics-btn" type="button" class="secondary diagnostics-run-btn">Run Diagnostics</button>
-	        <button id="copy-diagnostics-btn" type="button" class="ghost diagnostics-run-btn">Copy Diagnostics JSON</button>
-	        <div id="diagnostics-results" class="diagnostics-results">${this.renderDiagnosticsResults()}</div>
-	      </div>
-	    `;
+      <div class="card mb-8 diagnostics-card">
+        <div class="diagnostics-head">
+          <strong>Run Diagnostics</strong>
+          <span class="diagnostics-subtitle">Checks content runtime, selectors, storage, and LLM endpoint.</span>
+        </div>
+        <button id="run-diagnostics-btn" type="button" class="secondary diagnostics-run-btn">Run Diagnostics</button>
+        <button id="copy-diagnostics-btn" type="button" class="ghost diagnostics-run-btn">Copy Diagnostics JSON</button>
+        <div id="diagnostics-results" class="diagnostics-results">${this.renderDiagnosticsResults()}</div>
+      </div>
+    `;
 	}
 
 	private renderDiagnosticsResults(): string {
@@ -308,11 +455,7 @@ export class App {
 		const report = this.diagnosticsReport;
 		const generatedAt = new Date(report.generatedAtIso).toLocaleTimeString(
 			"en-US",
-			{
-				hour: "2-digit",
-				minute: "2-digit",
-				second: "2-digit",
-			},
+			{ hour: "2-digit", minute: "2-digit", second: "2-digit" },
 		);
 		const summary = `${report.summary.pass} passed · ${report.summary.warn} warnings · ${report.summary.fail} failed`;
 		const checksMarkup = report.checks
@@ -321,25 +464,25 @@ export class App {
 				const evidence = this.escapeHtml(check.evidence);
 				const nextAction = this.escapeHtml(check.nextAction);
 				return `
-	          <div class="diagnostics-row diagnostics-row--${check.status}">
-	            <div class="diagnostics-row-head">
-	              <span class="diagnostics-status-pill">${check.status.toUpperCase()}</span>
-	              <span class="diagnostics-row-label">${label}</span>
-	            </div>
-	            <div class="diagnostics-row-evidence">${evidence}</div>
-	            <div class="diagnostics-row-next">${nextAction}</div>
-	          </div>
-	        `;
+          <div class="diagnostics-row diagnostics-row--${check.status}">
+            <div class="diagnostics-row-head">
+              <span class="diagnostics-status-pill">${check.status.toUpperCase()}</span>
+              <span class="diagnostics-row-label">${label}</span>
+            </div>
+            <div class="diagnostics-row-evidence">${evidence}</div>
+            <div class="diagnostics-row-next">${nextAction}</div>
+          </div>
+        `;
 			})
 			.join("");
 
 		return `
-	      <div class="diagnostics-summary diagnostics-summary--${report.overallStatus}">
-	        <span>${this.escapeHtml(summary)}</span>
-	        <span class="diagnostics-timestamp">${this.escapeHtml(generatedAt)}</span>
-	      </div>
-	      <div class="diagnostics-list">${checksMarkup}</div>
-	    `;
+      <div class="diagnostics-summary diagnostics-summary--${report.overallStatus}">
+        <span>${this.escapeHtml(summary)}</span>
+        <span class="diagnostics-timestamp">${this.escapeHtml(generatedAt)}</span>
+      </div>
+      <div class="diagnostics-list">${checksMarkup}</div>
+    `;
 	}
 
 	private updateDiagnosticsUi(): void {
@@ -359,18 +502,14 @@ export class App {
 			copyButton.disabled = this.diagnosticsRunning || !this.diagnosticsReport;
 		}
 
-		const resultsContainer = this.container.querySelector(
-			"#diagnostics-results",
-		);
+		const resultsContainer = this.container.querySelector("#diagnostics-results");
 		if (resultsContainer) {
 			resultsContainer.innerHTML = this.renderDiagnosticsResults();
 		}
 	}
 
 	private bindDiagnosticsControls(): void {
-		if (!this.devModeEnabled) {
-			return;
-		}
+		if (!this.devModeEnabled) return;
 		const runButton = this.container.querySelector(
 			"#run-diagnostics-btn",
 		) as HTMLButtonElement | null;
@@ -401,7 +540,7 @@ export class App {
 			console.error("[Unslop] failed to write diagnostics to clipboard", error);
 		}
 
-		// Fallback for environments where clipboard API is unavailable.
+		// Fallback
 		const textarea = document.createElement("textarea");
 		textarea.value = serialized;
 		textarea.setAttribute("readonly", "true");
@@ -418,14 +557,14 @@ export class App {
 
 	private renderDevModeCard(devModeEnabled: boolean): string {
 		return `
-	      <div class="card mb-8">
-	        <label class="toggle-label">
-	          <input type="checkbox" id="dev-mode-toggle" ${devModeEnabled ? "checked" : ""} />
-	          <div class="toggle"></div>
-	          <span class="toggle-text">Developer mode</span>
-	        </label>
-	      </div>
-	    `;
+      <div class="card mb-8">
+        <label class="toggle-label">
+          <input type="checkbox" id="dev-mode-toggle" ${devModeEnabled ? "checked" : ""} />
+          <div class="toggle"></div>
+          <span class="toggle-text">Developer mode</span>
+        </label>
+      </div>
+    `;
 	}
 
 	private bindDevModeControl(): void {

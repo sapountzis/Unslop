@@ -8,15 +8,15 @@ import { buildDiagnosticsReport } from "./diagnostics";
 const BASE_RUNTIME: RuntimeDiagnosticsSnapshot = {
 	devModeEnabled: true,
 	enabled: true,
-	hasJwt: true,
+	hasApiKey: true,
 	activeTabId: 7,
 	activeTabUrl: "https://www.linkedin.com/feed/",
 	activeTabHost: "www.linkedin.com",
 	supportedPlatformId: "linkedin",
-	backendReachable: true,
-	backendLatencyMs: 9,
-	backendHttpStatus: 200,
-	backendError: null,
+	llmEndpointReachable: true,
+	llmEndpointLatencyMs: 9,
+	llmEndpointHttpStatus: 200,
+	llmEndpointError: null,
 };
 
 const BASE_CONTENT: ContentDiagnosticsSnapshot = {
@@ -67,13 +67,13 @@ describe("popup diagnostics report", () => {
 		expect(report.summary.warn).toBe(0);
 	});
 
-	it("flags backend reachability failure", () => {
+	it("flags llm endpoint reachability failure", () => {
 		const report = buildDiagnosticsReport({
 			runtimeSnapshot: {
 				...BASE_RUNTIME,
-				backendReachable: false,
-				backendError: "Failed to fetch",
-				backendHttpStatus: null,
+				llmEndpointReachable: false,
+				llmEndpointError: "Failed to fetch",
+				llmEndpointHttpStatus: null,
 			},
 			runtimeDisabledReason: null,
 			runtimeError: null,
@@ -82,10 +82,10 @@ describe("popup diagnostics report", () => {
 			contentError: null,
 		});
 
-		const backendCheck = report.checks.find(
-			(check) => check.id === "backend_reachable",
+		const llmCheck = report.checks.find(
+			(check) => check.id === "llm_endpoint_reachable",
 		);
-		expect(backendCheck?.status).toBe("fail");
+		expect(llmCheck?.status).toBe("fail");
 		expect(report.overallStatus).toBe("fail");
 	});
 

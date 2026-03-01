@@ -10,8 +10,3 @@ export const ATTRIBUTES = {
 	decision: "data-unslop-decision",
 	identity: "data-unslop-identity",
 } as const;
-
-// Auth selectors (shared across platforms, used by auth.ts)
-export const SELECTORS = {
-	jwtMeta: 'meta[name="unslop-jwt"]',
-} as const;

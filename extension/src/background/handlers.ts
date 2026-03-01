@@ -1,36 +1,38 @@
-import {
-	createCheckout,
-	getStats,
-	getUserInfoWithUsage,
-	startAuthFlow,
-} from "./api";
-import { streamClassifyBatch } from "./classifyPipeline";
-import { ClassificationService } from "./classificationService";
+// extension/src/background/handlers.ts
+import { LocalClassificationService } from "./localClassifier";
 import { DiagnosticsEngine } from "./diagnosticsEngine";
 import { createStorageFacade, type StorageFacade } from "./storageFacade";
+import {
+	createLocalStatsStore,
+	type LocalStatsStore,
+} from "./localStatsStore";
+import {
+	ensureProviderEndpointPermission,
+	type ProviderPermissionResult,
+} from "./providerPermissions";
 import {
 	MESSAGE_TYPES,
 	type ClassifyBatchMessage,
 	type RuntimeRequest,
-	type StartAuthMessage,
-	type SetJwtMessage,
+	type SetProviderSettingsMessage,
 } from "../lib/messages";
 import type { RuntimeMessageHandlers } from "./messageRouter";
+import type { Decision } from "../types";
 
 type QueryTabs = (
 	queryInfo: chrome.tabs.QueryInfo,
 ) => Promise<chrome.tabs.Tab[]>;
 type SendTabMessage = (tabId: number, message: unknown) => Promise<void>;
+type EnsureProviderPermissionFn = (
+	baseUrl: string,
+) => Promise<ProviderPermissionResult>;
 
 type BackgroundHandlerDependencies = {
 	storageFacade?: StorageFacade;
-	classificationService?: ClassificationService;
+	classificationService?: LocalClassificationService;
 	diagnosticsEngine?: DiagnosticsEngine;
-	getUserInfoWithUsageFn?: typeof getUserInfoWithUsage;
-	createCheckoutFn?: typeof createCheckout;
-	startAuthFlowFn?: typeof startAuthFlow;
-	getStatsFn?: typeof getStats;
-	streamClassifyBatchFn?: typeof streamClassifyBatch;
+	localStatsStore?: LocalStatsStore;
+	ensureProviderPermissionFn?: EnsureProviderPermissionFn;
 	queryTabsFn?: QueryTabs;
 	sendTabMessageFn?: SendTabMessage;
 };
@@ -41,39 +43,36 @@ function getClassifyBatchMessage(
 	return message as ClassifyBatchMessage;
 }
 
-function getStartAuthMessage(message: RuntimeRequest): StartAuthMessage {
-	return message as StartAuthMessage;
+function getSetProviderSettingsMessage(
+	message: RuntimeRequest,
+): SetProviderSettingsMessage {
+	return message as SetProviderSettingsMessage;
 }
 
-function getSetJwtMessage(message: RuntimeRequest): SetJwtMessage {
-	return message as SetJwtMessage;
+function resolveFinalDecision(item: { decision?: Decision }): Decision {
+	return item.decision === "hide" ? "hide" : "keep";
 }
 
 export function createBackgroundMessageHandlers(
 	dependencies: BackgroundHandlerDependencies = {},
 ): RuntimeMessageHandlers {
 	const storageFacade = dependencies.storageFacade ?? createStorageFacade();
-	const getUserInfoWithUsageFn =
-		dependencies.getUserInfoWithUsageFn ?? getUserInfoWithUsage;
-	const createCheckoutFn = dependencies.createCheckoutFn ?? createCheckout;
-	const startAuthFlowFn = dependencies.startAuthFlowFn ?? startAuthFlow;
-	const getStatsFn = dependencies.getStatsFn ?? getStats;
-	const streamClassifyBatchFn =
-		dependencies.streamClassifyBatchFn ?? streamClassifyBatch;
 	const queryTabsFn =
 		dependencies.queryTabsFn ??
 		(async (queryInfo) => await chrome.tabs.query(queryInfo));
+	const localStatsStore =
+		dependencies.localStatsStore ?? createLocalStatsStore();
 	const sendTabMessageFn =
 		dependencies.sendTabMessageFn ??
 		(async (tabId, message) => {
 			await chrome.tabs.sendMessage(tabId, message);
 		});
+	const ensureProviderPermissionFn =
+		dependencies.ensureProviderPermissionFn ??
+		(async (baseUrl) => await ensureProviderEndpointPermission(baseUrl));
 	const classificationService =
 		dependencies.classificationService ??
-		new ClassificationService({
-			streamClassifyBatchFn,
-			sendTabMessageFn,
-		});
+		new LocalClassificationService({ sendTabMessageFn });
 	const diagnosticsEngine =
 		dependencies.diagnosticsEngine ??
 		new DiagnosticsEngine({
@@ -84,9 +83,12 @@ export function createBackgroundMessageHandlers(
 	return {
 		async [MESSAGE_TYPES.CLASSIFY_BATCH](message, sender) {
 			const classifyMessage = getClassifyBatchMessage(message);
-			const authState = await storageFacade.getAuthState();
+			const [hasKey, enabled] = await Promise.all([
+				storageFacade.hasApiKey(),
+				storageFacade.getEnabled(),
+			]);
 
-			if (!authState.jwt || !authState.enabled) {
+			if (!hasKey || !enabled) {
 				return { status: "disabled" };
 			}
 
@@ -95,41 +97,20 @@ export function createBackgroundMessageHandlers(
 				return { status: "error" };
 			}
 
-			classificationService.classifyForTab(
-				classifyMessage,
-				authState.jwt,
+			const settings = await storageFacade.getProviderSettings();
+			classificationService.classifyBatch(
+				classifyMessage.posts,
+				settings,
 				tabId,
+				(item) => {
+					void localStatsStore
+						.incrementDecision(resolveFinalDecision(item))
+						.catch((error) => {
+							console.error("[Unslop][stats] failed to increment", error);
+						});
+				},
 			);
 
-			return { status: "ok" };
-		},
-
-		async [MESSAGE_TYPES.GET_USER_INFO]() {
-			const jwt = await storageFacade.getJwt();
-			if (!jwt) return null;
-			return await getUserInfoWithUsageFn(jwt);
-		},
-
-		async [MESSAGE_TYPES.CREATE_CHECKOUT]() {
-			const jwt = await storageFacade.getJwt();
-			if (!jwt) return { checkout_url: null };
-			return { checkout_url: await createCheckoutFn(jwt) };
-		},
-
-		async [MESSAGE_TYPES.START_AUTH](message) {
-			const startAuthMessage = getStartAuthMessage(message);
-			await startAuthFlowFn(startAuthMessage.email);
-			return { status: "ok" };
-		},
-
-		async [MESSAGE_TYPES.SET_JWT](message) {
-			const setJwtMessage = getSetJwtMessage(message);
-			await storageFacade.setJwt(setJwtMessage.jwt);
-			return { status: "ok" };
-		},
-
-		async [MESSAGE_TYPES.CLEAR_JWT]() {
-			await storageFacade.clearJwt();
 			return { status: "ok" };
 		},
 
@@ -137,10 +118,39 @@ export function createBackgroundMessageHandlers(
 			return { enabled: await storageFacade.toggleEnabled() };
 		},
 
-		async [MESSAGE_TYPES.GET_STATS]() {
-			const jwt = await storageFacade.getJwt();
-			if (!jwt) return null;
-			return await getStatsFn(jwt);
+		async [MESSAGE_TYPES.GET_PROVIDER_SETTINGS]() {
+			const hasKey = await storageFacade.hasApiKey();
+			if (!hasKey) return null;
+			return await storageFacade.getProviderSettings();
+		},
+
+		async [MESSAGE_TYPES.SET_PROVIDER_SETTINGS](message) {
+			const msg = getSetProviderSettingsMessage(message);
+			const permissionResult = await ensureProviderPermissionFn(
+				msg.settings.baseUrl,
+			);
+			if (permissionResult.status === "invalid_base_url") {
+				return {
+					status: "invalid_base_url",
+					reason: permissionResult.reason,
+				};
+			}
+			if (permissionResult.status === "permission_denied") {
+				return {
+					status: "permission_denied",
+					origin: permissionResult.origin,
+				};
+			}
+
+			await storageFacade.setProviderSettings({
+				...msg.settings,
+				baseUrl: permissionResult.normalizedBaseUrl,
+			});
+			return { status: "ok" };
+		},
+
+		async [MESSAGE_TYPES.GET_LOCAL_STATS]() {
+			return await localStatsStore.getLocalStats();
 		},
 
 		async [MESSAGE_TYPES.GET_RUNTIME_DIAGNOSTICS]() {

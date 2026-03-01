@@ -22,33 +22,33 @@ function debugLog(message: string, context?: DebugContext): void {
 }
 
 export class DecisionCacheService {
-	async get(postId: string): Promise<CachedDecision | null> {
+	async get(cacheKey: string): Promise<CachedDecision | null> {
 		const decisionCache = await this.read();
-		const cached = decisionCache[postId];
+		const cached = decisionCache[cacheKey];
 
 		if (!cached) {
 			debugLog("[Unslop][cache] miss", {
-				postId,
+				cacheKey,
 				cacheSize: this.size(decisionCache),
 			});
 			return null;
 		}
 
 		if (this.isExpired(cached)) {
-			delete decisionCache[postId];
+			delete decisionCache[cacheKey];
 			await this.write(decisionCache);
-			debugLog("[Unslop][cache] expired", { postId });
+			debugLog("[Unslop][cache] expired", { cacheKey });
 			return null;
 		}
 
-		debugLog("[Unslop][cache] hit", { postId, source: cached.source });
+		debugLog("[Unslop][cache] hit", { cacheKey, source: cached.source });
 		return cached;
 	}
 
-	async set(postId: string, decision: Decision, source: Source): Promise<void> {
+	async set(cacheKey: string, decision: Decision, source: Source): Promise<void> {
 		const decisionCache = await this.read();
 
-		decisionCache[postId] = {
+		decisionCache[cacheKey] = {
 			decision,
 			source,
 			timestamp: Date.now(),
@@ -58,7 +58,7 @@ export class DecisionCacheService {
 		await this.write(decisionCache);
 
 		debugLog("[Unslop][cache] set", {
-			postId,
+			cacheKey,
 			decision,
 			source,
 			cacheSize: this.size(decisionCache),
@@ -70,7 +70,7 @@ export class DecisionCacheService {
 
 		const expiredKeys = Object.entries(decisionCache)
 			.filter(([, cached]) => this.isExpired(cached))
-			.map(([postId]) => postId);
+			.map(([cacheKey]) => cacheKey);
 
 		for (const key of expiredKeys) {
 			delete decisionCache[key];

@@ -7,15 +7,15 @@ export type DiagnosticCheckId = string;
 export type RuntimeDiagnosticsSnapshot = {
 	devModeEnabled: boolean;
 	enabled: boolean;
-	hasJwt: boolean;
+	hasApiKey: boolean;
 	activeTabId: number | null;
 	activeTabUrl: string | null;
 	activeTabHost: string | null;
 	supportedPlatformId: SupportedPlatformId | null;
-	backendReachable: boolean;
-	backendLatencyMs: number | null;
-	backendHttpStatus: number | null;
-	backendError: string | null;
+	llmEndpointReachable: boolean;
+	llmEndpointLatencyMs: number | null;
+	llmEndpointHttpStatus: number | null;
+	llmEndpointError: string | null;
 };
 
 export type ContentDiagnosticsSnapshot = {
