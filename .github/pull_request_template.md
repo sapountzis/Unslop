@@ -1,14 +1,8 @@
 ## Summary
 - 
 
-## Governing Specs
-- `docs/product-specs/<spec>.md`
-
-## Execution Plan
-- `docs/exec-plans/completed/<plan>.md`
-
 ## Verification
-- `make check`
+- `cd extension && bun test src/`
 
 ## Review Notes
 - 
