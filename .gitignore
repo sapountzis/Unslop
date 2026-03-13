@@ -148,3 +148,7 @@ extension/src/**/*.js
 
 .claude/
 .vscode/
+backend/
+
+# Local eval artifacts
+evals/

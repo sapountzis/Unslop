@@ -1,0 +1,19 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import LegalShell from "../components/LegalShell.astro";
+---
+
+<BaseLayout title="Privacy | Unslop" description="Privacy information for Unslop.">
+  <LegalShell title="Privacy">
+    <section class="space-y-3">
+      <p>
+        Unslop has no backend, no account system, and collects no data. Your API key is stored
+        in <code>chrome.storage.local</code> on your device. Post text is sent only to the LLM
+        endpoint you configure.
+      </p>
+      <p>
+        Questions or concerns? <a class="underline" href="https://github.com/sapountzis/Unslop/issues" target="_blank" rel="noreferrer">Open an issue on GitHub</a>.
+      </p>
+    </section>
+  </LegalShell>
+</BaseLayout>

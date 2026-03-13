@@ -1,4 +1,4 @@
-type TimerHandle = ReturnType<typeof globalThis.setTimeout>;
+type TimerHandle = Parameters<typeof globalThis.clearTimeout>[0];
 
 export type WindowedBatcherOptions<T> = {
 	maxItems: number;

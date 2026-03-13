@@ -1,8 +1,10 @@
+// extension/src/background/diagnosticsEngine.ts
 import type { RuntimeDiagnosticsResponse } from "../lib/diagnostics";
 import type { StorageFacade } from "./storageFacade";
 import {
 	buildRuntimeDiagnosticsSnapshot,
-	probeBackendReachability,
+	probeLlmReachability,
+	type LlmProbeResult,
 } from "./runtimeDiagnostics";
 
 type QueryTabs = (
@@ -12,21 +14,21 @@ type QueryTabs = (
 type DiagnosticsEngineDependencies = {
 	storageFacade: StorageFacade;
 	queryTabsFn?: QueryTabs;
-	probeBackendReachabilityFn?: typeof probeBackendReachability;
+	probeLlmReachabilityFn?: typeof probeLlmReachability;
 };
 
 export class DiagnosticsEngine {
 	private readonly storageFacade: StorageFacade;
 	private readonly queryTabsFn: QueryTabs;
-	private readonly probeBackendReachabilityFn: typeof probeBackendReachability;
+	private readonly probeLlmReachabilityFn: typeof probeLlmReachability;
 
 	constructor(dependencies: DiagnosticsEngineDependencies) {
 		this.storageFacade = dependencies.storageFacade;
 		this.queryTabsFn =
 			dependencies.queryTabsFn ??
 			(async (queryInfo) => await chrome.tabs.query(queryInfo));
-		this.probeBackendReachabilityFn =
-			dependencies.probeBackendReachabilityFn ?? probeBackendReachability;
+		this.probeLlmReachabilityFn =
+			dependencies.probeLlmReachabilityFn ?? probeLlmReachability;
 	}
 
 	async collectRuntimeDiagnostics(): Promise<RuntimeDiagnosticsResponse> {
@@ -39,21 +41,38 @@ export class DiagnosticsEngine {
 				};
 			}
 
-			const authState = await this.storageFacade.getAuthState();
-			const [activeTab] = await this.queryTabsFn({
-				active: true,
-				currentWindow: true,
-			});
-			const backendProbe = await this.probeBackendReachabilityFn();
+			const [hasApiKey, settings, [activeTab]] = await Promise.all([
+				this.storageFacade.hasApiKey(),
+				this.storageFacade.getProviderSettings(),
+				this.queryTabsFn({ active: true, currentWindow: true }),
+			]);
+
+			let llmProbe: LlmProbeResult;
+			if (hasApiKey) {
+				llmProbe = await this.probeLlmReachabilityFn(
+					settings.baseUrl,
+					settings.apiKey,
+					settings.model,
+				);
+			} else {
+				llmProbe = {
+					reachable: false,
+					latencyMs: null,
+					httpStatus: null,
+					error: "No API key configured",
+				};
+			}
+
+			const enabled = await this.storageFacade.getEnabled();
 
 			return {
 				status: "ok",
 				snapshot: buildRuntimeDiagnosticsSnapshot({
 					devModeEnabled,
-					enabled: authState.enabled,
-					hasJwt: authState.jwt !== null,
+					enabled,
+					hasApiKey,
 					activeTab,
-					backendProbe,
+					llmProbe,
 				}),
 			};
 		} catch (error) {

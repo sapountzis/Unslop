@@ -8,6 +8,7 @@ import {
 	BATCH_WINDOW_MS,
 	FETCH_TIMEOUT_MS,
 } from "../lib/config";
+import { buildClassificationCacheKey } from "../lib/hash";
 import { MESSAGE_TYPES } from "../lib/messages";
 import { decisionCache } from "../lib/storage";
 import type { BatchClassifyResult, Decision, PostData, Source } from "../types";
@@ -15,9 +16,11 @@ export type ClassifyResult = { decision: Decision; source: Source };
 const FAIL_OPEN: ClassifyResult = { decision: "keep", source: "error" };
 const PENDING_EXPIRY_MS = FETCH_TIMEOUT_MS + BATCH_RESULT_TIMEOUT_MS;
 type PendingEntry = {
+	cacheKey: string;
 	resolve: (r: ClassifyResult) => void;
 	timer: ReturnType<typeof setTimeout>;
 };
+type BuildCacheKeyFn = (post: PostData) => Promise<string>;
 export class Classifier {
 	private readonly pending = new Map<string, PendingEntry>();
 	private readonly queue: PostData[] = [];
@@ -28,10 +31,17 @@ export class Classifier {
 			type: string;
 			posts: PostData[];
 		}) => Promise<{ status: "ok" | "disabled" | "error" } | null | undefined>,
+		private readonly buildCacheKeyFn: BuildCacheKeyFn = async (post) =>
+			await buildClassificationCacheKey({
+				text: post.text,
+				attachments: post.attachments,
+			}),
 	) {}
 	async classify(post: PostData): Promise<ClassifyResult> {
+		const cacheKey = await this.buildCacheKeyFn(post);
+
 		// Cache hit — skip the network entirely.
-		const cached = await decisionCache.get(post.post_id);
+		const cached = await decisionCache.get(cacheKey);
 		if (cached && cached.source !== "error") {
 			return { decision: cached.decision, source: cached.source };
 		}
@@ -51,7 +61,7 @@ export class Classifier {
 				this.pending.delete(post.post_id);
 				resolve(FAIL_OPEN);
 			}, PENDING_EXPIRY_MS);
-			this.pending.set(post.post_id, { resolve, timer });
+			this.pending.set(post.post_id, { cacheKey, resolve, timer });
 			this.queue.push(post);
 			if (this.queue.length >= BATCH_MAX_ITEMS) {
 				void this.flush();
@@ -66,11 +76,11 @@ export class Classifier {
 		clearTimeout(entry.timer);
 		this.pending.delete(result.post_id);
 		const r: ClassifyResult =
-			result.error === "quota_exceeded" || !result.decision || !result.source
+			!result.decision || !result.source
 				? FAIL_OPEN
 				: { decision: result.decision, source: result.source };
 		if (r.source !== "error") {
-			void decisionCache.set(result.post_id, r.decision, r.source);
+			void decisionCache.set(entry.cacheKey, r.decision, r.source);
 		}
 		entry.resolve(r);
 	}

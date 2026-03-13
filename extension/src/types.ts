@@ -2,11 +2,36 @@
 export type Decision = "keep" | "hide";
 export type Source = "llm" | "cache" | "error";
 
+export interface ProviderSettings {
+	apiKey: string;
+	baseUrl: string;
+	model: string;
+}
+
+export interface DecisionCounts {
+	keep: number;
+	hide: number;
+	total: number;
+}
+
+export interface LocalStatsDay extends DecisionCounts {
+	date: string;
+}
+
+export interface LocalStatsSnapshot {
+	today: DecisionCounts;
+	last30Days: DecisionCounts;
+	allTime: DecisionCounts;
+	dailyBreakdown: LocalStatsDay[];
+}
+
 export interface Storage {
-	jwt?: string;
 	enabled?: boolean;
 	hideRenderMode?: "collapse" | "label";
 	decisionCache?: Record<string, CachedDecision>;
+	apiKey?: string;
+	baseUrl?: string;
+	model?: string;
 }
 
 export interface CachedDecision {
@@ -67,35 +92,4 @@ export interface BatchClassifyResult {
 	post_id: string;
 	decision?: Decision;
 	source?: Source;
-	error?: "quota_exceeded";
-}
-
-export interface UserInfo {
-	user_id: string;
-	email: string;
-	plan: "free" | "pro";
-	plan_status: "active" | "inactive";
-}
-
-export interface UserInfoWithUsage extends UserInfo {
-	current_usage?: number;
-	limit?: number;
-	remaining?: number;
-	reset_date?: string;
-}
-
-export interface UsageInfo {
-	current_usage: number;
-	limit: number;
-	remaining: number;
-	plan: "free" | "pro";
-	plan_status: "active" | "inactive";
-	reset_date: string;
-}
-
-export interface StatsInfo {
-	all_time: { keep: number; hide: number; total: number };
-	last_30_days: { keep: number; hide: number; total: number };
-	today: { keep: number; hide: number; total: number };
-	daily_breakdown: { date: string; decision: string; count: number }[];
 }

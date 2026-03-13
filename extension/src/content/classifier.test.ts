@@ -28,6 +28,7 @@ const cacheGetMock = mock(
 );
 const cacheSetMock = mock(async (..._args: unknown[]) => {});
 const cacheCleanupExpiredMock = mock(async () => {});
+const buildCacheKeyMock = mock(async (post: PostData) => `cache:${post.post_id}`);
 import {
 	BATCH_MAX_ITEMS,
 	BATCH_WINDOW_MS,
@@ -56,12 +57,20 @@ function makeSendOk() {
 	}));
 }
 
+function makeClassifier(
+	sendMessage: ReturnType<typeof makeSendOk>,
+): Classifier {
+	return new Classifier(sendMessage, buildCacheKeyMock);
+}
+
 beforeEach(() => {
 	jest.useFakeTimers();
 	cacheGetMock.mockReset();
 	cacheGetMock.mockResolvedValue(null);
 	cacheSetMock.mockReset();
 	cacheCleanupExpiredMock.mockReset();
+	buildCacheKeyMock.mockReset();
+	buildCacheKeyMock.mockImplementation(async (post) => `cache:${post.post_id}`);
 	mutableDecisionCache.get = cacheGetMock as typeof decisionCache.get;
 	mutableDecisionCache.set = cacheSetMock as typeof decisionCache.set;
 	mutableDecisionCache.cleanupExpired =
@@ -81,7 +90,7 @@ afterEach(() => {
 describe("Classifier.classify", () => {
 	it("queues post and flushes after timer fires → sendMessage called with correct payload", async () => {
 		const sendMessage = makeSendOk();
-		const classifier = new Classifier(sendMessage);
+		const classifier = makeClassifier(sendMessage);
 
 		const post = makePost("p1");
 		const promise = classifier.classify(post);
@@ -107,7 +116,7 @@ describe("Classifier.classify", () => {
 
 	it("BATCH_MAX_ITEMS posts triggers immediate flush (no timer needed)", async () => {
 		const sendMessage = makeSendOk();
-		const classifier = new Classifier(sendMessage);
+		const classifier = makeClassifier(sendMessage);
 
 		const promises: Promise<unknown>[] = [];
 		for (let i = 0; i < BATCH_MAX_ITEMS; i++) {
@@ -130,7 +139,7 @@ describe("Classifier.classify", () => {
 
 	it("same post_id twice: deduplication — one queue entry, both promises resolve together", async () => {
 		const sendMessage = makeSendOk();
-		const classifier = new Classifier(sendMessage);
+		const classifier = makeClassifier(sendMessage);
 
 		const post = makePost("dup");
 		const p1 = classifier.classify(post);
@@ -160,11 +169,31 @@ describe("Classifier.classify", () => {
 		});
 
 		const sendMessage = makeSendOk();
-		const classifier = new Classifier(sendMessage);
+		const classifier = makeClassifier(sendMessage);
 
 		const result = await classifier.classify(makePost("cached"));
 		expect(result).toEqual({ decision: "keep", source: "llm" });
 		expect(sendMessage).not.toHaveBeenCalled();
+	});
+
+	it("uses hash-derived cache keys for decision cache lookup", async () => {
+		const sendMessage = makeSendOk();
+		const classifier = makeClassifier(sendMessage);
+		const post = makePost("hash-keyed-post");
+
+		const promise = classifier.classify(post);
+		await drain();
+
+		expect(cacheGetMock).toHaveBeenCalledTimes(1);
+		expect(buildCacheKeyMock).toHaveBeenCalledWith(post);
+		expect(cacheGetMock).toHaveBeenCalledWith("cache:hash-keyed-post");
+
+		classifier.onBatchResult({
+			post_id: post.post_id,
+			decision: "keep",
+			source: "llm",
+		});
+		await promise;
 	});
 
 	it("cache hit with source: 'error': NOT reused, goes to network", async () => {
@@ -175,7 +204,7 @@ describe("Classifier.classify", () => {
 		});
 
 		const sendMessage = makeSendOk();
-		const classifier = new Classifier(sendMessage);
+		const classifier = makeClassifier(sendMessage);
 
 		const post = makePost("err-cached");
 		const promise = classifier.classify(post);
@@ -201,7 +230,7 @@ describe("Classifier.classify", () => {
 describe("Classifier.onBatchResult", () => {
 	it("resolves pending, calls decisionCache.set, clears timer", async () => {
 		const sendMessage = makeSendOk();
-		const classifier = new Classifier(sendMessage);
+		const classifier = makeClassifier(sendMessage);
 
 		const post = makePost("r1");
 		const promise = classifier.classify(post);
@@ -218,11 +247,11 @@ describe("Classifier.onBatchResult", () => {
 
 		const result = await promise;
 		expect(result).toEqual({ decision: "hide", source: "llm" });
-		expect(cacheSetMock).toHaveBeenCalledWith("r1", "hide", "llm");
+		expect(cacheSetMock).toHaveBeenCalledWith("cache:r1", "hide", "llm");
 	});
 
 	it("with unknown post_id: no-op (no throw)", () => {
-		const classifier = new Classifier(makeSendOk());
+		const classifier = makeClassifier(makeSendOk());
 		expect(() =>
 			classifier.onBatchResult({
 				post_id: "unknown",
@@ -232,9 +261,9 @@ describe("Classifier.onBatchResult", () => {
 		).not.toThrow();
 	});
 
-	it("with error: 'quota_exceeded': fail-open, does NOT call decisionCache.set", async () => {
+	it("with missing decision/source fields: fail-open, does NOT call decisionCache.set", async () => {
 		const sendMessage = makeSendOk();
-		const classifier = new Classifier(sendMessage);
+		const classifier = makeClassifier(sendMessage);
 
 		const promise = classifier.classify(makePost("quota-post"));
 		await drain();
@@ -244,7 +273,6 @@ describe("Classifier.onBatchResult", () => {
 
 		classifier.onBatchResult({
 			post_id: "quota-post",
-			error: "quota_exceeded",
 		});
 
 		const result = await promise;
@@ -257,7 +285,7 @@ describe("Classifier.onBatchResult", () => {
 
 describe("Classifier fail-open timeout", () => {
 	it("firing the expiry timer resolves with {decision:'keep', source:'error'}", async () => {
-		const classifier = new Classifier(makeSendOk());
+		const classifier = makeClassifier(makeSendOk());
 
 		const promise = classifier.classify(makePost("timeout-post"));
 		await drain(); // classify sets up expiry timer + flush timer
@@ -274,7 +302,7 @@ describe("Classifier fail-open timeout", () => {
 describe("Classifier.reset", () => {
 	it("immediately fail-opens all pending, clears queue and flush timer", async () => {
 		const sendMessage = makeSendOk();
-		const classifier = new Classifier(sendMessage);
+		const classifier = makeClassifier(sendMessage);
 
 		const p1 = classifier.classify(makePost("reset-a"));
 		const p2 = classifier.classify(makePost("reset-b"));
@@ -295,7 +323,7 @@ describe("Classifier sendMessage rejects", () => {
 		const sendMessage = mock(async () => {
 			throw new Error("network error");
 		});
-		const classifier = new Classifier(sendMessage);
+		const classifier = new Classifier(sendMessage, buildCacheKeyMock);
 
 		const post = makePost("fail-post");
 		const promise = classifier.classify(post);

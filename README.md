@@ -1,284 +1,131 @@
-# Unslop - Local Development Guide
+<div align="center">
 
-This guide covers how to set up and run all Unslop components locally for development.
+<svg width="64" height="64" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M36 28V68C36 85.6731 50.3269 100 68 100C85.6731 100 100 85.6731 100 68V28"
+        stroke="#1A1A1A" stroke-width="12" stroke-linecap="square"/>
+  <circle cx="68" cy="62" r="14" fill="#4A6C48"/>
+</svg>
 
-## Agent Orientation
+# Unslop
 
-If you are working as an autonomous coding agent, start here before editing code:
+**A browser extension that filters AI-generated content from your social feeds.**
+Runs entirely in your browser. Bring your own API key. No account, no backend, no telemetry.
 
-1. Read `AGENTS.md` for repo guardrails and command surface.
-2. Read `docs/index.md` for canonical documentation entry points.
-3. Follow the detailed workflow in:
-   - `docs/runbooks/golden-paths.md`
-   - `docs/exec-plans/README.md`
-   - `docs/product-specs/index.md`
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-## Prerequisites
-
-- **Bun** v1.3.8+ - [Install Bun](https://bun.sh)
-- **Docker** with Docker Compose - for local PostgreSQL
-- **Chrome** browser - for extension testing
-
-## Quick Start
-
-```bash
-# 1. Start the database
-docker compose up -d
-
-# 2. Start the backend
-cd backend && bun run dev
-
-# 3. Build the extension
-cd extension && bun run build
-
-# 4. Serve the frontend (optional)
-cd frontend && bunx serve -l 8080
-```
+</div>
 
 ---
 
-## Component Details
+Unslop classifies posts in your LinkedIn, X, and Reddit feeds using an LLM of your choice. The model returns a direct `keep` or `hide` decision for each post. Everything runs locally in the Chrome service worker; only the LLM API calls you configure ever leave your machine.
 
-### 1. Database (PostgreSQL)
+## Install
 
-A Docker Compose configuration provides PostgreSQL 18.1 for local development.
-
-```bash
-# Start database
-docker compose up -d
-
-# View logs
-docker compose logs -f postgres
-
-# Stop database
-docker compose down
-
-# Reset database (removes all data)
-docker compose down -v && docker compose up -d
-```
-
-After starting a fresh database volume, apply schema with Drizzle migrations:
+### From source
 
 ```bash
-cd backend
-bun run migrate
-```
-
-**Connection details:**
-- Host: `localhost`
-- Port: `5432`
-- User: `unslop`
-- Password: `unslop_dev_password`
-- Database: `unslop`
-
----
-
-### 2. Backend API
-
-The backend is a Bun + Hono server.
-
-```bash
-cd backend
-
-# Install dependencies
+# Requires Bun v1.3.8+
+cd extension
 bun install
-
-# Start dev server (hot reload)
-bun run dev
-
-# Type check
-bun run type-check
-
-# Run deterministic unit tests
-bun run test
+bun run build
 ```
 
-**Server runs at:** `http://localhost:3000`
+1. Open Chrome → `chrome://extensions/`
+2. Enable **Developer mode** (top right)
+3. Click **Load unpacked** → select `extension/dist/`
 
-#### Environment Variables
+### From releases
 
-Copy `.env.example` to `.env`. The default `.env` is configured for local development:
+Pre-built zips are available on the [Releases](../../releases) page.
 
-| Variable | Description | Dev Default |
-|----------|-------------|-------------|
-| `DATABASE_URL` | PostgreSQL connection string | Local Docker PostgreSQL |
-| `JWT_SECRET` | Secret for session tokens | Dev secret (change in prod) |
-| `MAGIC_LINK_SECRET` | Secret for magic links | Dev secret |
-| `RESEND_API_KEY` | Resend API key for emails | Dummy (emails logged to console) |
-| `LLM_API_KEY` | OpenRouter API key for LLM | Dummy (falls back to "keep") |
-| `POLAR_API_KEY` | Polar API key for billing | Dummy (checkout returns error) |
+## Setup
 
-**Dev Mode Features:**
-- Magic links are logged to the console instead of emailed
-- LLM classification fails gracefully to `decision: "keep"` with `source: "error"`
-- Billing checkout returns `checkout_failed` error
+Open the extension popup and enter:
 
-#### Testing API Endpoints
+| Field | Example |
+|-------|---------|
+| API Key | your key from OpenAI, OpenRouter, etc. |
+| Base URL | `https://api.openai.com/v1` |
+| Model | `claude-haiku-4-5` |
 
-```bash
-# Health check
-curl http://localhost:3000/health
+Save, flip the toggle, scroll your feed. Done.
 
-# Start auth flow (logs magic link to console)
-curl -X POST http://localhost:3000/v1/auth/start \
-  -H "Content-Type: application/json" \
-  -d '{"email":"test@example.com"}'
+## Supported platforms
 
-# Visit the magic link from console output, then use the JWT for:
+| Platform | Status |
+|----------|--------|
+| LinkedIn | ✅ |
+| X / Twitter | experimental |
+| Reddit | experimental |
 
-# Get user info
-curl http://localhost:3000/v1/me \
-  -H "Authorization: Bearer <JWT>"
+## Supported providers
 
-# Classify a post
-curl -X POST http://localhost:3000/v1/classify \
-  -H "Authorization: Bearer <JWT>" \
-  -H "Content-Type: application/json" \
-  -d '{"post":{"post_id":"123","author_id":"456","author_name":"Test","content_text":"Test post"}}'
+Any OpenAI-compatible endpoint works:
+
+| Provider | Base URL |
+|----------|----------|
+| OpenAI | `https://api.openai.com/v1` |
+| OpenRouter | `https://openrouter.ai/api/v1` |
+| Ollama (local) | `http://localhost:11434/v1` |
+| vLLM / LiteLLM | your own URL |
+
+Recommended model: `claude-haiku-4-5` — fast, cheap, accurate for classification. Any model with JSON mode works.
+
+## How it works
+
+Each post is classified directly in the Chrome service worker:
+
+```
+post arrives in feed
+       ↓
+ local classifier (your API key)
+       ↓
+ keep / hide
 ```
 
----
-
-### 3. Chrome Extension
+## Development
 
 ```bash
 cd extension
 
-# Install dependencies
-bun install
+bun run build          # production build
+bun run dev            # watch mode
 
-# Build for production
-bun run build
-
-# Start dev server (for development with hot reload)
-bun run dev
+bun test src/          # full test suite
+bunx tsgo --noEmit -p tsconfig.json  # type check
 ```
 
-**Output:** The built extension is in `extension/dist/`
+## Project structure
 
-#### Loading in Chrome
-
-1. Open Chrome and go to `chrome://extensions/`
-2. Enable "Developer mode" (toggle in top right)
-3. Click "Load unpacked"
-4. Select the `extension/dist/` folder
-
-#### Configuring API URL
-
-For local development, update the API URL in `extension/src/lib/config.ts`:
-
-```typescript
-export const API_BASE_URL = 'http://localhost:3000';
+```
+extension/src/
+├── background/
+│   ├── llmClient.ts          # Typed OpenAI-compatible client
+│   ├── localClassifier.ts    # Batch classifier with concurrency control
+│   ├── storageFacade.ts      # API key + settings (chrome.storage.local)
+│   ├── runtimeDiagnostics.ts # LLM endpoint health probe
+│   └── handlers.ts           # Message handlers for content scripts
+├── lib/
+│   ├── prompts.ts            # System + user prompt templates
+│   └── config.ts
+├── content/                  # Feed DOM observation and rendering
+├── platforms/                # LinkedIn, X, Reddit DOM adapters
+└── popup/                    # Extension popup UI
 ```
 
----
+## Privacy
 
-### 4. Frontend (Static Site)
+Post text is sent only to the API endpoint you configure. No analytics, no telemetry, no external requests beyond your own LLM calls. Your API key lives in `chrome.storage.local`.
 
-The frontend is a static HTML/CSS site with no build step.
+## Contributing
+
+PRs welcome. Before opening one:
 
 ```bash
-cd frontend
-
-# Serve locally
-bunx serve -l 8080
+bunx tsgo --noEmit -p tsconfig.json  # must pass
+bun test src/                         # must pass
 ```
 
-**Site runs at:** `http://localhost:8080`
+## License
 
-Pages:
-- `/` - Landing page
-- `/privacy.html` - Privacy Policy
-- `/support.html` - Support & FAQ
-- `/terms.html` - Terms of Service
-
----
-
-## Full Stack Testing
-
-1. **Start all services:**
-   ```bash
-   # Terminal 1: Database
-   docker compose up -d
-   
-   # Terminal 2: Backend
-   cd backend && bun run dev
-   
-   # Terminal 3: Frontend (optional)
-   cd frontend && bunx serve -l 8080
-   ```
-
-2. **Build and load extension:**
-   ```bash
-   cd extension && bun run build
-   # Then load dist/ folder in Chrome
-   ```
-
-3. **Test the flow:**
-   - Sign in via the extension popup
-   - Visit LinkedIn and browse your feed
-   - Posts will be classified (falling back to "keep" without real OpenRouter key)
-
----
-
-## Production Configuration
-
-For production deployment, you need real API keys:
-
-| Service | Get Key At | Required For |
-|---------|-----------|--------------|
-| Neon | https://neon.tech | Database |
-| Resend | https://resend.com | Magic link emails |
-| OpenRouter | https://openrouter.ai | LLM classification |
-| Polar | https://polar.sh | Subscription billing |
-
-The backend automatically detects Neon databases and uses the serverless driver.
-
----
-
-## Troubleshooting
-
-### Database connection errors
-```bash
-# Check if PostgreSQL is running
-docker compose ps
-
-# View database logs
-docker compose logs postgres
-
-# Reset database
-docker compose down -v && docker compose up -d
-```
-
-### Port already in use
-```bash
-# Find and kill process on port 3000
-lsof -i :3000 -t | xargs -r kill -9
-```
-
-### Extension not updating
-1. Go to `chrome://extensions/`
-2. Click the refresh icon on the Unslop extension
-3. Reload the LinkedIn page
-
----
-
-## Project Structure
-
-```
-Unslop/
-├── backend/           # Bun + Hono API server
-│   ├── src/
-│   │   ├── routes/    # API endpoints
-│   │   ├── services/  # Business logic
-│   │   ├── db/        # Database schema & connection
-│   │   └── lib/       # Utilities (JWT, email, hash)
-│   └── drizzle/       # Database migrations
-├── extension/         # Chrome Extension (MV3)
-│   └── src/
-│       ├── background/  # Service worker
-│       ├── content/     # Feed content scripts (auth, classify, detection, feed, render, runtime)
-│       └── popup/       # Extension popup UI
-├── frontend/          # Static public website
-└── docs/product-specs/ # Project specifications
-```
+MIT

@@ -11,12 +11,12 @@ function waitForAsyncHandler(): Promise<void> {
 describe("background message router", () => {
 	it("routes handled message types and resolves async responses", async () => {
 		const router = createMessageRouter({
-			[MESSAGE_TYPES.GET_STATS]: async () => ({ stats: "ok" }),
+			[MESSAGE_TYPES.GET_LOCAL_STATS]: async () => ({ stats: "ok" }),
 		});
 
 		let response: unknown = null;
 		const keepChannel = router(
-			{ type: MESSAGE_TYPES.GET_STATS } as RuntimeRequest,
+			{ type: MESSAGE_TYPES.GET_LOCAL_STATS } as RuntimeRequest,
 			{} as MessageSender,
 			(value) => {
 				response = value;

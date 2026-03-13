@@ -10,15 +10,15 @@ const RUNTIME_OK: RuntimeDiagnosticsResponse = {
 	snapshot: {
 		devModeEnabled: true,
 		enabled: true,
-		hasJwt: true,
+		hasApiKey: true,
 		activeTabId: 7,
 		activeTabUrl: "https://www.linkedin.com/feed/",
 		activeTabHost: "www.linkedin.com",
 		supportedPlatformId: "linkedin",
-		backendReachable: true,
-		backendLatencyMs: 10,
-		backendHttpStatus: 200,
-		backendError: null,
+		llmEndpointReachable: true,
+		llmEndpointLatencyMs: 10,
+		llmEndpointHttpStatus: 200,
+		llmEndpointError: null,
 	},
 };
 
