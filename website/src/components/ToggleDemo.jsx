@@ -173,7 +173,7 @@ export default function ToggleDemo() {
 
 			{/* Caption */}
 			<p className="mt-8 text-center font-mono text-[10px] uppercase tracking-[0.2em] text-gray-400 opacity-60">
-				The AI reads the feed so you don't have to
+				Toggle to see what Unslop does to your feed.
 			</p>
 		</div>
 	);
