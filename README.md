@@ -1,10 +1,9 @@
 <div align="center">
 
-<svg width="64" height="64" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M36 28V68C36 85.6731 50.3269 100 68 100C85.6731 100 100 85.6731 100 68V28"
-        stroke="#1A1A1A" stroke-width="12" stroke-linecap="square"/>
-  <circle cx="68" cy="62" r="14" fill="#4A6C48"/>
-</svg>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="website/public/logo-lockup-dark.svg">
+  <img src="website/public/logo-lockup.svg" width="64" height="64" alt="Unslop logo">
+</picture>
 
 # Unslop
 
@@ -12,6 +11,7 @@
 Runs entirely in your browser. Bring your own API key. No account, no backend, no telemetry.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-ffdd00?style=flat&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/unslop)
 
 </div>
 

@@ -42,6 +42,14 @@ h4 {
 	letter-spacing: -0.01em;
 }
 
+/* Hide non-first sections until fullpage.js initializes to prevent FOUC */
+#fullpage .section:not(:first-child) {
+	visibility: hidden;
+}
+#fullpage.fullpage-initialized .section:not(:first-child) {
+	visibility: visible;
+}
+
 .fp-watermark {
 	display: none !important;
 }
