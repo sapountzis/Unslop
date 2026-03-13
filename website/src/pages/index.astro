@@ -158,63 +158,32 @@ import "fullpage.js/dist/fullpage.css";
           </p>
         </FadeIn>
         <FadeIn client:visible delay={0.12}>
-          <div
-            class="flex flex-col items-center justify-center gap-4 sm:flex-row"
+          <a
+            href="https://chromewebstore.google.com/detail/unslop/oichppihoiihcljjmpaaddflnkonbbbk"
+            target="_blank"
+            rel="noreferrer"
+            class="group inline-flex items-center justify-center gap-3 border border-ink bg-ink px-6 py-3 font-mono text-sm uppercase tracking-[0.1em] text-paper transition-all hover:bg-paper hover:text-ink"
           >
-            <a
-              href="https://chromewebstore.google.com/detail/unslop/oichppihoiihcljjmpaaddflnkonbbbk"
-              target="_blank"
-              rel="noreferrer"
-              class="group inline-flex items-center justify-center gap-3 border border-ink bg-ink px-6 py-3 font-mono text-sm uppercase tracking-[0.1em] text-paper transition-all hover:bg-paper hover:text-ink"
+            <span>Add to Chrome</span>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="opacity-70 transition-opacity group-hover:opacity-100"
             >
-              <span>Add to Chrome</span>
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                class="opacity-70 transition-opacity group-hover:opacity-100"
-              >
-                <circle cx="12" cy="12" r="10"></circle>
-                <circle cx="12" cy="12" r="4"></circle>
-                <line x1="21.17" x2="12" y1="8" y2="8"></line>
-                <line x1="3.95" x2="8.54" y1="6.06" y2="14"></line>
-                <line x1="10.88" x2="15.46" y1="21.94" y2="14"></line>
-              </svg>
-            </a>
-
-            <a
-              href="https://buymeacoffee.com/unslop"
-              target="_blank"
-              rel="noreferrer"
-              class="group inline-flex items-center justify-center gap-3 border border-ink px-6 py-3 font-mono text-xs uppercase tracking-[0.1em] text-ink transition-all hover:bg-ink hover:text-paper"
-            >
-              <span>Buy me a coffee</span>
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                class="-mt-0.5 opacity-70 transition-opacity group-hover:opacity-100"
-              >
-                <path d="M17 8h1a4 4 0 1 1 0 8h-1"></path>
-                <path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"></path>
-                <line x1="6" x2="6" y1="2" y2="4"></line>
-                <line x1="10" x2="10" y1="2" y2="4"></line>
-                <line x1="14" x2="14" y1="2" y2="4"></line>
-              </svg>
-            </a>
-          </div>
+              <circle cx="12" cy="12" r="10"></circle>
+              <circle cx="12" cy="12" r="4"></circle>
+              <line x1="21.17" x2="12" y1="8" y2="8"></line>
+              <line x1="3.95" x2="8.54" y1="6.06" y2="14"></line>
+              <line x1="10.88" x2="15.46" y1="21.94" y2="14"></line>
+            </svg>
+          </a>
         </FadeIn>
 
         <footer class="pt-6 pb-4">
