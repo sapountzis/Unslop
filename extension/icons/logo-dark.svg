@@ -1,8 +1,9 @@
 <svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M32 28V68C32 85.6731 46.3269 100 64 100C81.6731 100 96 85.6731 96 68V28"
-        stroke="#EDE9DE"
-        stroke-width="12"
-        stroke-linecap="square"/>
-
+  <path
+    d="M32 28V68C32 85.6731 46.3269 100 64 100C81.6731 100 96 85.6731 96 68V28"
+    stroke="#F5F1E8"
+    stroke-width="12"
+    stroke-linecap="square"
+  />
   <circle cx="64" cy="62" r="14" fill="#A8C29C"/>
 </svg>
