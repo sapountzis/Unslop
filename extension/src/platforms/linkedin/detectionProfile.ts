@@ -69,7 +69,7 @@ const signals: DetectionSignal[] = [
 
 export const linkedinDetectionProfile: DetectionProfile = {
 	hintSelectors: [
-		'article[role="article"]',
+		'[role="article"]',
 		'[data-urn^="urn:li:activity:"]',
 		'[data-urn^="urn:li:share:"]',
 	],
