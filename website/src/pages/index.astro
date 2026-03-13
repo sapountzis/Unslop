@@ -242,6 +242,7 @@ import "fullpage.js/dist/fullpage.css";
       easingcss3: "cubic-bezier(0.42, 0, 0.58, 1)",
       loopBottom: false,
       loopTop: false,
+      adjustOnNavChange: !isMobile,
 
       // Accessibility
       keyboardScrolling: true,
@@ -254,7 +255,7 @@ import "fullpage.js/dist/fullpage.css";
       responsiveWidth: MOBILE_BREAKPOINT,
 
       // Overflow Handling
-      scrollOverflow: !isMobile,
+      scrollOverflow: true,
 
       // Touch sensitivity
       touchSensitivity: 15,
