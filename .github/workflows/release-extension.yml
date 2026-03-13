@@ -8,6 +8,8 @@ on:
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -57,4 +59,4 @@ jobs:
 
             See [CHANGELOG.md](https://github.com/sapountzis/Unslop/blob/main/CHANGELOG.md) for details.
           files: unslop-extension-${{ steps.version.outputs.version }}.zip
-          token: ${{ secrets.RELEASES_REPO_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
