@@ -217,6 +217,11 @@ import "fullpage.js/dist/fullpage.css";
   <script>
     import fullpage from "fullpage.js";
 
+    const MOBILE_BREAKPOINT = 768;
+    const isMobile = window.matchMedia(
+      `(max-width: ${MOBILE_BREAKPOINT - 1}px)`,
+    ).matches;
+
     new fullpage("#fullpage", {
       afterRender() {
         document.getElementById("fullpage")?.classList.add("fullpage-initialized");
@@ -230,13 +235,14 @@ import "fullpage.js/dist/fullpage.css";
       css3: true,
       scrollingSpeed: 700,
       autoScrolling: true,
-      fitToSection: true,
-      fitToSectionDelay: 600,
+      fitToSection: !isMobile,
+      fitToSectionDelay: isMobile ? 0 : 600,
       scrollBar: false,
       easing: "easeInOutCubic",
       easingcss3: "cubic-bezier(0.42, 0, 0.58, 1)",
       loopBottom: false,
       loopTop: false,
+      adjustOnNavChange: !isMobile,
 
       // Accessibility
       keyboardScrolling: true,
@@ -246,7 +252,7 @@ import "fullpage.js/dist/fullpage.css";
       // Design
       verticalCentered: true,
       sectionSelector: ".section",
-      responsiveWidth: 768,
+      responsiveWidth: MOBILE_BREAKPOINT,
 
       // Overflow Handling
       scrollOverflow: true,

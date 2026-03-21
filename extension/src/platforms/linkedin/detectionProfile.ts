@@ -1,5 +1,5 @@
 import type { DetectionProfile, DetectionSignal } from "../platform";
-import { isLikelyFeedPostRoot } from "./parser";
+import { isLikelyFeedPostRoot, isLikelySduiFeedPost } from "./parser";
 
 function hasTextContent(element: HTMLElement): boolean {
 	const textNode = element.querySelector('p, [role="text"]');
@@ -31,6 +31,25 @@ function hasAggregateOrRecommendationMarkers(element: HTMLElement): boolean {
 	return element.querySelector('[data-urn^="urn:li:aggregate:"]') !== null;
 }
 
+/** Check for social action buttons via aria-label (SDUI and classic). */
+function hasSocialActionButtons(element: HTMLElement): boolean {
+	const buttons = element.querySelectorAll("button[aria-label]");
+	let socialCount = 0;
+	for (const btn of buttons) {
+		const label = btn.getAttribute("aria-label") ?? "";
+		if (
+			/\breaction\b/i.test(label) ||
+			/\blike\b/i.test(label) ||
+			/\bcomment\b/i.test(label) ||
+			/\brepost\b/i.test(label)
+		) {
+			socialCount++;
+		}
+		if (socialCount >= 2) return true;
+	}
+	return false;
+}
+
 const signals: DetectionSignal[] = [
 	{
 		id: "article_role",
@@ -45,9 +64,29 @@ const signals: DetectionSignal[] = [
 			element.getAttribute("role") === "article",
 	},
 	{
-		id: "identity_urn_anchor",
+		id: "identity_urn_direct",
 		weight: 6,
-		test: (element) => hasLinkedInUrn(element),
+		test: (element) => {
+			const directUrn = element.getAttribute("data-urn");
+			return (
+				directUrn?.startsWith("urn:li:activity:") === true ||
+				directUrn?.startsWith("urn:li:share:") === true
+			);
+		},
+	},
+	{
+		id: "identity_urn_descendant",
+		weight: 1,
+		test: (element) => {
+			const directUrn = element.getAttribute("data-urn");
+			if (
+				directUrn?.startsWith("urn:li:activity:") ||
+				directUrn?.startsWith("urn:li:share:")
+			) {
+				return false; // already scored by identity_urn_direct
+			}
+			return hasLinkedInUrn(element);
+		},
 	},
 	{
 		id: "author_anchor",
@@ -65,6 +104,19 @@ const signals: DetectionSignal[] = [
 		weight: -8,
 		test: (element) => hasAggregateOrRecommendationMarkers(element),
 	},
+	// SDUI-specific signals (stable ARIA attributes)
+	{
+		id: "sdui_social_actions",
+		weight: 3,
+		test: (element) => hasSocialActionButtons(element),
+	},
+	{
+		id: "sdui_listitem_role",
+		weight: 2,
+		test: (element) =>
+			element.getAttribute("role") === "listitem" &&
+			!!element.closest('[role="list"]'),
+	},
 ];
 
 export const linkedinDetectionProfile: DetectionProfile = {
@@ -72,6 +124,8 @@ export const linkedinDetectionProfile: DetectionProfile = {
 		'[role="article"]',
 		'[data-urn^="urn:li:activity:"]',
 		'[data-urn^="urn:li:share:"]',
+		// SDUI variant: posts are listitem children of a role="list" feed
+		'[role="list"] > [role="listitem"]',
 	],
 	maxAncestorDepth: 6,
 	minScore: 7,
@@ -79,6 +133,11 @@ export const linkedinDetectionProfile: DetectionProfile = {
 	signals,
 	resolveContentRoot(candidateRoot) {
 		if (isLikelyFeedPostRoot(candidateRoot)) {
+			return candidateRoot;
+		}
+
+		// SDUI path: listitem with social action buttons and author links
+		if (isLikelySduiFeedPost(candidateRoot)) {
 			return candidateRoot;
 		}
 
@@ -93,12 +152,17 @@ export const linkedinDetectionProfile: DetectionProfile = {
 					return current;
 				}
 			}
+			// SDUI path: walk up to listitem
+			if (isLikelySduiFeedPost(current)) {
+				return current;
+			}
 			current = current.parentElement;
 		}
 
 		return null;
 	},
 	resolveRenderRoot(_candidateRoot, contentRoot) {
+		// Classic LinkedIn: scroll hotkey items
 		const renderRoot = contentRoot.closest("[data-finite-scroll-hotkey-item]");
 		if (
 			renderRoot &&
@@ -106,6 +170,15 @@ export const linkedinDetectionProfile: DetectionProfile = {
 			typeof renderRoot.querySelector === "function"
 		) {
 			return renderRoot as HTMLElement;
+		}
+		// SDUI: listitem role is the render root
+		const listItemRoot = contentRoot.closest('[role="listitem"]');
+		if (
+			listItemRoot &&
+			typeof listItemRoot.getAttribute === "function" &&
+			typeof listItemRoot.querySelector === "function"
+		) {
+			return listItemRoot as HTMLElement;
 		}
 		return contentRoot;
 	},

@@ -1,6 +1,6 @@
 {
 	"name": "unslop-extension",
-	"version": "0.8.0",
+	"version": "0.9.1",
 	"type": "module",
 	"scripts": {
 		"dev": "vite",
