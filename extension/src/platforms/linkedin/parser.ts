@@ -49,6 +49,38 @@ export function isLikelyFeedPostRoot(element: HTMLElement): boolean {
 	);
 }
 
+/**
+ * Check if an element is a SDUI-style feed post (role="listitem" + structural signals).
+ * Uses only stable ARIA/semantic attributes — no CSS classes.
+ */
+export function isLikelySduiFeedPost(element: HTMLElement): boolean {
+	if (element.getAttribute("role") !== "listitem") {
+		return false;
+	}
+	// Must have an author link
+	if (
+		!element.querySelector('a[href*="/in/"], a[href*="/company/"]')
+	) {
+		return false;
+	}
+	// Must have at least 2 social action buttons (Like, Comment, Repost, etc.)
+	const buttons = element.querySelectorAll("button[aria-label]");
+	let socialCount = 0;
+	for (const btn of buttons) {
+		const label = btn.getAttribute("aria-label") ?? "";
+		if (
+			/\breaction\b/i.test(label) ||
+			/\blike\b/i.test(label) ||
+			/\bcomment\b/i.test(label) ||
+			/\brepost\b/i.test(label)
+		) {
+			socialCount++;
+		}
+		if (socialCount >= 2) return true;
+	}
+	return false;
+}
+
 export function readPostIdentity(element: HTMLElement): string | null {
 	const dataId = element.getAttribute("data-id");
 	if (dataId) return dataId;
@@ -62,12 +94,30 @@ export function readPostIdentity(element: HTMLElement): string | null {
 		if (nestedUrn) return nestedUrn;
 	}
 
+	// Fallback for SDUI DOM: derive identity from text content
+	const text = (element.textContent ?? "").trim();
+	if (text.length > 30) {
+		// Use a synchronous simple hash for identity (just needs to be stable & unique)
+		return `text-hash:${simpleHash(text.slice(0, 200))}`;
+	}
+
 	return null;
+}
+
+/** Fast synchronous string hash for identity derivation (non-crypto). */
+function simpleHash(str: string): string {
+	let hash = 0;
+	for (let i = 0; i < str.length; i++) {
+		const char = str.charCodeAt(i);
+		hash = ((hash << 5) - hash + char) | 0;
+	}
+	return (hash >>> 0).toString(36);
 }
 
 function isFeedPost(element: HTMLElement): boolean {
 	return (
 		isLikelyFeedPostRoot(element) ||
+		isLikelySduiFeedPost(element) ||
 		element.querySelector(
 			'[data-urn^="urn:li:activity:"], [data-urn^="urn:li:share:"]',
 		) !== null ||

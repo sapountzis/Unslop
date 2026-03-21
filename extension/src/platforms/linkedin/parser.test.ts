@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import {
 	extractPostData,
 	isLikelyFeedPostRoot,
+	isLikelySduiFeedPost,
 	readPostIdentity,
 } from "./parser";
 
@@ -455,6 +456,178 @@ describe("linkedin parser", () => {
 			const result = await extractPostData(post);
 			expect(result).not.toBeNull();
 			expect(result!.attachments).toEqual([]);
+		});
+	});
+
+	describe("isLikelySduiFeedPost", () => {
+		it("accepts listitem with author link and social action buttons", () => {
+			const postItem = document.createElement("div");
+			postItem.setAttribute("role", "listitem");
+
+			const link = document.createElement("a");
+			link.setAttribute("href", "/in/janesmith/");
+			postItem.appendChild(link);
+
+			const btn1 = document.createElement("button");
+			btn1.setAttribute("aria-label", "Reaction button state: no reaction");
+			postItem.appendChild(btn1);
+
+			const btn2 = document.createElement("button");
+			btn2.setAttribute("aria-label", "Comment");
+			postItem.appendChild(btn2);
+
+			expect(isLikelySduiFeedPost(postItem)).toBe(true);
+		});
+
+		it("accepts listitem with company author link", () => {
+			const postItem = document.createElement("div");
+			postItem.setAttribute("role", "listitem");
+
+			const link = document.createElement("a");
+			link.setAttribute("href", "/company/some-company/posts/");
+			postItem.appendChild(link);
+
+			const btn1 = document.createElement("button");
+			btn1.setAttribute("aria-label", "Like");
+			postItem.appendChild(btn1);
+
+			const btn2 = document.createElement("button");
+			btn2.setAttribute("aria-label", "Repost");
+			postItem.appendChild(btn2);
+
+			expect(isLikelySduiFeedPost(postItem)).toBe(true);
+		});
+
+		it("rejects element without listitem role", () => {
+			const div = document.createElement("div");
+			const link = document.createElement("a");
+			link.setAttribute("href", "/in/someone/");
+			div.appendChild(link);
+
+			const btn = document.createElement("button");
+			btn.setAttribute("aria-label", "Like");
+			div.appendChild(btn);
+
+			const btn2 = document.createElement("button");
+			btn2.setAttribute("aria-label", "Comment");
+			div.appendChild(btn2);
+
+			expect(isLikelySduiFeedPost(div)).toBe(false);
+		});
+
+		it("rejects listitem without author links", () => {
+			const postItem = document.createElement("div");
+			postItem.setAttribute("role", "listitem");
+
+			const btn1 = document.createElement("button");
+			btn1.setAttribute("aria-label", "Like");
+			postItem.appendChild(btn1);
+
+			const btn2 = document.createElement("button");
+			btn2.setAttribute("aria-label", "Comment");
+			postItem.appendChild(btn2);
+
+			expect(isLikelySduiFeedPost(postItem)).toBe(false);
+		});
+
+		it("rejects listitem with only one social button", () => {
+			const postItem = document.createElement("div");
+			postItem.setAttribute("role", "listitem");
+
+			const link = document.createElement("a");
+			link.setAttribute("href", "/in/someone/");
+			postItem.appendChild(link);
+
+			const btn = document.createElement("button");
+			btn.setAttribute("aria-label", "Like");
+			postItem.appendChild(btn);
+
+			expect(isLikelySduiFeedPost(postItem)).toBe(false);
+		});
+	});
+
+	describe("readPostIdentity — text-hash fallback", () => {
+		it("returns text-hash when no data-id or data-urn exists", () => {
+			const post = document.createElement("div");
+			post.setAttribute("role", "listitem");
+			const p = document.createElement("p");
+			p.textContent = "This is a long enough post to generate a text hash identity.";
+			post.appendChild(p);
+
+			const identity = readPostIdentity(post);
+			expect(identity).not.toBeNull();
+			expect(identity!).toStartWith("text-hash:");
+		});
+
+		it("returns same text-hash for same content", () => {
+			const post1 = document.createElement("div");
+			post1.textContent = "Identical post content for identity testing.";
+
+			const post2 = document.createElement("div");
+			post2.textContent = "Identical post content for identity testing.";
+
+			expect(readPostIdentity(post1)).toBe(readPostIdentity(post2));
+		});
+
+		it("returns different text-hash for different content", () => {
+			const post1 = document.createElement("div");
+			post1.textContent = "First unique post about engineering practices.";
+
+			const post2 = document.createElement("div");
+			post2.textContent = "Second unique post about product management.";
+
+			expect(readPostIdentity(post1)).not.toBe(readPostIdentity(post2));
+		});
+
+		it("returns null for short text without data-id or data-urn", () => {
+			const post = document.createElement("div");
+			post.textContent = "Short";
+
+			expect(readPostIdentity(post)).toBeNull();
+		});
+
+		it("prefers data-id over text-hash", () => {
+			const post = document.createElement("div");
+			post.setAttribute("data-id", "explicit-id-123");
+			post.textContent = "Post with enough text to generate a hash normally.";
+
+			expect(readPostIdentity(post)).toBe("explicit-id-123");
+		});
+
+		it("prefers data-urn over text-hash", () => {
+			const post = document.createElement("div");
+			post.setAttribute("data-urn", "urn:li:activity:999");
+			post.textContent = "Post with enough text to generate a hash normally.";
+
+			expect(readPostIdentity(post)).toBe("urn:li:activity:999");
+		});
+	});
+
+	describe("extractPostData — SDUI posts", () => {
+		it("extracts text from SDUI post with role=listitem", async () => {
+			const post = document.createElement("div");
+			post.setAttribute("role", "listitem");
+
+			const authorLink = document.createElement("a");
+			authorLink.setAttribute("href", "/in/janesmith/");
+			authorLink.textContent = "Jane Smith";
+			post.appendChild(authorLink);
+
+			const p = document.createElement("p");
+			p.textContent = "Important insights about software architecture and design.";
+			post.appendChild(p);
+
+			const btn1 = document.createElement("button");
+			btn1.setAttribute("aria-label", "Reaction button state: no reaction");
+			post.appendChild(btn1);
+
+			const btn2 = document.createElement("button");
+			btn2.setAttribute("aria-label", "Comment");
+			post.appendChild(btn2);
+
+			const result = await extractPostData(post);
+			expect(result).not.toBeNull();
+			expect(result!.text.length).toBeGreaterThan(0);
 		});
 	});
 });
