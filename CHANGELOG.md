@@ -7,9 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-03-21
+
+### Added
+
+- Support for LinkedIn's newer SDUI/minified feed DOM by detecting `role="listitem"` posts with author links and social-action buttons, plus a text-hash fallback when `data-urn` identifiers are missing.
+- Shared provider URL normalization helpers and tests for OpenAI-compatible endpoints, including validation, query stripping, and normalized origin patterns.
+
 ### Changed
 
-- Simplified repository automation to extension-only CI by replacing Make-based checks with `cd extension && bun test src/`.
+- Moved custom model-host permission requests into the popup save flow so endpoint access is granted before provider settings are stored, and persist normalized base URLs instead of raw input.
+- Added `http://localhost:8001/*` to extension host permissions for local OpenAI-compatible servers.
+- Normalized LLM user messages to content-part arrays for both text-only and multimodal requests, reducing duplicate request-building paths.
+
+## [0.8.0] - 2026-03-13
+
+### Added
+
+- Dark-mode logo and favicon variants for the website and extension branding.
+- Buy Me a Coffee funding metadata in the repository and a persistent support button in the website header.
+
+### Changed
+
+- Refreshed the landing page copy and calls to action with a direct Chrome Web Store install link, a GitHub link, clearer BYOK/no-backend messaging, and a simpler before/after demo framing.
+- Refreshed the shipped extension icons and aligned the core logo geometry across website and extension assets.
+- Upgraded the website from Astro 5 to Astro 6 and removed unused website test dependencies.
+
+### Removed
+
+- Obsolete backend/local-infra scaffolding and deployment scripts, including local Docker/observability compose files and stale release/setup docs.
+
+## [0.7.2] - 2026-03-13
+
+### Added
+
+- MIT licensing for the project.
+- GitHub bug-report and feature-request issue templates.
+
+### Changed
+
+- Generalized LinkedIn article detection from `article[role="article"]` to `[role="article"]` so post discovery works across more DOM variants.
+- Updated the release workflow to publish extension packages with the repository `GITHUB_TOKEN` and explicit `contents: write` permissions.
 
 ## [0.7.0] - 2026-03-01
 
