@@ -1,6 +1,6 @@
-// extension/src/background/storageFacade.test.ts
 import { describe, expect, it } from "bun:test";
 import { createStorageFacade } from "./storageFacade";
+import { DEFAULT_BASE_URL, DEFAULT_MODEL } from "../lib/config";
 
 describe("StorageFacade (BYOK)", () => {
 	it("returns provider settings with defaults when nothing is stored", async () => {
@@ -10,8 +10,8 @@ describe("StorageFacade (BYOK)", () => {
 
 		const settings = await storage.getProviderSettings();
 		expect(settings.apiKey).toBe("");
-		expect(settings.baseUrl).toBe("https://openrouter.ai/api/v1");
-		expect(settings.model).toBe("gpt-4.1-mini");
+		expect(settings.baseUrl).toBe(DEFAULT_BASE_URL);
+		expect(settings.model).toBe(DEFAULT_MODEL);
 	});
 
 	it("returns stored provider settings", async () => {

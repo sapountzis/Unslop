@@ -35,23 +35,11 @@ const DecisionSchema = z.object({
 	decision: z.enum(["keep", "hide"]),
 });
 
-interface ImageContentPart {
-	type: "image_url";
-	image_url: { url: string; detail: "low" };
-}
-
-interface TextContentPart {
-	type: "text";
-	text: string;
-}
-
-type ContentPart = TextContentPart | ImageContentPart;
-
 function resolveApiBaseUrl(baseUrl: string): string {
 	return baseUrl.replace(/\/+$/, "");
 }
 
-function buildImageParts(post: PostData): ImageContentPart[] {
+function buildImageParts(post: PostData): ChatCompletionContentPart[] {
 	return post.attachments
 		.filter(
 			(
@@ -78,10 +66,7 @@ function buildImageParts(post: PostData): ImageContentPart[] {
 		});
 }
 
-function buildMessages(
-	post: PostData,
-	options: { includeEphemeralCacheHint: boolean },
-): ChatCompletionMessageParam[] {
+function buildUserContent(post: PostData): ChatCompletionContentPart[] {
 	const userText = constructUserPrompt({
 		text: post.text,
 		attachments: post.attachments.map((attachment, i) => ({
@@ -94,12 +79,13 @@ function buildMessages(
 		})),
 	});
 
-	const imageParts = buildImageParts(post);
-	const userContent: ChatCompletionContentPart[] = [
-		{ type: "text", text: userText },
-		...imageParts,
-	];
+	return [{ type: "text", text: userText }, ...buildImageParts(post)];
+}
 
+function buildMessages(
+	post: PostData,
+	options: { includeEphemeralCacheHint: boolean },
+): ChatCompletionMessageParam[] {
 	const systemMessage = options.includeEphemeralCacheHint
 		? ({
 				role: "system",
@@ -108,7 +94,7 @@ function buildMessages(
 			} as ChatCompletionMessageParam)
 		: ({ role: "system", content: SYSTEM_PROMPT } as ChatCompletionMessageParam);
 
-	return [systemMessage, { role: "user", content: userContent }];
+	return [systemMessage, { role: "user", content: buildUserContent(post) }];
 }
 
 function parseDecision(content: string | null): Decision | null {

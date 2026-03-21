@@ -1,8 +1,8 @@
-// extension/src/popup/App.ts
 import {
 	MESSAGE_TYPES,
 	type SetProviderSettingsResponse,
 } from "../lib/messages";
+import { normalizeProviderBaseUrl } from "../lib/providerUrls";
 import { resolveEnabled } from "../lib/enabledState";
 import { DEFAULT_BASE_URL, DEFAULT_MODEL } from "../lib/config";
 import type { DiagnosticsReport } from "../lib/diagnostics";
@@ -147,10 +147,24 @@ export class App {
 				return;
 			}
 
+			const normalized = normalizeProviderBaseUrl(baseUrl);
+			if (normalized.status !== "ok") {
+				statusEl.textContent = normalized.reason;
+				return;
+			}
+
+			const granted = await chrome.permissions.request({
+				origins: [normalized.originPattern],
+			});
+			if (!granted) {
+				statusEl.textContent = `Permission denied for ${normalized.origin}`;
+				return;
+			}
+
 			statusEl.textContent = "Saving...";
 			const saveResult = (await chrome.runtime.sendMessage({
 				type: MESSAGE_TYPES.SET_PROVIDER_SETTINGS,
-				settings: { apiKey, baseUrl, model } satisfies ProviderSettings,
+				settings: { apiKey, baseUrl: normalized.normalizedBaseUrl, model } satisfies ProviderSettings,
 			})) as SetProviderSettingsResponse | null;
 			if (saveResult?.status === "ok") {
 				await this.clearProviderSettingsDraft();
@@ -285,10 +299,25 @@ export class App {
 			const newKey = apiKeyInput.value.trim();
 			const newUrl = baseUrlInput.value.trim() || DEFAULT_BASE_URL;
 			const newModel = modelInput.value.trim() || DEFAULT_MODEL;
+
+			const normalized = normalizeProviderBaseUrl(newUrl);
+			if (normalized.status !== "ok") {
+				statusEl.textContent = normalized.reason;
+				return;
+			}
+
+			const granted = await chrome.permissions.request({
+				origins: [normalized.originPattern],
+			});
+			if (!granted) {
+				statusEl.textContent = `Permission denied for ${normalized.origin}`;
+				return;
+			}
+
 			statusEl.textContent = "Saving...";
 			const saveResult = (await chrome.runtime.sendMessage({
 				type: MESSAGE_TYPES.SET_PROVIDER_SETTINGS,
-				settings: { apiKey: newKey, baseUrl: newUrl, model: newModel },
+				settings: { apiKey: newKey, baseUrl: normalized.normalizedBaseUrl, model: newModel },
 			})) as SetProviderSettingsResponse | null;
 			if (saveResult?.status === "ok") {
 				await this.clearProviderSettingsDraft();

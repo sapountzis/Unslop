@@ -31,6 +31,12 @@ afterEach(() => {
 	globalThis.fetch = originalFetch;
 });
 
+function getRequestMessages(
+	requestBody: Record<string, unknown>,
+): Array<Record<string, unknown>> {
+	return requestBody.messages as Array<Record<string, unknown>>;
+}
+
 describe("llmClient", () => {
 	it("uses configured base URL as-is for chat/completions", async () => {
 		let requestedUrl = "";
@@ -61,6 +67,86 @@ describe("llmClient", () => {
 		});
 	});
 
+	it("always sends text-only user content as a content-part list", async () => {
+		let requestBody: Record<string, unknown> = {};
+		globalThis.fetch = (async (input, init) => {
+			requestBody = await readJsonBody(input as FetchInput, init);
+			return new Response(
+				JSON.stringify({
+					choices: [{ message: { content: '{"decision":"keep"}' } }],
+				}),
+				{ status: 200, headers: { "content-type": "application/json" } },
+			);
+		}) as typeof fetch;
+
+		await classifyPostWithLlm(
+			{
+				apiKey: "sk-test",
+				baseUrl: "https://api.openai.com",
+				model: "gpt-4.1-mini",
+			},
+			{ post_id: "p1", text: "test post", attachments: [] },
+		);
+
+		const messages = getRequestMessages(requestBody);
+		const userMessage = messages[1];
+		const userContent = userMessage?.content as Array<Record<string, unknown>>;
+
+		expect(Array.isArray(userContent)).toBe(true);
+		expect(userContent).toHaveLength(1);
+		expect(userContent[0]).toMatchObject({
+			type: "text",
+		});
+		expect(userContent[0]?.text).toEqual(expect.stringContaining("POST TO ANALYZE:"));
+	});
+
+	it("keeps multimodal user content in the same content-part list", async () => {
+		let requestBody: Record<string, unknown> = {};
+		globalThis.fetch = (async (input, init) => {
+			requestBody = await readJsonBody(input as FetchInput, init);
+			return new Response(
+				JSON.stringify({
+					choices: [{ message: { content: '{"decision":"hide"}' } }],
+				}),
+				{ status: 200, headers: { "content-type": "application/json" } },
+			);
+		}) as typeof fetch;
+
+		await classifyPostWithLlm(
+			{
+				apiKey: "sk-test",
+				baseUrl: "https://api.openai.com",
+				model: "gpt-4.1-mini",
+			},
+			{
+				post_id: "p1",
+				text: "test post",
+				attachments: [
+					{
+						kind: "image",
+						mime_type: "image/png",
+						base64: "YWJjZA==",
+						sha256: "unused",
+					},
+				],
+			},
+		);
+
+		const messages = getRequestMessages(requestBody);
+		const userContent = messages[1]?.content as Array<Record<string, unknown>>;
+
+		expect(Array.isArray(userContent)).toBe(true);
+		expect(userContent).toHaveLength(2);
+		expect(userContent[0]).toMatchObject({ type: "text" });
+		expect(userContent[1]).toEqual({
+			type: "image_url",
+			image_url: {
+				url: "data:image/png;base64,YWJjZA==",
+				detail: "low",
+			},
+		});
+	});
+
 	it("includes ephemeral cache hint for known compatible hosts", async () => {
 		let requestBody: Record<string, unknown> = {};
 		globalThis.fetch = (async (input, init) => {
@@ -82,7 +168,7 @@ describe("llmClient", () => {
 			{ post_id: "p1", text: "test post", attachments: [] },
 		);
 
-		const messages = requestBody.messages as Array<Record<string, unknown>>;
+		const messages = getRequestMessages(requestBody);
 		expect(Array.isArray(messages)).toBe(true);
 		expect(messages[0]?.cache_control).toEqual({ type: "ephemeral" });
 	});
@@ -108,7 +194,7 @@ describe("llmClient", () => {
 			{ post_id: "p1", text: "test post", attachments: [] },
 		);
 
-		const messages = requestBody.messages as Array<Record<string, unknown>>;
+		const messages = getRequestMessages(requestBody);
 		expect(Array.isArray(messages)).toBe(true);
 		expect(messages[0] && "cache_control" in messages[0]).toBe(false);
 	});
@@ -150,12 +236,10 @@ describe("llmClient", () => {
 
 		expect(callCount).toBe(2);
 		expect(result.source).toBe("llm");
-		expect((requestBodies[0]?.messages as Array<Record<string, unknown>>)[0]?.cache_control).toEqual({
+		expect(getRequestMessages(requestBodies[0]!)[0]?.cache_control).toEqual({
 			type: "ephemeral",
 		});
-		expect("cache_control" in (requestBodies[1]?.messages as Array<Record<string, unknown>>)[0]!).toBe(
-			false,
-		);
+		expect("cache_control" in getRequestMessages(requestBodies[1]!)[0]!).toBe(false);
 	});
 
 	it("returns fail-open error result when model response is malformed", async () => {
@@ -184,4 +268,3 @@ describe("llmClient", () => {
 		});
 	});
 });
-
