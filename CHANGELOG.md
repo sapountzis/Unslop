@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-03-21
+
+### Fixed
+
+- Fixed SDUI LinkedIn feed detection failing on DOMs where `role="listitem"` posts are nested inside wrapper divs rather than being direct children of `role="list"` (changed `>` direct-child combinator to a descendant selector).
+
+### Added
+
+- Two additional hint selectors for SDUI feed discovery: `[data-testid="expandable-text-box"]` (stable post text body) and `[componentkey*="FeedType_MAIN_FEED"]` (per-post component key), providing redundant entry points for post detection.
+
+### Changed
+
+- Rewrote SDUI detection test fixtures to match the actual minified LinkedIn DOM structure with realistic wrapper div nesting, `componentkey` attributes, and `expandable-text-box` test IDs, replacing the previous misleadingly-simplified fixtures.
+
 ## [0.9.1] - 2026-03-21
 
 ### Added

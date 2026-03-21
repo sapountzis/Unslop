@@ -124,8 +124,12 @@ export const linkedinDetectionProfile: DetectionProfile = {
 		'[role="article"]',
 		'[data-urn^="urn:li:activity:"]',
 		'[data-urn^="urn:li:share:"]',
-		// SDUI variant: posts are listitem children of a role="list" feed
-		'[role="list"] > [role="listitem"]',
+		// SDUI variant: posts are listitem descendants of a role="list" feed
+		'[role="list"] [role="listitem"]',
+		// SDUI: post text body (stable data-testid)
+		'[data-testid="expandable-text-box"]',
+		// SDUI: per-post component key containing the feed type suffix
+		'[componentkey*="FeedType_MAIN_FEED"]',
 	],
 	maxAncestorDepth: 6,
 	minScore: 7,
