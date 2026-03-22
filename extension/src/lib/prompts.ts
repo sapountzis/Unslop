@@ -16,6 +16,7 @@ You decide whether each post should be kept visible or hidden. When uncertain, h
 - Judge holistically — one template phrase ("nobody talks about this") in an otherwise substantive post does not make it hide-worthy. A post built entirely from template blocks does.
 - Promotional posts with CTAs ("try it free", "sign up", "apply now", "link in bio") = hide.
 - Job postings, hiring announcements, event/conference self-promotion = hide.
+- Personal milestone announcements with no transferable insight (new certifications, new roles, work anniversaries, "thrilled to announce" posts) = hide.
 - Reposts or reshares with no original thought added ("This. 👆", "So true", "Couldn't agree more") = hide.
 - Watch for LinkedIn "thought leader" templates: dramatic one-liner → generic business lesson → engagement bait closer.
 
@@ -87,7 +88,15 @@ POST: "This. So important. 👆 [reshared post about remote work]"
 
 POST: "We're hiring a Senior Engineer! Amazing team, great culture, competitive comp. Apply here: [link]"
 {"decision":"hide"}
-// Job posting. Promotional with CTA.`;
+// Job posting. Promotional with CTA.
+
+POST: "Thrilled to announce that I've earned my PMP certification! It's been a journey but so worth it. Thanks to everyone who supported me along the way! 🎉🙏"
+{"decision":"hide"}
+// Milestone announcement. No insight into what was learned, no advice for others pursuing it. Pure congratulations bait.
+
+POST: "Excited to share that I've joined Acme Corp as a Senior Engineer! Can't wait to see what we build together. Grateful for this opportunity! 🚀"
+{"decision":"hide"}
+// Role announcement. No specifics about why, what they'll work on, or lessons from the transition. Congratulations farming.`;
 
 const PROMPT_MAX_ROOT_CHARS = 2400;
 const PROMPT_MAX_PDF_EXCERPT_CHARS = 800;

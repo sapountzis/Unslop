@@ -22,6 +22,7 @@ const ZERO_LOCAL_STATS: LocalStatsSnapshot = {
 	dailyBreakdown: [],
 };
 
+const LOCAL_STATS_STORAGE_KEY = "localStats";
 const PROVIDER_DRAFT_STORAGE_KEY = "providerSettingsDraft";
 const BASE_URL_PLACEHOLDER = "openai compatible endpoint";
 
@@ -32,6 +33,12 @@ export class App {
 	private diagnosticsReport: DiagnosticsReport | null = null;
 	private diagnosticsRunning = false;
 	private devModeEnabled = false;
+	private storageChangeHandler:
+		| ((
+				changes: Record<string, { newValue?: unknown }>,
+				areaName: string,
+		  ) => void)
+		| null = null;
 
 	constructor(
 		containerId: string,
@@ -177,6 +184,7 @@ export class App {
 
 		this.bindDevModeControl();
 		this.bindDiagnosticsControls();
+		this.bindLiveStatsUpdates();
 	}
 
 	// ── Dashboard (shown when API key is configured) ──────
@@ -247,6 +255,7 @@ export class App {
 
 		this.bindDevModeControl();
 		this.bindDiagnosticsControls();
+		this.bindLiveStatsUpdates();
 	}
 
 	// ── Settings edit view (from dashboard) ──────────────
@@ -424,7 +433,7 @@ export class App {
 
 	private renderLocalStatsCard(localStats: LocalStatsSnapshot): string {
 		return `
-      <div class="card mb-8">
+      <div id="local-stats-card" class="card mb-8">
         <strong>Local stats</strong>
         <div class="local-stats-row"><span>Today</span><span>${localStats.today.hide} hidden / ${localStats.today.total} total</span></div>
         <div class="local-stats-row"><span>Last 30 days</span><span>${localStats.last30Days.hide} hidden / ${localStats.last30Days.total} total</span></div>
@@ -535,6 +544,26 @@ export class App {
 		if (resultsContainer) {
 			resultsContainer.innerHTML = this.renderDiagnosticsResults();
 		}
+	}
+
+	private bindLiveStatsUpdates(): void {
+		if (this.storageChangeHandler) return;
+
+		this.storageChangeHandler = (changes, areaName) => {
+			if (areaName !== "local") return;
+			if (!(LOCAL_STATS_STORAGE_KEY in changes)) return;
+			void this.refreshLocalStatsCard();
+		};
+
+		chrome.storage.onChanged.addListener(this.storageChangeHandler);
+	}
+
+	private async refreshLocalStatsCard(): Promise<void> {
+		const card = this.container.querySelector("#local-stats-card");
+		if (!card || !card.isConnected) return;
+
+		const localStats = await this.loadLocalStats();
+		card.outerHTML = this.renderLocalStatsCard(localStats);
 	}
 
 	private bindDiagnosticsControls(): void {
