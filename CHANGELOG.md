@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- LinkedIn label mode now places the decision chip at the top of the post instead of overlaying post controls.
+
+### Changed
+
+- Refreshed the popup local stats card live via `chrome.storage.onChanged`, so counts update while the popup stays open.
+
 ## [0.9.2] - 2026-03-21
 
 ### Fixed

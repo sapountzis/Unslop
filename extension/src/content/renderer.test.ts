@@ -55,6 +55,7 @@ describe("renderDecision", () => {
 		const pill = root.querySelector(".unslop-decision-label");
 		expect(pill).not.toBeNull();
 		expect(pill?.textContent).toBe("Unslop: keep");
+		expect(root.firstElementChild).toBe(pill);
 		cleanup(root);
 	});
 

@@ -22,7 +22,7 @@ export function renderDecision(
 		const pill = docRef.createElement("span");
 		pill.className = `unslop-decision-label unslop-decision-label--${decision}`;
 		pill.textContent = `Unslop: ${decision}`;
-		labelRoot.append(pill);
+		labelRoot.prepend(pill);
 	}
 
 	if (decision === "hide") {

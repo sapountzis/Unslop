@@ -71,7 +71,7 @@ function makePost(
 // ── Tests ──────────────────────────────────────────────────────────────────
 
 describe("LinkedIn detection smoke tests", () => {
-	it("single post detected; identity = data-urn; renderRoot = [data-finite-scroll-hotkey-item] div", () => {
+	it("single post detected; identity = data-urn; renderRoot = [data-finite-scroll-hotkey-item] div; labelRoot = article", () => {
 		const post = makePost({ urn: "urn:li:activity:123" });
 		feedContainer.appendChild(post);
 
@@ -84,6 +84,7 @@ describe("LinkedIn detection smoke tests", () => {
 		expect(surfaces).toHaveLength(1);
 		expect(surfaces[0]!.identity).toBe("urn:li:activity:123");
 		expect(surfaces[0]!.renderRoot).toBe(post); // the scroll-item div
+		expect(surfaces[0]!.labelRoot).toBe(post.firstElementChild);
 	});
 
 	it("two posts → 2 surfaces", () => {
@@ -155,6 +156,7 @@ describe("LinkedIn detection smoke tests", () => {
 		expect(surfaces).toHaveLength(1);
 		// renderRoot should be the article itself (contentRoot) since no scroll item
 		expect(surfaces[0]!.renderRoot).toBe(post);
+		expect(surfaces[0]!.labelRoot).toBe(post);
 	});
 });
 
