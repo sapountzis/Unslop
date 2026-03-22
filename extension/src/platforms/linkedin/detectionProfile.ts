@@ -186,4 +186,9 @@ export const linkedinDetectionProfile: DetectionProfile = {
 		}
 		return contentRoot;
 	},
+	resolveLabelRoot(_candidateRoot, contentRoot) {
+		// Keep label mode anchored to the post/article itself so the pill does not
+		// sit on the wider wrapper that also contains post controls.
+		return contentRoot;
+	},
 };
